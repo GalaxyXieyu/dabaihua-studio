@@ -18,6 +18,34 @@ test("converts entity-escaped feed HTML before rendering Markdown", () => {
   assert.doesNotMatch(markdown, /<img|<p>|&lt;/);
 });
 
+test("keeps heart-knot exploration versioned and direction confirmation explicit", async () => {
+  const [schema, store, sensemaking, explorationRoute, directionRoute, migration, cli] = await Promise.all([
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/store.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/sensemaking.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/itches/[id]/explorations/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/itches/[id]/directions/[directionId]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0012_slim_scarlet_spider.sql", import.meta.url), "utf8"),
+    readFile(new URL("../public/cli/topics", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(schema, /export const explorations/);
+  assert.match(schema, /export const directions/);
+  assert.match(schema, /status: text\("status", \{ enum: \["candidate", "confirmed", "rejected", "retired"\] \}\)\.notNull\(\)\.default\("candidate"\)/);
+  assert.match(store, /CREATE TABLE IF NOT EXISTS explorations/);
+  assert.match(store, /CREATE TABLE IF NOT EXISTS directions/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS `explorations`/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS `directions`/);
+  assert.match(sensemaking, /COALESCE\(MAX\(round\), 0\) \+ 1/);
+  assert.match(sensemaking, /WHERE id = \? AND itch_id = \? AND user_id = \?/);
+  assert.match(sensemaking, /VALUES \(\?, \?, \?, \?, \?, \?, \?, \?, \?, \?, \?, 'candidate', \?, \?\)/);
+  assert.match(sensemaking, /status === "confirmed" \? timestamp : null/);
+  assert.match(explorationRoute, /requireSessionUser/);
+  assert.match(directionRoute, /body\.action === "confirm"/);
+  assert.match(cli, /topics itch confirm <id> --direction/);
+  assert.match(cli, /"action": action/);
+});
+
 test("keeps leaderboard fallback avatars centered independently from nickname styles", async () => {
   const [page, styles] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),

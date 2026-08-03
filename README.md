@@ -1,6 +1,6 @@
 # 清流阅读
 
-一个可自行部署的 RSS、X 与微信公众号阅读工作台。它把关注来源的新内容组织成连续阅读流，并提供发现来源、收藏、批注、阅读进度和个人主页。
+一个可自行部署的阅读与内容发现工作台。它聚合 RSS、X 与微信公众号，也把反复出现的个人问题记录为心结，供 Agent、CLI 和后续内容工作流持续炼化。
 
 ![清流阅读预览](public/og-community.png)
 
@@ -10,6 +10,7 @@
 - 今日阅读流、预计阅读时间、已读和收藏状态
 - 来源发现、关注、取消关注和导入队列
 - 文章批注、回复、通知与个人主页
+- 心结捕捉、再次触发、材料关联、探索研究和候选方向确认
 - D1 持久化和 R2 媒体存储
 - 可选的 Cloudflare Workers AI 中文处理
 - Cloudflare Worker 定时同步 RSS 与 X
@@ -81,7 +82,7 @@ macOS 定时任务模板位于 `scripts/com.personal-intel-desk.wechat-sync.plis
 
 ## topics CLI（多端命令行客户端）
 
-在任何电脑读取你的订阅流与选题库：
+在任何电脑读取订阅流、心结与选题库：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/GalaxyXieyu/qingliu-reader/main/public/cli/topics -o ~/bin/topics && chmod +x ~/bin/topics
@@ -92,6 +93,19 @@ topics sub <RSS地址|X主页|公众号文章链接> --category ai   # 一条命
 topics sub <公众号名>                                     # 按名字提交，采集端自动处理
 topics unsub <id>   # 取消关注；--delete 删除自己贡献的源
 topics imports      # 公众号导入队列进度
+topics itch "Agent时代灵感枯竭怎么办"  # 记录心结；再次输入会累计触发
+topics itch list                          # 查看开放心结
+topics itch show <id>                     # 查看触发历史与关联
+topics itch feel <id> "今天为什么又想到它"
+topics itch link <id> --item <文章ID>     # 关联阅读材料
+topics itch refine <id> --file exploration.json
+topics itch research <id> --exploration <探索ID> --file research.json
+topics itch direction <id> --file direction.json  # 只创建 candidate
+topics itch directions <id>                # 比较多个候选方向
+topics itch confirm <id> --direction <方向ID> --note "我的判断"
+topics itch archive <id>
 ```
+
+`exploration.json` 保存四问字段 `triggerContext`、`coreConflict`、`personalStake`、`desiredChange`。`research.json` 保存 `questionTree`、`materialMap`、`counterEvidence`、`evidenceGaps`；`direction.json` 保存 `claim`、`audience`、`tension`、`personalConnection`、正反证据与信心。Agent 和 Deep Research 可以写探索与候选方向，但不能在创建时把方向标记为 `confirmed`。
 
 API Key 在「个人 API」接口体系下管理（`topics token list/create/revoke`）。服务端对应实现：`app/api/tokens/`，所有 API 同时接受会话 Cookie 与 `Authorization: Bearer topk_*`。

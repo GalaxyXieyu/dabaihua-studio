@@ -27,6 +27,19 @@ topics — 内容选题中心的多端 CLI（云端命令集 P1）
   topics save <文章ID>              # 收藏 / 取消收藏（开关）
   topics capture <链接> [--title 标题]   # 把任意链接丢进收件箱
 
+心结命令:
+  topics itch "Agent时代灵感枯竭怎么办"   # 记录心结；再次输入会累计一次触发
+  topics itch list [--status open,dormant] [--json]
+  topics itch show <id> [--json]
+  topics itch feel <id> "今天为什么又想到它"
+  topics itch link <id> --item <文章ID> [--relation triggered_by]
+  topics itch refine <id> --file exploration.json
+  topics itch research <id> --exploration <探索ID> --file research.json
+  topics itch directions <id> [--status candidate] [--json]
+  topics itch direction <id> --file direction.json
+  topics itch confirm <id> --direction <方向ID> [--note "为什么确认"]
+  topics itch archive <id>
+
 选题库命令:
   topics review [--all|--status approved]   # 候选选题（AI 评估产出，总分≥6）
   topics approve <id...> / skip <id...>     # 拍板入选 / 忽略
@@ -95,7 +108,7 @@ DEFAULT_ENDPOINT = "https://topic.aigalaxy.top:8443"
 CONFIG_DIR = Path(os.environ.get("TOPICS_CONFIG_DIR", "~/.config/topics-cli")).expanduser()
 CONFIG_FILE = CONFIG_DIR / "config.json"
 STRATEGY_CACHE = CONFIG_DIR / "strategy-cache.json"
-CLI_VERSION = "2.0.0"
+CLI_VERSION = "2.2.0"
 
 KIND_ICON = {"rss": "📰", "x": "𝕏 ", "x-tweet": "𝕏 ", "wechat": "💬", "link": "🔗"}
 CATEGORY_LABEL = {"ai": "AI", "investment": "投资", "gaming": "游戏", "technology": "科技", "business": "商业", "product": "产品"}
@@ -133,7 +146,7 @@ def request(path, method="GET", body=None, token=None, cookie=None, capture_cook
         "Content-Type": "application/json",
         "Origin": endpoint(),
         "Referer": endpoint() + "/",
-        "User-Agent": "topics-cli/1.1",
+        "User-Agent": f"topics-cli/{CLI_VERSION}",
     }
     tok = token if token is not None else load_config().get("token")
     if tok:
@@ -448,6 +461,230 @@ def cmd_capture(args):
     r = request("/api/items", "POST", body)
     ready = "全文已就绪" if r.get("contentReady") else "正文稍后由 AI 补全"
     print(f"✅ 已存入收件箱 #{r.get('id')}（{ready}）· topics open {r.get('id')} 阅读")
+
+
+# ─── 心结 ─────────────────────────────────────────────────────────────────────
+
+ITCH_TARGET_FLAGS = {
+    "item": "item", "annotation": "annotation", "conversation": "conversation",
+    "project": "project", "related_itch": "itch", "topic": "topic",
+}
+
+
+def _itch_target(args):
+    targets = [(target_type, getattr(args, flag)) for flag, target_type in ITCH_TARGET_FLAGS.items()
+               if getattr(args, flag) is not None]
+    if len(targets) > 1:
+        sys.exit("一次只能关联一个目标")
+    return targets[0] if targets else (None, None)
+
+
+def _json_payload(path):
+    if not path:
+        sys.exit("这个动作需要 --file <JSON文件>；使用 --file - 可从标准输入读取")
+    try:
+        content = sys.stdin.read() if path == "-" else Path(path).read_text()
+        payload = json.loads(content)
+    except (OSError, json.JSONDecodeError) as error:
+        sys.exit(f"无法读取 JSON: {error}")
+    if not isinstance(payload, dict):
+        sys.exit("JSON 顶层必须是对象")
+    return payload
+
+
+def _print_itch_detail(itch):
+    print(f"#{itch.get('id')}  [{itch.get('status')}]  触发 {itch.get('feltCount', 1)} 次")
+    print(itch.get("body", ""))
+    if itch.get("note"):
+        print(f"备注: {itch['note']}")
+    print(f"首次: {str(itch.get('firstFeltAt', ''))[:16]}  最近: {str(itch.get('lastFeltAt', ''))[:16]}")
+    events = itch.get("events") or []
+    if events:
+        print("\n触发与记录:")
+        for event in events:
+            body = f" · {event['body']}" if event.get("body") else ""
+            print(f"  {str(event.get('createdAt', ''))[:16]}  {event.get('type')}{body}")
+    links = itch.get("links") or []
+    if links:
+        print("\n关联:")
+        for link in links:
+            note = f" · {link['note']}" if link.get("note") else ""
+            print(f"  #{link.get('id')}  {link.get('relation')} -> {link.get('targetType')}:{link.get('targetId')}{note}")
+    explorations = itch.get("explorations") or []
+    if explorations:
+        print("\n探索:")
+        for exploration in explorations:
+            research_count = sum(bool(exploration.get(key)) for key in (
+                "questionTree", "materialMap", "counterEvidence", "evidenceGaps"))
+            print(f"  #{exploration.get('id')}  第 {exploration.get('round')} 轮 · {exploration.get('status')} · {research_count}/4 类研究产物")
+    directions = itch.get("directions") or []
+    if directions:
+        print("\n方向:")
+        for direction in directions:
+            print(f"  #{direction.get('id')}  [{direction.get('status')}/{direction.get('confidence')}] {direction.get('claim', '')}")
+
+
+def cmd_itch(args):
+    values = list(args.values or [])
+    action = values[0] if values else "list"
+
+    if action == "list":
+        query = ""
+        if args.status:
+            query = "?status=" + urllib.parse.quote(args.status)
+        data = request("/api/itches" + query)
+        if args.json:
+            print(json.dumps(data, ensure_ascii=False))
+            return
+        rows = data.get("itches", [])
+        if not rows:
+            print("（没有匹配的心结）")
+            return
+        for itch in rows:
+            print(f"[{itch['id']:>3}] {itch.get('status', 'open'):<8} ×{itch.get('feltCount', 1):<3} {itch.get('body', '')}")
+            print(f"      最近 {str(itch.get('lastFeltAt', ''))[:16]} · {itch.get('eventCount', 0)} 条记录 · {itch.get('linkCount', 0)} 个关联")
+        print(f"\n共 {len(rows)} 条 · topics itch show <id> 查看")
+        return
+
+    if action == "show":
+        if len(values) < 2 or not values[1].isdigit():
+            sys.exit("用法: topics itch show <id>")
+        data = request(f"/api/itches/{values[1]}")
+        if args.json:
+            print(json.dumps(data, ensure_ascii=False))
+        else:
+            _print_itch_detail(data.get("itch", {}))
+        return
+
+    if action == "feel":
+        if len(values) < 2 or not values[1].isdigit():
+            sys.exit('用法: topics itch feel <id> "为什么又想到它"')
+        note = args.note or " ".join(values[2:]).strip()
+        if not note:
+            sys.exit("再次触发时请写一句当时发生了什么")
+        data = request(f"/api/itches/{values[1]}/events", "POST", {"type": "resurfaced", "body": note})
+        if args.json:
+            print(json.dumps(data, ensure_ascii=False))
+        else:
+            print(f"心结 #{values[1]} 已记录一次再次触发")
+        return
+
+    if action == "link":
+        if len(values) < 2 or not values[1].isdigit():
+            sys.exit("用法: topics itch link <id> --item <文章ID>")
+        target_type, target_id = _itch_target(args)
+        if target_type is None:
+            sys.exit("至少指定一个关联目标，例如 --item <文章ID>")
+        data = request(f"/api/itches/{values[1]}/links", "POST", {
+            "targetType": target_type,
+            "targetId": str(target_id),
+            "relation": args.relation,
+            "note": args.note,
+        })
+        if args.json:
+            print(json.dumps(data, ensure_ascii=False))
+        else:
+            suffix = "（已存在）" if data.get("existing") else ""
+            print(f"心结 #{values[1]} 已关联 {target_type}:{target_id}{suffix}")
+        return
+
+    if action == "refine":
+        if len(values) < 2 or not values[1].isdigit():
+            sys.exit("用法: topics itch refine <id> --file exploration.json")
+        payload = _json_payload(args.file) if args.file else {
+            "triggerContext": args.trigger_context,
+            "coreConflict": args.core_conflict,
+            "personalStake": args.personal_stake,
+            "desiredChange": args.desired_change,
+            "note": args.note,
+        }
+        data = request(f"/api/itches/{values[1]}/explorations", "POST", payload)
+        if args.json:
+            print(json.dumps(data, ensure_ascii=False))
+        else:
+            exploration = data.get("exploration", {})
+            print(f"心结 #{values[1]} 已创建第 {exploration.get('round')} 轮探索 #{exploration.get('id')}")
+        return
+
+    if action == "research":
+        if len(values) < 2 or not values[1].isdigit() or args.exploration is None:
+            sys.exit("用法: topics itch research <id> --exploration <探索ID> --file research.json")
+        payload = _json_payload(args.file)
+        data = request(f"/api/itches/{values[1]}/explorations/{args.exploration}", "PATCH", payload)
+        if args.json:
+            print(json.dumps(data, ensure_ascii=False))
+        else:
+            print(f"探索 #{args.exploration} 的研究产物已更新")
+        return
+
+    if action == "directions":
+        if len(values) < 2 or not values[1].isdigit():
+            sys.exit("用法: topics itch directions <id> [--status candidate]")
+        query = "?status=" + urllib.parse.quote(args.status) if args.status else ""
+        data = request(f"/api/itches/{values[1]}/directions{query}")
+        if args.json:
+            print(json.dumps(data, ensure_ascii=False))
+            return
+        rows = data.get("directions", [])
+        if not rows:
+            print("（还没有候选方向）")
+            return
+        for direction in rows:
+            print(f"[{direction.get('id'):>3}] {direction.get('status'):<9} {direction.get('confidence'):<6} {direction.get('claim', '')}")
+            if direction.get("audience"):
+                print(f"      面向: {direction['audience']}")
+        return
+
+    if action == "direction":
+        if len(values) < 2 or not values[1].isdigit():
+            sys.exit("用法: topics itch direction <id> --file direction.json")
+        payload = _json_payload(args.file)
+        if args.direction is None:
+            data = request(f"/api/itches/{values[1]}/directions", "POST", payload)
+        else:
+            data = request(f"/api/itches/{values[1]}/directions/{args.direction}", "PATCH", payload)
+        if args.json:
+            print(json.dumps(data, ensure_ascii=False))
+        else:
+            direction = data.get("direction", {})
+            print(f"候选方向 #{direction.get('id')} 已保存，当前状态 {direction.get('status')}")
+        return
+
+    if action in ("confirm", "reject"):
+        if len(values) < 2 or not values[1].isdigit() or args.direction is None:
+            sys.exit(f"用法: topics itch {action} <id> --direction <方向ID> [--note 说明]")
+        data = request(f"/api/itches/{values[1]}/directions/{args.direction}", "PATCH", {
+            "action": action,
+            "note": args.note,
+        })
+        if args.json:
+            print(json.dumps(data, ensure_ascii=False))
+        else:
+            label = "已由用户确认" if action == "confirm" else "已拒绝"
+            print(f"方向 #{args.direction} {label}")
+        return
+
+    if action == "archive":
+        if len(values) < 2 or not values[1].isdigit():
+            sys.exit("用法: topics itch archive <id>")
+        data = request(f"/api/itches/{values[1]}", "PATCH", {"status": "archived", "note": args.note})
+        if args.json:
+            print(json.dumps(data, ensure_ascii=False))
+        else:
+            print(f"心结 #{values[1]} 已归档")
+        return
+
+    target_type, target_id = _itch_target(args)
+    body = " ".join(values).strip()
+    payload = {"body": body, "note": args.note}
+    if target_type is not None:
+        payload.update({"sourceType": target_type, "sourceId": str(target_id)})
+    data = request("/api/itches", "POST", payload)
+    if args.json:
+        print(json.dumps(data, ensure_ascii=False))
+    else:
+        label = "再次触发" if data.get("resurfaced") else "已记录"
+        print(f"心结 #{data.get('id')} {label} · topics itch show {data.get('id')} 查看")
 
 
 # ─── 选题库 ──────────────────────────────────────────────────────────────────
@@ -944,6 +1181,28 @@ def main():
     cp.add_argument("url")
     cp.add_argument("--title")
 
+    it = sub.add_parser("itch", help="记录和炼化心结")
+    it.add_argument("values", nargs="*", help="心结内容，或 list/show/feel/link/refine/research/directions/direction/confirm/reject/archive")
+    it.add_argument("--status", help="list: 状态过滤，逗号分隔")
+    it.add_argument("--note", help="补充当时发生了什么")
+    it.add_argument("--json", action="store_true", help="JSON 输出（Agent 管道消费）")
+    it.add_argument("--item", type=int, help="关联文章 ID")
+    it.add_argument("--annotation", type=int, help="关联批注 ID")
+    it.add_argument("--conversation", help="关联对话 ID")
+    it.add_argument("--project", help="关联项目 ID")
+    it.add_argument("--related-itch", dest="related_itch", type=int, help="关联另一个心结 ID")
+    it.add_argument("--topic", type=int, help="关联 topic ID")
+    it.add_argument("--exploration", type=int, help="探索 ID")
+    it.add_argument("--direction", type=int, help="方向 ID")
+    it.add_argument("--file", help="Agent 交换 JSON；- 表示标准输入")
+    it.add_argument("--trigger-context", help="四问：什么具体情境再次触发")
+    it.add_argument("--core-conflict", help="四问：真正卡住的冲突是什么")
+    it.add_argument("--personal-stake", help="四问：为什么这件事对你重要")
+    it.add_argument("--desired-change", help="四问：希望谁发生什么改变")
+    it.add_argument("--relation", default="triggered_by", choices=[
+        "triggered_by", "supports", "contradicts", "related_to", "derived_from", "tested_by", "spawned",
+    ])
+
     rv = sub.add_parser("review")
     rv.add_argument("--all", action="store_true")
     rv.add_argument("--status", choices=["candidate", "approved", "skipped"])
@@ -1032,7 +1291,7 @@ def main():
         "config": cmd_config, "token": cmd_token, "sub": cmd_sub,
         "unsub": cmd_unsub, "sources": cmd_sources, "sync": cmd_sync,
         "imports": cmd_imports, "inbox": cmd_inbox, "open": cmd_open,
-        "save": cmd_save, "capture": cmd_capture, "review": cmd_review,
+        "save": cmd_save, "capture": cmd_capture, "itch": cmd_itch, "review": cmd_review,
         "approve": cmd_approve, "skip": cmd_skip, "profile": cmd_profile,
         "strategy": cmd_strategy, "board": cmd_board, "edit": cmd_edit,
         "schedule": cmd_schedule, "unschedule": cmd_unschedule,

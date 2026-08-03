@@ -1,4 +1,4 @@
-import { integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -123,6 +123,94 @@ export const ideas = sqliteTable("ideas", {
   sourceItemIds: text("source_item_ids").notNull(),
   createdAt: text("created_at").notNull(),
 });
+export const itches = sqliteTable("itches", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull().references(() => users.id),
+  body: text("body").notNull(),
+  normalizedBody: text("normalized_body").notNull(),
+  note: text("note"),
+  status: text("status", { enum: ["open", "dormant", "resolved", "archived"] }).notNull().default("open"),
+  feltCount: integer("felt_count").notNull().default(1),
+  firstFeltAt: text("first_felt_at").notNull(),
+  lastFeltAt: text("last_felt_at").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  index("itches_user_status_idx").on(table.userId, table.status, table.lastFeltAt),
+  index("itches_user_normalized_idx").on(table.userId, table.normalizedBody),
+]);
+
+export const itchEvents = sqliteTable("itch_events", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  itchId: integer("itch_id").notNull().references(() => itches.id),
+  userId: integer("user_id").notNull().references(() => users.id),
+  type: text("type", { enum: [
+    "captured", "resurfaced", "note", "status_changed", "feedback",
+    "exploration_created", "research_updated", "direction_created", "direction_status_changed",
+  ] }).notNull(),
+  body: text("body"),
+  metadata: text("metadata").notNull().default("{}"),
+  createdAt: text("created_at").notNull(),
+}, (table) => [index("itch_events_itch_created_idx").on(table.itchId, table.createdAt)]);
+
+export const itchLinks = sqliteTable("itch_links", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  itchId: integer("itch_id").notNull().references(() => itches.id),
+  userId: integer("user_id").notNull().references(() => users.id),
+  targetType: text("target_type", { enum: ["item", "annotation", "conversation", "project", "itch", "exploration", "direction", "topic"] }).notNull(),
+  targetId: text("target_id").notNull(),
+  relation: text("relation", { enum: ["triggered_by", "supports", "contradicts", "related_to", "derived_from", "tested_by", "spawned"] }).notNull(),
+  note: text("note"),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  index("itch_links_itch_idx").on(table.itchId, table.createdAt),
+  uniqueIndex("itch_links_unique_idx").on(table.itchId, table.targetType, table.targetId, table.relation),
+]);
+
+export const explorations = sqliteTable("explorations", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  itchId: integer("itch_id").notNull().references(() => itches.id),
+  userId: integer("user_id").notNull().references(() => users.id),
+  round: integer("round").notNull(),
+  status: text("status", { enum: ["open", "researching", "synthesized", "closed"] }).notNull().default("open"),
+  triggerContext: text("trigger_context"),
+  coreConflict: text("core_conflict"),
+  personalStake: text("personal_stake"),
+  desiredChange: text("desired_change"),
+  questionTree: text("question_tree").notNull().default("[]"),
+  materialMap: text("material_map").notNull().default("[]"),
+  counterEvidence: text("counter_evidence").notNull().default("[]"),
+  evidenceGaps: text("evidence_gaps").notNull().default("[]"),
+  note: text("note"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("explorations_itch_round_idx").on(table.itchId, table.userId, table.round),
+  index("explorations_user_updated_idx").on(table.userId, table.updatedAt),
+]);
+
+export const directions = sqliteTable("directions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  itchId: integer("itch_id").notNull().references(() => itches.id),
+  explorationId: integer("exploration_id").references(() => explorations.id),
+  userId: integer("user_id").notNull().references(() => users.id),
+  claim: text("claim").notNull(),
+  audience: text("audience"),
+  tension: text("tension"),
+  personalConnection: text("personal_connection"),
+  evidenceFor: text("evidence_for").notNull().default("[]"),
+  evidenceAgainst: text("evidence_against").notNull().default("[]"),
+  evidenceGaps: text("evidence_gaps").notNull().default("[]"),
+  confidence: text("confidence", { enum: ["low", "medium", "high"] }).notNull().default("low"),
+  status: text("status", { enum: ["candidate", "confirmed", "rejected", "retired"] }).notNull().default("candidate"),
+  confirmationNote: text("confirmation_note"),
+  confirmedAt: text("confirmed_at"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  index("directions_itch_status_idx").on(table.itchId, table.userId, table.status, table.updatedAt),
+  index("directions_exploration_idx").on(table.explorationId),
+]);
 
 export const subscriptionRequests = sqliteTable("subscription_requests", {
   id: integer("id").primaryKey({ autoIncrement: true }),

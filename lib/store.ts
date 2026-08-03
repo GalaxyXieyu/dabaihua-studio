@@ -7,7 +7,7 @@ import { readXArticles, readXPost, readXProfile, xPostAddress, xProfileAddress }
 export type AppEnv = { DB: D1Database; AI?: { run: (model: string, input: unknown) => Promise<unknown> } };
 const now = () => new Date().toISOString();
 const day = () => new Date().toISOString().slice(0, 10);
-const SCHEMA_VERSION = "2026-07-20.1";
+const SCHEMA_VERSION = "2026-08-03.2";
 const schemaReady = new WeakMap<object, Promise<void>>();
 
 async function initializeSchema(db: D1Database) {
@@ -29,6 +29,11 @@ async function initializeSchema(db: D1Database) {
     db.prepare("CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY AUTOINCREMENT, source_id INTEGER, kind TEXT NOT NULL, title TEXT NOT NULL, original_excerpt TEXT, content_markdown TEXT, author TEXT, translated_title TEXT, translated_excerpt TEXT, url TEXT NOT NULL UNIQUE, published_at TEXT, language TEXT, topic TEXT, status TEXT NOT NULL DEFAULT 'pending', is_read INTEGER NOT NULL DEFAULT 0, is_saved INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)"),
     db.prepare("CREATE TABLE IF NOT EXISTS sync_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, source_id INTEGER NOT NULL, started_at TEXT NOT NULL, finished_at TEXT, item_count INTEGER NOT NULL DEFAULT 0, error TEXT)"),
     db.prepare("CREATE TABLE IF NOT EXISTS ideas (id INTEGER PRIMARY KEY AUTOINCREMENT, day TEXT NOT NULL UNIQUE, headline TEXT NOT NULL, angle TEXT NOT NULL, source_item_ids TEXT NOT NULL, created_at TEXT NOT NULL)"),
+    db.prepare("CREATE TABLE IF NOT EXISTS itches (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, body TEXT NOT NULL, normalized_body TEXT NOT NULL, note TEXT, status TEXT NOT NULL DEFAULT 'open', felt_count INTEGER NOT NULL DEFAULT 1, first_felt_at TEXT NOT NULL, last_felt_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id))"),
+    db.prepare("CREATE TABLE IF NOT EXISTS itch_events (id INTEGER PRIMARY KEY AUTOINCREMENT, itch_id INTEGER NOT NULL, user_id INTEGER NOT NULL, type TEXT NOT NULL, body TEXT, metadata TEXT NOT NULL DEFAULT '{}', created_at TEXT NOT NULL, FOREIGN KEY(itch_id) REFERENCES itches(id), FOREIGN KEY(user_id) REFERENCES users(id))"),
+    db.prepare("CREATE TABLE IF NOT EXISTS itch_links (id INTEGER PRIMARY KEY AUTOINCREMENT, itch_id INTEGER NOT NULL, user_id INTEGER NOT NULL, target_type TEXT NOT NULL, target_id TEXT NOT NULL, relation TEXT NOT NULL, note TEXT, created_at TEXT NOT NULL, FOREIGN KEY(itch_id) REFERENCES itches(id), FOREIGN KEY(user_id) REFERENCES users(id))"),
+    db.prepare("CREATE TABLE IF NOT EXISTS explorations (id INTEGER PRIMARY KEY AUTOINCREMENT, itch_id INTEGER NOT NULL, user_id INTEGER NOT NULL, round INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'open', trigger_context TEXT, core_conflict TEXT, personal_stake TEXT, desired_change TEXT, question_tree TEXT NOT NULL DEFAULT '[]', material_map TEXT NOT NULL DEFAULT '[]', counter_evidence TEXT NOT NULL DEFAULT '[]', evidence_gaps TEXT NOT NULL DEFAULT '[]', note TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(itch_id) REFERENCES itches(id), FOREIGN KEY(user_id) REFERENCES users(id))"),
+    db.prepare("CREATE TABLE IF NOT EXISTS directions (id INTEGER PRIMARY KEY AUTOINCREMENT, itch_id INTEGER NOT NULL, exploration_id INTEGER, user_id INTEGER NOT NULL, claim TEXT NOT NULL, audience TEXT, tension TEXT, personal_connection TEXT, evidence_for TEXT NOT NULL DEFAULT '[]', evidence_against TEXT NOT NULL DEFAULT '[]', evidence_gaps TEXT NOT NULL DEFAULT '[]', confidence TEXT NOT NULL DEFAULT 'low', status TEXT NOT NULL DEFAULT 'candidate', confirmation_note TEXT, confirmed_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(itch_id) REFERENCES itches(id), FOREIGN KEY(exploration_id) REFERENCES explorations(id), FOREIGN KEY(user_id) REFERENCES users(id))"),
     db.prepare("CREATE TABLE IF NOT EXISTS subscription_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, query TEXT NOT NULL UNIQUE, kind TEXT NOT NULL DEFAULT 'unknown', category TEXT, status TEXT NOT NULL DEFAULT 'pending', stage TEXT NOT NULL DEFAULT 'queued', result_name TEXT, item_count INTEGER NOT NULL DEFAULT 0, requester_user_id INTEGER, last_error TEXT, created_at TEXT NOT NULL, updated_at TEXT, FOREIGN KEY(requester_user_id) REFERENCES users(id))"),
     db.prepare("CREATE TABLE IF NOT EXISTS user_item_states (user_id INTEGER NOT NULL, item_id INTEGER NOT NULL, is_read INTEGER NOT NULL DEFAULT 0, read_at TEXT, is_saved INTEGER NOT NULL DEFAULT 0, updated_at TEXT NOT NULL, PRIMARY KEY(user_id, item_id), FOREIGN KEY(user_id) REFERENCES users(id), FOREIGN KEY(item_id) REFERENCES items(id))"),
     db.prepare("CREATE TABLE IF NOT EXISTS daily_reading_activity (user_id INTEGER NOT NULL, item_id INTEGER NOT NULL, day TEXT NOT NULL, active_seconds INTEGER NOT NULL DEFAULT 0, last_heartbeat_at TEXT NOT NULL, counted_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(user_id, item_id, day), FOREIGN KEY(user_id) REFERENCES users(id), FOREIGN KEY(item_id) REFERENCES items(id))"),
@@ -85,6 +90,35 @@ async function initializeSchema(db: D1Database) {
   if (!requestColumns.results.some((column) => column.name === "result_name")) await db.prepare("ALTER TABLE subscription_requests ADD COLUMN result_name TEXT").run();
   if (!requestColumns.results.some((column) => column.name === "item_count")) await db.prepare("ALTER TABLE subscription_requests ADD COLUMN item_count INTEGER NOT NULL DEFAULT 0").run();
   if (!requestColumns.results.some((column) => column.name === "requester_user_id")) await db.prepare("ALTER TABLE subscription_requests ADD COLUMN requester_user_id INTEGER REFERENCES users(id)").run();
+  const itchColumns = await db.prepare("PRAGMA table_info(itches)").all<{ name: string }>();
+  const itchExisting = new Set(itchColumns.results.map((column) => column.name));
+  const itchNewColumns: Array<[string, string]> = [
+    ["normalized_body", "TEXT"],
+    ["felt_count", "INTEGER NOT NULL DEFAULT 1"],
+    ["first_felt_at", "TEXT"],
+    ["last_felt_at", "TEXT"],
+  ];
+  for (const [name, type] of itchNewColumns) {
+    if (!itchExisting.has(name)) await db.prepare(`ALTER TABLE itches ADD COLUMN ${name} ${type}`).run();
+  }
+  await db.batch([
+    db.prepare("UPDATE itches SET normalized_body = lower(trim(body)) WHERE normalized_body IS NULL OR normalized_body = ''"),
+    db.prepare("UPDATE itches SET felt_count = COALESCE(felt_count, 1), first_felt_at = COALESCE(first_felt_at, created_at), last_felt_at = COALESCE(last_felt_at, updated_at, created_at)"),
+    db.prepare("UPDATE itches SET status = 'open' WHERE status IN ('researching', 'triggered')"),
+    db.prepare("UPDATE itches SET status = 'resolved' WHERE status = 'killed'"),
+    db.prepare("DROP INDEX IF EXISTS itches_user_status_idx"),
+  ]);
+  await db.batch([
+    db.prepare("CREATE INDEX IF NOT EXISTS itches_user_status_idx ON itches(user_id, status, last_felt_at DESC)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS itches_user_normalized_idx ON itches(user_id, normalized_body)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS itch_events_itch_created_idx ON itch_events(itch_id, created_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS itch_links_itch_idx ON itch_links(itch_id, created_at)"),
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS itch_links_unique_idx ON itch_links(itch_id, target_type, target_id, relation)"),
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS explorations_itch_round_idx ON explorations(itch_id, user_id, round)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS explorations_user_updated_idx ON explorations(user_id, updated_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS directions_itch_status_idx ON directions(itch_id, user_id, status, updated_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS directions_exploration_idx ON directions(exploration_id)"),
+  ]);
   // topics 表扩展列（幂等 ALTER）
   const topicColumns = await db.prepare("PRAGMA table_info(topics)").all<{ name: string }>();
   const topicExisting = new Set(topicColumns.results.map((c) => c.name));
