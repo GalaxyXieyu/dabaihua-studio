@@ -71,7 +71,14 @@ export function describeSyncResultError(result) {
 function syncExporterAccount(accountId, limit = 20) {
   const result = runJson(["exporter-sync", "--account-id", String(accountId), "--limit", String(limit)]);
   const syncError = describeSyncResultError(result);
-  if (syncError) throw new Error(syncError);
+  if (syncError) {
+    // fetched_count=0 不一定是登录失效，用 auth-check 确认后再决定
+    if (syncError.includes("没有返回任何文章")) {
+      const auth = runJson(["exporter-auth-check"]);
+      if (auth.ok && auth.status === "valid") return result;
+    }
+    throw new Error(syncError);
+  }
   return result;
 }
 
