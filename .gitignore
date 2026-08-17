@@ -43,3 +43,13 @@ next-env.d.ts
 /outputs/
 /work/
 /.wechat-runtime/
+
+# 采集端（collector/）运行态
+/collector/node/
+/collector/logs/
+/collector/**/__pycache__/
+*.pyc
+/collector/*.bak
+/collector/.qr-push-state
+/collector/.qr-push-state.gentle
+/collector/.workbuddy/
