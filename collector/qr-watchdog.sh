@@ -3,9 +3,9 @@
 # 逻辑：登录有效且距过期>24h → 静默退出；否则把二维码推到清流阅读网页横幅
 #       （管理员登录后自动弹出），飞书只发一条文字提醒不发图。
 #       等扫码确认后自动完成续期。每天最多发起 5 轮防轰炸。
-export MOORE_WECHAT_EXPORTER_SCRIPT=$HOME/wechat-collector/moore/scripts/wechat_exporter.py
+export MOORE_WECHAT_EXPORTER_SCRIPT=$HOME/wechat-collector/collector/moore/scripts/wechat_exporter.py
 export MOORE_WECHAT_EXPORTER_DISABLE_KEYCHAIN=1
-W=$HOME/wechat-collector/app/scripts/wechat-exporter-browser.py
+W=$HOME/wechat-collector/collector/app/scripts/wechat-exporter-browser.py
 LARK=$HOME/bin/lark-cli
 TARGET=ou_e259415b8f68b3007c23920aa2f80ca2
 STATE=$HOME/wechat-collector/.qr-push-state
