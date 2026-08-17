@@ -15,7 +15,7 @@
     <path d="M19 48C28 38 38 38 47 48C56 58 66 58 73 48" stroke="white" stroke-width="6" stroke-linecap="round"/>
   </g>
 
-  <text x="104" y="336" fill="#1B2030" font-family="Avenir Next, PingFang SC, Noto Sans SC, sans-serif" font-size="96" font-weight="700" letter-spacing="-3">清流阅读</text>
+  <text x="104" y="336" fill="#1B2030" font-family="Avenir Next, PingFang SC, Noto Sans SC, sans-serif" font-size="96" font-weight="700" letter-spacing="-3">清流工作室</text>
   <text x="110" y="411" fill="#315CC8" font-family="Avenir Next, PingFang SC, Noto Sans SC, sans-serif" font-size="30" font-weight="700" letter-spacing="4">RSS · X · 公众号</text>
   <rect x="106" y="462" width="76" height="5" rx="2.5" fill="#315CC8"/>
   <text x="106" y="536" fill="#50586C" font-family="Avenir Next, PingFang SC, Noto Sans SC, sans-serif" font-size="29" font-weight="500">把每天的新内容，排成一条读得完的清流。</text>
@@ -32,7 +32,7 @@
   <g transform="translate(704 112)">
     <rect width="46" height="46" rx="12" fill="#315CC8"/>
     <path d="M10 19C15 14 20 14 25 19C30 24 35 24 39 19M10 28C15 23 20 23 25 28C30 33 35 33 39 28" stroke="white" stroke-width="3" stroke-linecap="round"/>
-    <text x="62" y="21" fill="#1B2030" font-family="Avenir Next, PingFang SC, sans-serif" font-size="20" font-weight="700">清流阅读</text>
+    <text x="62" y="21" fill="#1B2030" font-family="Avenir Next, PingFang SC, sans-serif" font-size="20" font-weight="700">清流工作室</text>
     <text x="62" y="43" fill="#727A8D" font-family="Avenir Next, PingFang SC, sans-serif" font-size="13" font-weight="500">RSS · X · 公众号</text>
   </g>
 

@@ -57,7 +57,7 @@ export default async function StrategyPage() {
         <div className="flex items-center gap-3">
           <a href="/" className="flex items-center gap-2 text-sm font-bold text-[var(--muted)] hover:text-[var(--green)]">
             <span className="text-base">🌊</span>
-            <span>清流阅读</span>
+            <span>清流工作室</span>
           </a>
           <span className="text-[var(--line-strong)]">/</span>
           <h1 className="text-lg font-bold">⚙️ 策略配置</h1>

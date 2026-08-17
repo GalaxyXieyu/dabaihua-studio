@@ -1,4 +1,4 @@
-# qingliu-reader Claude Entry
+# qingliu-studio Claude Entry
 
 先读取 `AGENTS.md`，再读取：
 

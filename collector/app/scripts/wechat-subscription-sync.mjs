@@ -453,7 +453,7 @@ async function runHealthCheck(dailyState) {
         "im", "+messages-send",
         "--user-id", LARK_BOT_TARGET,
         "--as", "bot",
-        "--text", `⚠️ 公众号采集异常告警：过去 24 小时没有新文章入库。请检查采集服务登录态和网络连接。\n清流阅读: https://topic.aigalaxy.top:8443`,
+        "--text", `⚠️ 公众号采集异常告警：过去 24 小时没有新文章入库。请检查采集服务登录态和网络连接。\n清流工作室: https://topic.aigalaxy.top:8443`,
       ], { encoding: "utf8", timeout: 15000 });
     }
     await writeFile(checkedFile, dailyState.date, "utf8");

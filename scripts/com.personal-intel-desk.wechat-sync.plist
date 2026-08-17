@@ -7,10 +7,10 @@
   <key>ProgramArguments</key>
   <array>
     <string>/opt/homebrew/bin/node</string>
-    <string>/ABSOLUTE/PATH/TO/qingliu-reader/scripts/wechat-subscription-sync.mjs</string>
+    <string>/ABSOLUTE/PATH/TO/qingliu-studio/scripts/wechat-subscription-sync.mjs</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>/ABSOLUTE/PATH/TO/qingliu-reader</string>
+  <string>/ABSOLUTE/PATH/TO/qingliu-studio</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>RSS_AI_ENDPOINT</key>
@@ -25,8 +25,8 @@
   <key>StartInterval</key>
   <integer>60</integer>
   <key>StandardOutPath</key>
-  <string>/tmp/qingliu-reader-wechat-sync.log</string>
+  <string>/tmp/qingliu-studio-wechat-sync.log</string>
   <key>StandardErrorPath</key>
-  <string>/tmp/qingliu-reader-wechat-sync-error.log</string>
+  <string>/tmp/qingliu-studio-wechat-sync-error.log</string>
 </dict>
 </plist>

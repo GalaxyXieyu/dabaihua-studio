@@ -1,8 +1,8 @@
-# 清流阅读
+# 清流工作室
 
-一个可自行部署的阅读与内容发现工作台。它聚合 RSS、X 与微信公众号，也把反复出现的个人问题记录为心结，供 Agent、CLI 和后续内容工作流持续炼化。
+一个可自行部署的阅读、心结与内容发现工作台。它聚合 RSS、X 与微信公众号，也把反复出现的个人问题记录为心结，供 Agent、CLI 和后续内容工作流持续炼化。
 
-![清流阅读预览](public/og-community.png)
+![清流工作室预览](public/og-community.png)
 
 ## 功能
 
@@ -27,8 +27,8 @@
 需要 Node.js `>=22.13.0`。
 
 ```bash
-git clone https://github.com/zhangtianze703-design/qingliu-reader.git
-cd qingliu-reader
+git clone https://github.com/GalaxyXieyu/qingliu-studio.git
+cd qingliu-studio
 npm install
 npm run dev
 ```
@@ -85,7 +85,7 @@ macOS 定时任务模板位于 `scripts/com.personal-intel-desk.wechat-sync.plis
 在任何电脑读取订阅流、心结与选题库：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/GalaxyXieyu/qingliu-reader/main/public/cli/topics -o ~/bin/topics && chmod +x ~/bin/topics
+curl -fsSL https://raw.githubusercontent.com/GalaxyXieyu/qingliu-studio/main/public/cli/topics -o ~/bin/topics && chmod +x ~/bin/topics
 topics login        # 账号密码换本机 API Key（密码不落盘）；或 topics login --token topk_xxx
 topics inbox        # 统一收件箱；topics open <id> 阅读全文（默认标记已读）
 topics sources      # 订阅源总览；topics sources set <id> --interval 30m 调整每源拉取间隔

@@ -91,7 +91,7 @@ test("ships public passage annotations, one-level replies, plaza feeds, personal
   assert.match(page, /返回来源列表/);
   assert.match(page, /sidebarDraft/);
   assert.equal([...page.matchAll(/onSelection=\{handleArticleSelection\}/g)].length, 2);
-  assert.match(page, /登录清流阅读/);
+  assert.match(page, /登录清流工作室/);
   assert.match(styles, /reader-annotation-layout\.with-sidebar/);
   assert.match(styles, /annotation-sidebar/);
   assert.match(styles, /discover-immersive/);
@@ -487,14 +487,14 @@ test("ships secure accounts, personal state, source follows, contributors, and d
   assert.doesNotMatch(page, /\[data\.user, selectedItem, view\]/);
 });
 
-test("defines the Qingliu Reader shell", async () => {
+test("defines the Qingliu Studio shell", async () => {
   const [page, layout, discoverPage] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/discover/page.tsx", import.meta.url), "utf8"),
   ]);
-  assert.match(layout, /const title = "清流阅读 · RSS \/ X \/ 公众号"/i);
-  assert.match(page, /清流阅读/);
+  assert.match(layout, /const title = "清流工作室 · RSS \/ X \/ 公众号"/i);
+  assert.match(page, /清流工作室/);
   assert.match(page, /今天，他们为你更新了/);
   assert.match(page, /开始今日阅读/);
   assert.match(page, /发现来源/);

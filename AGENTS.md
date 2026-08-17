@@ -1,6 +1,6 @@
-# qingliu-reader Agent Contract
+# qingliu-studio Agent Contract
 
-qingliu-reader 是心结驱动的个人阅读、研究和内容发现系统，运行在 Next.js/vinext、Cloudflare Workers、D1、R2 和 Drizzle 上。
+qingliu-studio 是心结驱动的个人阅读、研究和内容发现工作台，运行在 Next.js/vinext、Cloudflare Workers、D1、R2 和 Drizzle 上。
 
 ## Domain Rules
 

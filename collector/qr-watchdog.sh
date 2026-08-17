@@ -1,6 +1,6 @@
 #!/bin/bash
 # 公众号采集登录态看门狗（每 30 分钟由 launchd 触发）
-# 逻辑：登录有效且距过期>24h → 静默退出；否则把二维码推到清流阅读网页横幅
+# 逻辑：登录有效且距过期>24h → 静默退出；否则把二维码推到清流工作室网页横幅
 #       （管理员登录后自动弹出），飞书只发一条文字提醒不发图。
 #       等扫码确认后自动完成续期。每天最多发起 5 轮防轰炸。
 export MOORE_WECHAT_EXPORTER_SCRIPT=$HOME/wechat-collector/collector/moore/scripts/wechat_exporter.py
