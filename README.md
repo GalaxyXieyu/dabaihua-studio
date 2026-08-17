@@ -70,7 +70,7 @@ export WECHAT_DOWNLOADER=/absolute/path/to/wechat_downloader.py
 npm run sync:wechat
 ```
 
-macOS 定时任务模板位于 `scripts/com.personal-intel-desk.wechat-sync.plist`。使用前必须把其中的占位路径替换为自己机器上的绝对路径。请只导入你有权保存和使用的内容。
+macOS 定时任务模板位于 `scripts/com.qingliu-studio.wechat-sync.plist`。使用前必须把其中的占位路径替换为自己机器上的绝对路径。请只导入你有权保存和使用的内容。
 
 ## 数据与版权
 

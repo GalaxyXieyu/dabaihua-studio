@@ -526,7 +526,7 @@ test("ships unified subscriptions, daily sync, translation, reading, and idea wo
     readFile(new URL("../scripts/wechat-subscription-sync.mjs", import.meta.url), "utf8"),
     readFile(new URL("../scripts/sites-browser-fetch.mjs", import.meta.url), "utf8"),
     readFile(new URL("../scripts/backfill-wechat-markdown.mjs", import.meta.url), "utf8"),
-    readFile(new URL("../scripts/com.personal-intel-desk.wechat-sync.plist", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/com.qingliu-studio.wechat-sync.plist", import.meta.url), "utf8"),
     readFile(new URL("../vite.config.ts", import.meta.url), "utf8"),
   ]);
   assert.match(page, /\/api\/sources/);
