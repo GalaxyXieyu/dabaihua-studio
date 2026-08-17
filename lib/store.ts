@@ -425,6 +425,7 @@ export async function captureLink(env: AppEnv, url: string, title?: string) {
       if (response.ok) {
         resolvedTitle = readMeta(html, "og:title") || readTag(html, "title") || "待处理链接";
         excerpt = readMeta(html, "og:description") || readMeta(html, "description");
+        publishedAt = normalizePublishedAt(readMeta(html, "article:published_time") || readMeta(html, "og:updated_time"));
       }
     } catch {
       // Some platforms block server-side previews. The link is still worth keeping.
@@ -542,6 +543,14 @@ function readMeta(html: string, key: string) {
     if (match?.[1]) return stripHtml(match[1]);
   }
   return "";
+}
+
+function normalizePublishedAt(raw: string | null | undefined): string | null {
+  const value = String(raw || "").trim();
+  if (!value) return null;
+  const ts = Date.parse(value);
+  if (Number.isNaN(ts)) return null;
+  return new Date(ts).toISOString();
 }
 
 function readTag(html: string, tag: string) {
