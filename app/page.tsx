@@ -1933,7 +1933,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
           <div className="settings-install">
             <h2>在新设备上安装命令行</h2>
             <pre><code>{`mkdir -p ~/bin\ncurl -fsSL https://topic.aigalaxy.top:8443/cli/topics -o ~/bin/topics\nchmod +x ~/bin/topics\ntopics login --token <上面生成的密钥>`}</code></pre>
-            <p className="settings-install-note">注意端口 <code>:8443</code>——本站的 443 端口在腾讯云备案接入完成前不可用。GitHub 备用源：<code>curl -fsSL https://raw.githubusercontent.com/GalaxyXieyu/qingliu-studio/main/public/cli/topics -o ~/bin/topics</code></p>
+            <p className="settings-install-note">注意端口 <code>:8443</code>——本站的 443 端口在腾讯云备案接入完成前不可用。GitHub 备用源：<code>curl -fsSL https://raw.githubusercontent.com/GalaxyXieyu/dabaihua-studio/main/public/cli/topics -o ~/bin/topics</code></p>
           </div>
         </div>}
     </section>}

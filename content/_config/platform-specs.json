@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "purpose": "项目内可版本控制的平台结构规格。动态选题、标题、CTA 与禁用模式以 topics strategy 为准。",
+  "platforms": {
+    "gzh": {
+      "titleMaxChars": 64,
+      "recommendedBodyChars": [1500, 3000],
+      "headlineCover": { "generateAspectRatio": "16:9", "feedCrop": "center 2.35:1", "safeArea": "vertical center" },
+      "secondaryCover": { "aspectRatio": "1:1" },
+      "inlineImageAspectRatio": "16:9"
+    },
+    "bilibili": {
+      "coverAspectRatio": "16:9",
+      "coverPixels": "1280x720",
+      "scriptRecommendedChars": [1500, 2500]
+    },
+    "xhs": {
+      "noteMaxChars": 1000,
+      "recommendedBodyChars": [200, 500],
+      "titleMaxChars": 20,
+      "tagsCount": [5, 8],
+      "cardAspectRatio": "3:4",
+      "cardPixels": "1080x1440"
+    },
+    "x": {
+      "threadPostMaxChars": 250,
+      "threadRecommendedPosts": [5, 7]
+    }
+  }
+}

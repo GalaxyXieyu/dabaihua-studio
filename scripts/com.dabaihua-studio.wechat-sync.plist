@@ -3,14 +3,14 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.qingliu-studio.wechat-sync</string>
+  <string>com.dabaihua-studio.wechat-sync</string>
   <key>ProgramArguments</key>
   <array>
     <string>/opt/homebrew/bin/node</string>
-    <string>/ABSOLUTE/PATH/TO/qingliu-studio/scripts/wechat-subscription-sync.mjs</string>
+    <string>/ABSOLUTE/PATH/TO/dabaihua-studio/scripts/wechat-subscription-sync.mjs</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>/ABSOLUTE/PATH/TO/qingliu-studio</string>
+  <string>/ABSOLUTE/PATH/TO/dabaihua-studio</string>
   <key>EnvironmentVariables</key>
   <dict>
     <key>RSS_AI_ENDPOINT</key>
@@ -25,8 +25,8 @@
   <key>StartInterval</key>
   <integer>60</integer>
   <key>StandardOutPath</key>
-  <string>/tmp/qingliu-studio-wechat-sync.log</string>
+  <string>/tmp/dabaihua-studio-wechat-sync.log</string>
   <key>StandardErrorPath</key>
-  <string>/tmp/qingliu-studio-wechat-sync-error.log</string>
+  <string>/tmp/dabaihua-studio-wechat-sync-error.log</string>
 </dict>
 </plist>

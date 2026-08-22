@@ -1,0 +1,12 @@
+# Project-local MCP template for Codex. Set these variables in the environment
+# that starts Codex; do not commit credentials.
+
+[mcp_servers.image-this]
+url = "http://120.76.159.103:34128/mcp"
+env_http_headers = { Authorization = "DABAIHUA_IMAGE_THIS_AUTHORIZATION" }
+startup_timeout_sec = 180
+
+[mcp_servers.wenyan-mcp]
+url = "http://120.76.159.103:39000/mcp"
+env_http_headers = { "X-API-Key" = "DABAIHUA_WENYAN_API_KEY" }
+startup_timeout_sec = 180

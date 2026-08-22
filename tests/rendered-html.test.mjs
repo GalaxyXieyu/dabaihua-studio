@@ -487,7 +487,7 @@ test("ships secure accounts, personal state, source follows, contributors, and d
   assert.doesNotMatch(page, /\[data\.user, selectedItem, view\]/);
 });
 
-test("defines the Qingliu Studio shell", async () => {
+test("defines the Dabaihua Studio shell", async () => {
   const [page, layout, discoverPage] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
@@ -526,7 +526,7 @@ test("ships unified subscriptions, daily sync, translation, reading, and idea wo
     readFile(new URL("../scripts/wechat-subscription-sync.mjs", import.meta.url), "utf8"),
     readFile(new URL("../scripts/sites-browser-fetch.mjs", import.meta.url), "utf8"),
     readFile(new URL("../scripts/backfill-wechat-markdown.mjs", import.meta.url), "utf8"),
-    readFile(new URL("../scripts/com.qingliu-studio.wechat-sync.plist", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/com.dabaihua-studio.wechat-sync.plist", import.meta.url), "utf8"),
     readFile(new URL("../vite.config.ts", import.meta.url), "utf8"),
   ]);
   assert.match(page, /\/api\/sources/);

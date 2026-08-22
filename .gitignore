@@ -53,3 +53,7 @@ next-env.d.ts
 /collector/.qr-push-state
 /collector/.qr-push-state.gentle
 /collector/.workbuddy/
+
+# Project-local MCP credentials (use the tracked example files as templates)
+/.mcp.json
+/.codex/config.toml

@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "image-this": {
+      "url": "http://120.76.159.103:34128/mcp",
+      "headers": {
+        "Authorization": "Bearer ${DABAIHUA_IMAGE_THIS_TOKEN}"
+      },
+      "directTools": ["generate_image"],
+      "includeTools": ["generate_image"],
+      "lifecycle": "lazy",
+      "requestTimeoutMs": 180000
+    },
+    "wenyan-mcp": {
+      "url": "http://120.76.159.103:39000/mcp",
+      "headers": {
+        "X-API-Key": "${DABAIHUA_WENYAN_API_KEY}"
+      },
+      "lifecycle": "lazy",
+      "requestTimeoutMs": 180000
+    }
+  }
+}

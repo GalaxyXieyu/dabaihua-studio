@@ -4,7 +4,7 @@
 topics — 内容选题中心的多端 CLI（云端命令集 P1）
 
 任何电脑安装（两个源任选）：
-  curl -fsSL https://raw.githubusercontent.com/GalaxyXieyu/qingliu-studio/main/public/cli/topics -o ~/bin/topics && chmod +x ~/bin/topics
+  curl -fsSL https://raw.githubusercontent.com/GalaxyXieyu/dabaihua-studio/main/public/cli/topics -o ~/bin/topics && chmod +x ~/bin/topics
   curl -fsSL https://topic.aigalaxy.top:8443/cli/topics -o ~/bin/topics && chmod +x ~/bin/topics
 
 首次登录（二选一）：

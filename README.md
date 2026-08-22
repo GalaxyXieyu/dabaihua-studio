@@ -27,8 +27,8 @@
 需要 Node.js `>=22.13.0`。
 
 ```bash
-git clone https://github.com/GalaxyXieyu/qingliu-studio.git
-cd qingliu-studio
+git clone https://github.com/GalaxyXieyu/dabaihua-studio.git
+cd dabaihua-studio
 npm install
 npm run dev
 ```
@@ -70,7 +70,7 @@ export WECHAT_DOWNLOADER=/absolute/path/to/wechat_downloader.py
 npm run sync:wechat
 ```
 
-macOS 定时任务模板位于 `scripts/com.qingliu-studio.wechat-sync.plist`。使用前必须把其中的占位路径替换为自己机器上的绝对路径。请只导入你有权保存和使用的内容。
+macOS 定时任务模板位于 `scripts/com.dabaihua-studio.wechat-sync.plist`。使用前必须把其中的占位路径替换为自己机器上的绝对路径。请只导入你有权保存和使用的内容。
 
 ## 数据与版权
 
@@ -85,7 +85,7 @@ macOS 定时任务模板位于 `scripts/com.qingliu-studio.wechat-sync.plist`。
 在任何电脑读取订阅流、心结与选题库：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/GalaxyXieyu/qingliu-studio/main/public/cli/topics -o ~/bin/topics && chmod +x ~/bin/topics
+curl -fsSL https://raw.githubusercontent.com/GalaxyXieyu/dabaihua-studio/main/public/cli/topics -o ~/bin/topics && chmod +x ~/bin/topics
 topics login        # 账号密码换本机 API Key（密码不落盘）；或 topics login --token topk_xxx
 topics inbox        # 统一收件箱；topics open <id> 阅读全文（默认标记已读）
 topics sources      # 订阅源总览；topics sources set <id> --interval 30m 调整每源拉取间隔
