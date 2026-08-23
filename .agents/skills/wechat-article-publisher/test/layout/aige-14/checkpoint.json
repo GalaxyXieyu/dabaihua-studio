@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "name": "aige-14-layout-v1",
+  "captured_at": "2026-08-23",
+  "scope": "punctuation, semantic mobile layout, and rendered HTML structure",
+  "files": {
+    "input/Aige 14 - 原稿.docx": "1d952777fa1508840da8edc25d3d9683205b4d319df86653ca8fec82f40776e6",
+    "expected/01-source.md": "3d17578b481d7fe6b9c5dc3110f1be5de5de9f5205f9f7716f62e3ecec003337",
+    "expected/02-punctuation.md": "3319356943977a4afb3aaf7a7ed18e1720753c15f67a82cf43a8e467071aeb19",
+    "expected/03-layout.md": "d0c3cec77bc8c5648779fa7b0e7b521e171a6a74062f6600d888b9cbc2b64a55",
+    "expected/output.html": "b790d162a8243d9d168cc1a30a8749fc4bf1ae602c81ea39a871d00675b53df8"
+  },
+  "contracts": [
+    "03-layout.md is the exact approved semantic-layout golden master",
+    "rendered text must equal 03-layout.md after layout markers are removed",
+    "every chapter number and title is centered with one visual blank line between them"
+  ]
+}

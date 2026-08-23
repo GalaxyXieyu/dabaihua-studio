@@ -1,0 +1,45 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "score", "summary", "dimensions", "regressions"],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "warn", "fail"]
+    },
+    "score": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "summary": {
+      "type": "string"
+    },
+    "dimensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["content_fidelity", "punctuation", "semantic_layout", "heading_layout", "rendering"],
+      "properties": {
+        "content_fidelity": {"type": "integer", "minimum": 0, "maximum": 20},
+        "punctuation": {"type": "integer", "minimum": 0, "maximum": 20},
+        "semantic_layout": {"type": "integer", "minimum": 0, "maximum": 30},
+        "heading_layout": {"type": "integer", "minimum": 0, "maximum": 15},
+        "rendering": {"type": "integer", "minimum": 0, "maximum": 15}
+      }
+    },
+    "regressions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["severity", "location", "evidence", "recommendation"],
+        "properties": {
+          "severity": {"type": "string", "enum": ["critical", "major", "minor"]},
+          "location": {"type": "string"},
+          "evidence": {"type": "string"},
+          "recommendation": {"type": "string"}
+        }
+      }
+    }
+  }
+}

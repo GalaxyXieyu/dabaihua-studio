@@ -1,0 +1,4 @@
+interface:
+  display_name: "爱格标点校订"
+  short_description: "基于上下文语意和爱格文风，逐段校订中文文稿标点符号"
+  default_prompt: "使用 $aige-punctuation-editor 逐段校订这篇爱格文稿的标点，保留原文内容、分行与风格，并将每处修改标点及其前一字统一标为蓝色。"
