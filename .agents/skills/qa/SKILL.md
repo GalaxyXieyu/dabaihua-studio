@@ -184,7 +184,7 @@ changelog:
 
 ### L4：活人感终审（最主观、最重要）
 
-先按 `.agents/skills/dabaihua-humanizer/SKILL.md`（`dabaihua-humanizer`）做一次结构级扫描，再通读全文。关键词扫描只能发现表面词汇，不能替代下面的判断。
+先按 `.agents/skills/wechat-draft-editor/SKILL.md`（`wechat-draft-editor`）做一次结构级扫描，再通读全文。关键词扫描只能发现表面词汇，不能替代下面的判断。
 
 重点检查：
 - 同一个工具/项目是否被重复介绍，或前后两次宣布“我做了它”。

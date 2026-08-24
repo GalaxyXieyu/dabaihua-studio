@@ -16,7 +16,7 @@ dabaihua-studio 是心结驱动的个人阅读、研究和内容发现工作台�
 - 内容项目的唯一源工作区是 `content/projects/<content-slug>/`；定位、研究、主稿、衍生稿、视觉资产、QA 与发布记录必须跟随同一内容项目。
 - `content/ghz/`、`content/bilibili/`、`content/xhs/` 只保存对应渠道的发布快照、上传记录或专属资产，并链接回源项目；不得重新分叉主稿。
 - 动态内容策略以 `topics strategy` 为准，离线时使用 `topics strategy --cached`；项目内结构规格见 `content/_config/platform-specs.json`，作者声音基线见 `content/_config/author-voice.md`。
-- 生产路由：新选题先用 `positioning`；主稿用 `writer`；结构级去 AI 味用 `dabaihua-humanizer`；发布前用 `qa`；多平台文本衍生用 `derive`，单独的小红书正文用 `xhs`；普通配图与封面用 `visual`，成套社交卡和公众号封面对用 `guizang-social-card-skill`。
+- 生产路由：新选题先用 `positioning`；主稿用 `writer`；结构级去 AI 味用 `wechat-draft-editor`；公众号排版用 `gzh-design-skill`；发布前用 `qa`；多平台文本衍生用 `derive`，单独的小红书正文用 `xhs`；普通配图与封面用 `visual`，成套社交卡和公众号封面对用 `guizang-social-card-skill`。
 - 不得凭空添加作者经历、情绪、数据或观点；真人感来自已验证的材料和用户确认的作者声音，而不是口头禅、自嘲或强制疑问句。
 - 公众号图片上传与文章发布是外部写操作，只有在用户明确确认后才使用项目级 `wenyan-mcp`。
 
