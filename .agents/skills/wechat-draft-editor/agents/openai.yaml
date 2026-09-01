@@ -1,4 +1,4 @@
 interface:
   display_name: "公众号文稿去 AI 化"
-  short_description: "检查并改写公众号文稿中的 AI 腔、翻译腔、书面腔和机械表达"
-  default_prompt: "使用 $wechat-draft-editor 为这篇公众号文稿去除 AI 表达，保留事实、观点和作者声音。"
+  short_description: "优化公众号正文与二级标题的语言表达、逻辑结构和阅读路径"
+  default_prompt: "使用 $wechat-draft-editor 优化这篇公众号文稿的正文与二级标题，保留事实、观点和作者声音。"
