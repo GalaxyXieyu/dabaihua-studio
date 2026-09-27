@@ -9,6 +9,9 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const exporter = process.env.WECHAT_EXPORTER || path.join(projectRoot, "scripts", "wechat-exporter-browser.py");
 const wizard = process.env.WECHAT_WIZARD || "";
 const downloader = process.env.WECHAT_DOWNLOADER || "";
+// 公众号后台文章列表接口已于 2026-07-30 关闭，默认改走微信读书；WECHAT_SYNC_SOURCE=exporter 可切回旧通道。
+const weread = process.env.WECHAT_WEREAD || path.join(projectRoot, "collector", "moore", "scripts", "weread_mp.py");
+export const syncSource = (process.env.WECHAT_SYNC_SOURCE || "weread").trim().toLowerCase();
 const endpoint = (process.env.RSS_AI_ENDPOINT || "http://localhost:3000").replace(/\/$/, "");
 const runtime = path.join(os.homedir(), ".moore", "wechat-article-downloader");
 export const managedCacheRoot = path.join(runtime, "rss-ai-cache");
@@ -44,6 +47,53 @@ function runPythonJson(script, args) {
 }
 
 const runJson = (args) => runPythonJson(exporter, args);
+
+export class WereadError extends Error {
+  constructor(message, { code = "", fatal = false } = {}) {
+    super(message);
+    this.code = code;
+    this.fatal = fatal;
+  }
+}
+
+// weread_mp.py prints one JSON object even when it exits 1; `fatal` means stop the whole run.
+export function parseWereadResult(status, stdout, stderr = "") {
+  let parsed;
+  try { parsed = JSON.parse(String(stdout || "").trim().split("\n").at(-1) || ""); }
+  catch { throw new WereadError((stderr || stdout || "微信读书采集器运行失败").trim().slice(-800), { fatal: true }); }
+  if (status !== 0 || parsed.ok === false) {
+    throw new WereadError(String(parsed.error || parsed.status || "微信读书采集失败"), { code: String(parsed.code ?? ""), fatal: Boolean(parsed.fatal) });
+  }
+  return parsed;
+}
+
+function runWeread(args) {
+  const result = spawnSync("python3", [weread, ...args], { cwd: projectRoot, encoding: "utf8", timeout: 5 * 60 * 1000 });
+  return parseWereadResult(result.status, result.stdout, result.stderr);
+}
+
+function wereadAuthCheck() {
+  try {
+    runWeread(["auth-check"]);
+    return "";
+  } catch (error) {
+    return `微信读书登录已失效，需要重新扫码（${error instanceof Error ? error.message : "auth-check 失败"}）`;
+  }
+}
+
+async function syncWereadAccount(account, requestId, { force = false } = {}) {
+  const fakeid = String(account.fakeid || "").trim();
+  if (!fakeid) throw new WereadError("公众号账号信息不完整");
+  const args = ["latest", "--fakeid", fakeid, "--name", String(account.nickname || "")];
+  if (force) args.push("--force");
+  const result = runWeread(args);
+  const withAvatar = { ...account, avatar_url: account.avatar_url || result.avatar_url || "" };
+  const rows = result.articles || [];
+  const imported = rows.length ? await importPublicationMetadata(withAvatar, rows, requestId) : 0;
+  // Only after the app accepted the rows do we mark the newest reviewId as seen (local, no network).
+  if (result.source === "weread-cover" && rows[0]?.msgid) runWeread(["seen", "--fakeid", fakeid, "--review-id", String(rows[0].msgid)]);
+  return { imported, unchanged: Boolean(result.unchanged), source: result.source, latestTitle: result.articles?.[0]?.title || result.latest_title || "" };
+}
 
 export function describeCollectorError(parsed) {
   if (!parsed || typeof parsed !== "object") return "";
@@ -167,9 +217,22 @@ async function request(pathname, options = {}) {
     ...options,
     headers: { ...authHeaders(), ...(options.headers || {}) },
   };
-  const response = remote
-    ? await sitesBrowserFetch(`${endpoint}${pathname}`, requestOptions)
-    : await fetch(`${endpoint}${pathname}`, requestOptions);
+  let response;
+  try {
+    response = remote
+      ? await sitesBrowserFetch(`${endpoint}${pathname}`, requestOptions)
+      : await fetch(`${endpoint}${pathname}`, requestOptions);
+  } catch (error) {
+    if (remote) throw error;
+    // 本地 dev server 偶发连接重置（如 HMR 重载），稍等后重试一次
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      response = await fetch(`${endpoint}${pathname}`, requestOptions);
+    } catch (retryError) {
+      const cause = retryError?.cause?.code || retryError?.cause?.message || "";
+      throw new Error(`情报台请求失败 ${pathname}${cause ? `（${cause}）` : ""}`);
+    }
+  }
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || `情报台返回 ${response.status}`);
   return result;
@@ -197,6 +260,7 @@ async function importPublicationMetadata(account, rows, requestId) {
       excerpt: String(row.digest || ""),
       author: String(row.author || row.account_name || account.nickname || ""),
       publishedAt,
+      ...(row.content_markdown ? { contentMarkdown: String(row.content_markdown) } : {}),
     }];
   });
   for (let index = 0; index < articles.length; index += 20) {
@@ -285,6 +349,16 @@ async function processPendingRequests() {
       const candidate = resolveWechatAccount(task.query, accountName, metadata.biz);
       const saved = runJson(["exporter-add", "--from-json", JSON.stringify(candidate)]);
       const account = saved.account;
+      if (syncSource === "weread") {
+        const latest = await syncWereadAccount(account, task.id, { force: true });
+        await request("/api/import-queue", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ id: task.id, status: "completed", stage: "completed", resultName: account.nickname || accountName, itemCount: Math.max(partialImport.itemCount, latest.imported), error: "" }),
+        });
+        completed += 1;
+        continue;
+      }
       syncExporterAccount(account.id);
       const knownArticles = runJson(["exporter-articles", "--account-id", String(account.id), "--limit", "20"]).articles || [];
       await importPublicationMetadata(account, knownArticles, task.id);
@@ -346,6 +420,7 @@ async function dailySync() {
     return { ran: false, accounts: 0, failed: 0, reason: decision.reason };
   }
   const accounts = runJson(["exporter-accounts"]).accounts || [];
+  if (syncSource === "weread") return dailyWereadSync(accounts, decision);
   let synced = 0;
   let failed = 0;
   const errors = [];
@@ -369,6 +444,40 @@ async function dailySync() {
     await writeFile(stateFile, `${decision.today}\n`, "utf8");
   }
   return { ran: true, accounts: synced, failed, errors };
+}
+
+async function dailyWereadSync(accounts, decision) {
+  const authError = wereadAuthCheck();
+  if (authError) return { ran: true, source: "weread", accounts: 0, failed: Math.max(accounts.length, 1), errors: [authError] };
+  let synced = 0;
+  let failed = 0;
+  let imported = 0;
+  const errors = [];
+  const details = [];
+  for (const [index, account] of accounts.entries()) {
+    const accountName = String(account.nickname || account.fakeid || account.id || "未知公众号");
+    try {
+      const result = await syncWereadAccount(account);
+      synced += 1;
+      imported += result.imported;
+      details.push({ account: accountName, imported: result.imported, unchanged: result.unchanged, latest: result.latestTitle });
+    } catch (error) {
+      failed += 1;
+      const message = error instanceof Error ? error.message : "公众号同步失败";
+      errors.push(`${accountName}: ${message}`);
+      if (error instanceof WereadError && error.fatal) {
+        const skipped = accounts.length - index - 1;
+        failed += skipped;
+        errors.push(`微信读书登录失效或被限流，已停止本轮同步（跳过 ${skipped} 个公众号）`);
+        break;
+      }
+    }
+  }
+  if (failed === 0) {
+    await mkdir(runtime, { recursive: true });
+    await writeFile(stateFile, `${decision.today}\n`, "utf8");
+  }
+  return { ran: true, source: "weread", accounts: synced, failed, imported, details, errors };
 }
 
 async function main() {

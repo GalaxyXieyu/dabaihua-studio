@@ -764,16 +764,19 @@ def request_with_cookie_jar(
     jar: http.cookiejar.MozillaCookieJar,
     method: str = "GET",
     body: bytes | None = None,
+    extra_headers: dict[str, str] | None = None,
 ) -> tuple[bytes, dict[str, Any], list[str], str]:
     url = normalize_base_url(base_url) + path
+    headers = {
+        "Accept": "application/json,text/plain,image/*,*/*",
+        "User-Agent": "Moore-WeChat-Exporter/1.0",
+    }
+    headers.update(extra_headers or {})
     req = urllib.request.Request(
         url,
         data=body,
         method=method,
-        headers={
-            "Accept": "application/json,text/plain,image/*,*/*",
-            "User-Agent": "Moore-WeChat-Exporter/1.0",
-        },
+        headers=headers,
     )
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
     with opener.open(req, timeout=30) as resp:
@@ -1011,24 +1014,63 @@ def qr_login_status(base: Path, login_id: str) -> dict[str, Any]:
     }
 
 
+def jar_cookie(jar: http.cookiejar.CookieJar, name: str) -> http.cookiejar.Cookie | None:
+    for cookie in jar:
+        if cookie.name == name and cookie.value and cookie.value != "EXPIRED":
+            return cookie
+    return None
+
+
+def verify_exporter_auth_key(base_url: str, jar: http.cookiejar.MozillaCookieJar, auth_key: str) -> dict[str, Any]:
+    """Ask the exporter which MP account an auth-key is bound to ({} if invalid)."""
+    try:
+        _raw, payload, _cookies, _ctype = request_with_cookie_jar(
+            base_url, "/api/web/mp/info", jar, extra_headers={"X-Auth-Key": auth_key}
+        )
+    except (urllib.error.URLError, OSError):
+        return {}
+    return payload if isinstance(payload, dict) and payload.get("nick_name") else {}
+
+
 def complete_qr_login(base: Path, login_id: str, profile: str = "") -> dict[str, Any]:
     session = load_qr_login_session(base, login_id)
+    base_url = str(session["base_url"])
     jar = login_cookie_jar(base, login_id)
-    _raw, payload, set_cookies, _ctype = request_with_cookie_jar(
-        str(session["base_url"]),
-        "/api/web/login/bizlogin",
-        jar,
-        method="POST",
-        body=b"",
-    )
-    if isinstance(payload, dict) and payload.get("err"):
-        raise RuntimeError(str(payload.get("err")))
+    # bizlogin is one-shot: a successful call consumes the uuid cookie and sets auth-key in the
+    # jar. If a previous run got that far but failed locally (e.g. auth-key storage), a second
+    # bizlogin always answers {"err":"登录失败，请稍后重试"}. So reuse a still-valid jar auth-key.
+    previous = jar_cookie(jar, "auth-key")
+    payload: dict[str, Any] = {}
+    set_cookies: list[str] = []
+    bizlogin_error = ""
+    if jar_cookie(jar, "uuid") or not previous:
+        try:
+            _raw, payload, set_cookies, _ctype = request_with_cookie_jar(
+                base_url, "/api/web/login/bizlogin", jar, method="POST", body=b""
+            )
+        except urllib.error.HTTPError as exc:
+            bizlogin_error = f"HTTP {exc.code}"
+        if isinstance(payload, dict) and payload.get("err"):
+            bizlogin_error = str(payload.get("err"))
     auth_key = extract_cookie_value(set_cookies, "auth-key")
-    if not auth_key:
-        raise RuntimeError("auth-key was not returned by exporter bizlogin")
+    expires_at = str(payload.get("expires") or "") if isinstance(payload, dict) else ""
+    if bizlogin_error or not auth_key:
+        cookie = jar_cookie(jar, "auth-key")
+        info = verify_exporter_auth_key(base_url, jar, cookie.value) if cookie else {}
+        if not info:
+            raise RuntimeError(bizlogin_error or "auth-key was not returned by exporter bizlogin")
+        auth_key = cookie.value
+        payload = {"nickname": info.get("nick_name"), "avatar": info.get("head_img", "")}
+        if cookie.expires:
+            expires_at = dt.datetime.fromtimestamp(cookie.expires, dt.timezone.utc).isoformat()
+        session["recovered_from_cookie_jar"] = True
     nickname = str(payload.get("nickname") or payload.get("nick_name") or profile or "default")
-    expires_at = str(payload.get("expires") or (dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=4)).isoformat())
-    result = upsert_login_profile(base, str(session["base_url"]), auth_key, profile or nickname or "default", expires_at, False)
+    expires_at = expires_at or (dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=4)).isoformat()
+    # Without macOS Keychain (Linux, or MOORE_WECHAT_EXPORTER_DISABLE_KEYCHAIN=1) fall back to local
+    # SQLite storage instead of raising *after* the one-shot bizlogin already consumed the QR login.
+    result = upsert_login_profile(
+        base, base_url, auth_key, profile or nickname or "default", expires_at, not keychain_available()
+    )
     db = connect_db(base)
     try:
         db.execute(
