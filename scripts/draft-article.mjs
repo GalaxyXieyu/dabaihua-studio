@@ -158,21 +158,43 @@ function tableExists(db, name) {
   return Boolean(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
 }
 
-function loadReviewFeedback(dbPath, topicId) {
+const VERDICT_LABELS = { approved: "通过", changes_requested: "要求修改", comments: "仅批注" };
+
+function tryParseJson(value) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function loadReviewFeedback(dbPath, topicId, draftUpdatedAt = null) {
   const db = new DatabaseSync(dbPath);
   try {
     db.exec("PRAGMA busy_timeout = 5000");
-    if (!tableExists(db, "topic_reviews")) return { reject: null, annotations: [] };
-    const reject = db.prepare("SELECT body, created_at AS createdAt FROM topic_reviews WHERE topic_id = ? AND kind = 'reject' ORDER BY created_at DESC, id DESC LIMIT 1").get(topicId) || null;
-    const annotations = db.prepare("SELECT block_index AS blockIndex, quote, body, created_at AS createdAt FROM topic_reviews WHERE topic_id = ? AND kind = 'annotation' AND resolved = 0 ORDER BY block_index ASC, created_at ASC").all(topicId);
-    return { reject, annotations };
+    let reject = null;
+    let annotations = [];
+    if (tableExists(db, "topic_reviews")) {
+      reject = db.prepare("SELECT body, created_at AS createdAt FROM topic_reviews WHERE topic_id = ? AND kind = 'reject' ORDER BY created_at DESC, id DESC LIMIT 1").get(topicId) || null;
+      annotations = db.prepare("SELECT block_index AS blockIndex, quote, body, created_at AS createdAt FROM topic_reviews WHERE topic_id = ? AND kind = 'annotation' AND resolved = 0 ORDER BY block_index ASC, created_at ASC").all(topicId);
+    }
+    let round = null;
+    if (tableExists(db, "review_rounds")) {
+      const row = db.prepare("SELECT round, verdict, comment, feedback_json AS feedbackJson, created_at AS createdAt FROM review_rounds WHERE target_type = 'topic' AND target_id = ? AND verdict IN ('changes_requested', 'comments') ORDER BY round DESC, id DESC LIMIT 1").get(String(topicId)) || null;
+      if (row) {
+        const reviewedAt = Date.parse(row.createdAt);
+        const draftedAt = draftUpdatedAt ? Date.parse(draftUpdatedAt) : Number.NaN;
+        if (!draftUpdatedAt || !Number.isFinite(draftedAt) || !Number.isFinite(reviewedAt) || reviewedAt > draftedAt) round = row;
+      }
+    }
+    return { reject, annotations, round };
   } finally {
     db.close();
   }
 }
 
 function hasReviewFeedback(feedback) {
-  return Boolean(feedback && ((feedback.reject && String(feedback.reject.body || "").trim()) || feedback.annotations.length));
+  return Boolean(feedback && ((feedback.reject && String(feedback.reject.body || "").trim()) || feedback.annotations.length || feedback.round));
 }
 
 function writeReviewFiles(workDir, topic, feedback) {
@@ -189,6 +211,37 @@ function writeReviewFiles(workDir, topic, feedback) {
   } else {
     lines.push("（无）");
   }
+
+  if (feedback.round) {
+    const parsed = tryParseJson(feedback.round.feedbackJson) || {};
+    const marks = Array.isArray(parsed.marks) ? parsed.marks : [];
+    const changes = marks.filter((mark) => mark.type === "change");
+    const goods = marks.filter((mark) => mark.type === "good");
+    const label = VERDICT_LABELS[feedback.round.verdict] || feedback.round.verdict;
+    lines.push("", `## 最新审稿轮次（第 ${feedback.round.round} 轮 · 结论 ${label}）`, "");
+    lines.push("总体意见：");
+    lines.push(feedback.round.comment ? String(feedback.round.comment).trim() : "（无）");
+    lines.push("", `### 要改（${changes.length}）`, "");
+    if (changes.length) {
+      for (const mark of changes) {
+        const context = `${mark.prefix ? `…${mark.prefix}` : ""}【${mark.quote}】${mark.suffix ? `${mark.suffix}…` : ""}`;
+        lines.push(`- 「${mark.quote}」（上下文：${context}）→ ${mark.comment || "（无补充说明）"}`);
+      }
+    } else {
+      lines.push("（无）");
+    }
+    lines.push("", `### 写得好（${goods.length}，必须保留）`, "");
+    if (goods.length) {
+      for (const mark of goods) {
+        const context = `${mark.prefix ? `…${mark.prefix}` : ""}【${mark.quote}】${mark.suffix ? `${mark.suffix}…` : ""}`;
+        lines.push(`- 「${mark.quote}」（上下文：${context}）→ ${mark.comment || "（无补充说明）"}`);
+      }
+    } else {
+      lines.push("（无）");
+    }
+    writeFileSync(path.join(workDir, "review-feedback.json"), `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
+  }
+
   writeFileSync(path.join(workDir, "review-feedback.md"), `${lines.join("\n")}\n`, "utf8");
 }
 
@@ -449,6 +502,7 @@ function reworkRules(workDir) {
   return [
     "这是返工稿：必须逐条回应审稿意见（打回意见优先），保留上一稿中未被批评且符合风格契约的部分，仍只用 sources.md 的事实/链接。",
     `读取 ${workFile(workDir, "00-previous-draft.md")} 和 ${workFile(workDir, "review-feedback.md")}。`,
+    "凡在 review-feedback.md 的「写得好」中列出的段落必须原样保留（可微调措辞，但不得删除、不得改写原意）。",
   ].join("\n");
 }
 
@@ -626,16 +680,16 @@ async function main() {
   }
 
   const workDir = path.join(outDir, ".work", `${date}-${topic.id}`);
-  const feedback = loadReviewFeedback(dbPath, topic.id);
+  const feedback = loadReviewFeedback(dbPath, topic.id, topic.draftUpdatedAt);
   const hasFeedback = hasReviewFeedback(feedback);
   if (hasFeedback) {
-    log(`发现未处理审稿反馈：打回意见 ${feedback.reject?.body ? "有" : "无"}，未解决批注 ${feedback.annotations.length} 条`);
+    log(`发现未处理审稿反馈：打回意见 ${feedback.reject?.body ? "有" : "无"}，未解决批注 ${feedback.annotations.length} 条${feedback.round ? `，第 ${feedback.round.round} 轮反馈（${feedback.round.verdict}）` : ""}`);
   }
   const sources = await collectSources(topic);
   writeWorkFiles(workDir, topic, sources);
   if (hasFeedback) {
     writeReviewFiles(workDir, topic, feedback);
-    log("已写出审稿反馈文件：00-previous-draft.md、review-feedback.md");
+    log(`已写出审稿反馈文件：00-previous-draft.md、review-feedback.md${feedback.round ? "、review-feedback.json" : ""}`);
   }
   log(`work 目录：${workDir}（来源 ${sources.length} 个）`);
 

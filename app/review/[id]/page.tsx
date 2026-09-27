@@ -3,12 +3,18 @@ import { notFound, redirect } from "next/navigation";
 import { env } from "cloudflare:workers";
 import { getSessionUser } from "../../../lib/auth";
 import { getTopic } from "../../../lib/topics";
-import { listTopicReviews } from "../../../lib/reviews";
+import { getTopicReviewTarget, listMarks, listRounds } from "../../../lib/article-review";
 import { requestOrigin } from "../../../lib/request-origin";
-import { ReviewClient, type ReviewRecord, type TopicDetail } from "./ReviewClient";
+import { ArticleReviewer, type ReviewMark, type ReviewRoundSummary } from "../../_components/ArticleReviewer";
 
 export const dynamic = "force-dynamic";
 export const viewport = { width: "device-width", initialScale: 1 };
+
+function topicStatusLabel(status: string | null | undefined) {
+  if (status === "approved") return "已通过";
+  if (status === "rejected") return "已打回";
+  return "待审";
+}
 
 export default async function ReviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: rawId } = await params;
@@ -16,13 +22,15 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
   if (!Number.isInteger(id) || id <= 0) notFound();
 
   const requestHeaders = await headers();
-  const request = new Request(`${requestOrigin(requestHeaders)}/review/${id}`, {
-    headers: {
-      cookie: requestHeaders.get("cookie") || "",
-      authorization: requestHeaders.get("authorization") || "",
-    },
-  });
-  const user = await getSessionUser(env, request);
+  const user = await getSessionUser(
+    env,
+    new Request(`${requestOrigin(requestHeaders)}/review/${id}`, {
+      headers: {
+        cookie: requestHeaders.get("cookie") || "",
+        authorization: requestHeaders.get("authorization") || "",
+      },
+    }),
+  );
   if (!user) redirect(`/login?next=/review/${id}`);
 
   const topic = await getTopic(env, id);
@@ -43,6 +51,35 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
     );
   }
 
-  const reviews = await listTopicReviews(env, id) as ReviewRecord[];
-  return <ReviewClient topic={topic as unknown as TopicDetail} initialReviews={reviews} currentUserId={user.id} />;
+  const target = await getTopicReviewTarget(env, id);
+  const marks = await listMarks(env, "topic", id) as unknown as ReviewMark[];
+  const rounds = await listRounds(env, "topic", id) as unknown as ReviewRoundSummary[];
+  const articleRow = await env.DB.prepare("SELECT slug FROM articles WHERE topic_id = ? ORDER BY updated_at DESC LIMIT 1")
+    .bind(id).first<{ slug: string }>();
+
+  return (
+    <ArticleReviewer
+      target={{ type: "topic", id: String(id) }}
+      title={target.title || String(topic.title || `选题 #${id}`)}
+      html={target.renderedHtml}
+      htmlSource={target.htmlSource}
+      round={target.round}
+      statusLabel={topicStatusLabel(topic.reviewStatus as string | null | undefined)}
+      initialMarks={marks}
+      rounds={rounds}
+      canReview
+      currentUserId={user.id}
+      backHref="/topics"
+      extraHeader={
+        articleRow?.slug ? (
+          <a
+            href={`/articles/${articleRow.slug}`}
+            className="min-h-[36px] rounded-full bg-[var(--green-soft)] px-3 text-xs font-bold leading-[36px] text-[var(--green)]"
+          >
+            查看文章
+          </a>
+        ) : null
+      }
+    />
+  );
 }

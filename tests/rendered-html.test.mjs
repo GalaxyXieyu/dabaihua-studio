@@ -618,3 +618,137 @@ test("ships a draft-box-only WeChat publish pipeline and reworks drafts from rev
   assert.match(draft, /review-feedback\.md/);
   assert.match(draft, /resolved = 1/);
 });
+
+test("sanitizes trusted-pipeline gzh html conservatively", async () => {
+  const { sanitizeArticleHtml } = await import("../lib/html-sanitize.ts");
+  const html = [
+    '<p onclick="steal()">hi</p>',
+    "<script>alert(1)</script>",
+    '<style>.x{color:red}</style>',
+    '<a href="javascript:alert(1)">bad</a>',
+    '<a href="vbscript:evil">also bad</a>',
+    '<img src="images/cover.png">',
+    '<img src="./images/cover-2.jpg">',
+    '<a href="https://example.com/post">ok</a>',
+  ].join("");
+  const clean = sanitizeArticleHtml(html, { assetBase: "/api/articles/demo/assets" });
+  assert.doesNotMatch(clean, /<script|<style/i);
+  assert.doesNotMatch(clean, /onclick/i);
+  assert.doesNotMatch(clean, /javascript:|vbscript:/i);
+  assert.match(clean, /src="\/api\/articles\/demo\/assets\/images\/cover\.png"/);
+  assert.match(clean, /src="\/api\/articles\/demo\/assets\/images\/cover-2\.jpg"/);
+  assert.match(clean, /target="_blank"/);
+  assert.match(clean, /rel="noopener noreferrer"/);
+  assert.equal(sanitizeArticleHtml('<img src="data:image/png;base64,AAAA">'), '<img src="data:image/png;base64,AAAA">');
+  assert.doesNotMatch(sanitizeArticleHtml('<img src="data:text/html;base64,AAAA">'), /data:text/);
+  assert.doesNotMatch(sanitizeArticleHtml('<iframe src="https://evil.example"></iframe>'), /iframe/i);
+});
+
+test("renders markdown as a gzh html fragment with inline styles", async () => {
+  const { renderMarkdownAsGzhHtml } = await import("../lib/gzh-markdown.ts");
+  const html = renderMarkdownAsGzhHtml("# 标题\n\n正文一段，**加粗**。\n\n## 章节标题\n\n- 甲\n- 乙\n\n> 引用金句\n\n![封面](images/cover.png)\n\n[官网](https://example.com)", { assetBase: "/api/articles/demo/assets" });
+  assert.match(html, /^<section style="/);
+  assert.match(html, /#DC2626/);
+  assert.doesNotMatch(html, /class=/);
+  assert.doesNotMatch(html, /<script/i);
+  assert.match(html, /\/api\/articles\/demo\/assets\/images\/cover\.png/);
+  assert.match(html, /max-width:100%/);
+  assert.match(html, /target="_blank"/);
+  assert.match(html, /<strong>/);
+  const escaped = renderMarkdownAsGzhHtml("<script>alert(1)</script>");
+  assert.doesNotMatch(escaped, /<script>/);
+  assert.match(escaped, /&lt;script&gt;/);
+});
+
+test("keeps the article review backend, asset route, and sync script wired to the shared spec", async () => {
+  const [store, schema, migration, domain, assetsRoute, articlesRoute, submitRoute, sync, packageJson, serveProd, draft] = await Promise.all([
+    readFile(new URL("../lib/store.ts", import.meta.url), "utf8"),
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0014_article_review.sql", import.meta.url), "utf8"),
+    readFile(new URL("../lib/article-review.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/articles/[slug]/assets/[...path]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/articles/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/review/[type]/[id]/submit/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/sync-articles.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/serve-prod.sh", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/draft-article.mjs", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(store, /CREATE TABLE IF NOT EXISTS articles/);
+  assert.match(store, /CREATE TABLE IF NOT EXISTS article_assets/);
+  assert.match(store, /CREATE TABLE IF NOT EXISTS article_versions/);
+  assert.match(store, /CREATE TABLE IF NOT EXISTS review_marks/);
+  assert.match(store, /CREATE TABLE IF NOT EXISTS review_rounds/);
+  assert.match(store, /SCHEMA_VERSION = "2026-08-03\.5"/);
+  assert.match(schema, /export const articles/);
+  assert.match(schema, /export const articleAssets/);
+  assert.match(schema, /export const articleVersions/);
+  assert.match(schema, /export const reviewMarks/);
+  assert.match(schema, /export const reviewRounds/);
+  assert.match(schema, /blob\("bytes", \{ mode: "buffer" \}\)/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS `articles`/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS `review_marks`/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS `review_rounds`/);
+  assert.match(domain, /export function buildFeedback/);
+  assert.match(domain, /export async function submitReview/);
+  assert.match(domain, /export async function listMarks/);
+  assert.match(domain, /changes_requested/);
+  assert.match(domain, /dabaihua\.review-feedback\/v1/);
+  assert.match(assetsRoute, /\^images/);
+  assert.match(assetsRoute, /includes\("\.\."\)/);
+  assert.match(assetsRoute, /image\/svg\+xml/);
+  assert.match(assetsRoute, /content-security-policy/);
+  assert.doesNotMatch(assetsRoute, /node:fs|readFile/);
+  assert.match(articlesRoute, /getSessionUser/);
+  assert.match(submitRoute, /assertSameOrigin/);
+  assert.match(submitRoute, /requireSessionUser/);
+  assert.match(sync, /resolveD1Path/);
+  assert.match(sync, /PRAGMA busy_timeout = 5000/);
+  assert.match(sync, /lstatSync/);
+  assert.match(sync, /review-feedback-\$\{row\.round\}\.json/);
+  assert.match(sync, /review-feedback-\$\{row\.round\}\.md/);
+  assert.match(sync, /exported_at IS NULL/);
+  assert.match(sync, /topic-\$\{row\.targetId\}/);
+  assert.match(sync, /SIGINT/);
+  assert.match(packageJson, /"articles:sync": "node scripts\/sync-articles\.mjs"/);
+  assert.match(packageJson, /"articles:watch": "node scripts\/sync-articles\.mjs --watch"/);
+  assert.match(serveProd, /articles-watch\.pid/);
+  assert.match(serveProd, /articles-watch\.log/);
+  assert.match(serveProd, /start_watcher/);
+  assert.match(serveProd, /stop_watcher/);
+  assert.match(draft, /review_rounds/);
+  assert.match(draft, /写得好/);
+});
+
+test("ships the phone-first article reviewer with range marks and verdict actions", async () => {
+  const [reviewer, articlePage, articlesList, reviewPage, topicsPage] = await Promise.all([
+    readFile(new URL("../app/_components/ArticleReviewer.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/articles/[slug]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/articles/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/review/[id]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/topics/page.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(reviewer, /"use client"/);
+  assert.match(reviewer, /selectionchange/);
+  assert.match(reviewer, /prefix/);
+  assert.match(reviewer, /suffix/);
+  assert.match(reviewer, /exact/);
+  assert.match(reviewer, /data-mark-id/);
+  assert.match(reviewer, /`\$\{base\}\/marks`/);
+  assert.match(reviewer, /\/api\/review\//);
+  assert.match(reviewer, /dangerouslySetInnerHTML/);
+  assert.match(reviewer, /env\(safe-area-inset-bottom\)/);
+
+  assert.match(articlePage, /redirect\(`\/login\?next=\/articles\//);
+  assert.match(articlePage, /getArticle/);
+  assert.match(articlePage, /ArticleHeaderActions/);
+
+  assert.match(articlesList, /listArticles/);
+  assert.match(articlesList, /getSessionUser/);
+
+  assert.match(reviewPage, /ArticleReviewer/);
+  assert.match(reviewPage, /redirect\(/);
+  assert.match(topicsPage, /\/articles/);
+});

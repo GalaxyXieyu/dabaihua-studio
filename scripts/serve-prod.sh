@@ -29,6 +29,8 @@ HOST="${HOST:-0.0.0.0}"
 PROD_DIR=".wrangler/prod"
 LOG_FILE="${PROD_DIR}/server.log"
 PID_FILE="${PROD_DIR}/server.pid"
+WATCH_LOG_FILE="${PROD_DIR}/articles-watch.log"
+WATCH_PID_FILE="${PROD_DIR}/articles-watch.pid"
 WRANGLER_LOG_PATH_ENV=".wrangler/prod/wrangler.log"
 WRANGLER_CONFIG="dist/server/wrangler.json"
 
@@ -46,7 +48,51 @@ current_pid() {
   cat -- "${PID_FILE}" 2>/dev/null || true
 }
 
+watch_is_running() {
+  [[ -f "${WATCH_PID_FILE}" ]] || return 1
+  local pid
+  pid="$(cat -- "${WATCH_PID_FILE}" 2>/dev/null || true)"
+  [[ -n "${pid}" ]] || return 1
+  kill -0 -- "${pid}" 2>/dev/null
+}
+
+start_watcher() {
+  if watch_is_running; then
+    echo "articles watcher already running: pid $(cat -- "${WATCH_PID_FILE}")" >&2
+    return 0
+  fi
+  echo "starting articles watcher (node scripts/sync-articles.mjs --watch)..."
+  setsid nohup node scripts/sync-articles.mjs --watch >"${WATCH_LOG_FILE}" 2>&1 &
+  local watch_pid=$!
+  echo "${watch_pid}" > "${WATCH_PID_FILE}"
+  echo "articles watcher: pid ${watch_pid}, log ${WATCH_LOG_FILE}"
+}
+
+stop_watcher() {
+  if ! watch_is_running; then
+    rm -f -- "${WATCH_PID_FILE}"
+    return 0
+  fi
+  local watch_pid
+  watch_pid="$(cat -- "${WATCH_PID_FILE}")"
+  echo "stopping articles watcher pid ${watch_pid} (process group -${watch_pid})..."
+  kill -TERM -- "-${watch_pid}" 2>/dev/null || kill -TERM -- "${watch_pid}" 2>/dev/null || true
+  for _ in {1..10}; do
+    if ! kill -0 -- "${watch_pid}" 2>/dev/null; then
+      rm -f -- "${WATCH_PID_FILE}"
+      echo "articles watcher stopped"
+      return 0
+    fi
+    sleep 1
+  done
+  echo "articles watcher still alive after SIGTERM, sending SIGKILL" >&2
+  kill -KILL -- "-${watch_pid}" 2>/dev/null || kill -KILL -- "${watch_pid}" 2>/dev/null || true
+  rm -f -- "${WATCH_PID_FILE}"
+  echo "articles watcher stopped"
+}
+
 start() {
+  start_watcher
   if is_running; then
     echo "already running: pid $(current_pid), port ${PORT}" >&2
     return 1
@@ -95,6 +141,7 @@ start() {
 }
 
 stop() {
+  stop_watcher
   if ! is_running; then
     echo "stopped: port ${PORT}"
     rm -f -- "${PID_FILE}"
@@ -129,6 +176,12 @@ status() {
   else
     rm -f -- "${PID_FILE}"
     echo "stopped: port ${PORT}"
+  fi
+  if watch_is_running; then
+    echo "articles watcher: running: pid $(cat -- "${WATCH_PID_FILE}"), log ${WATCH_LOG_FILE}"
+  else
+    rm -f -- "${WATCH_PID_FILE}"
+    echo "articles watcher: stopped"
   fi
 }
 

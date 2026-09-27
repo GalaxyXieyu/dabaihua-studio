@@ -1,4 +1,4 @@
-import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { blob, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -308,3 +308,83 @@ export const notifications = sqliteTable("notifications", {
   isRead: integer("is_read", { mode: "boolean" }).notNull().default(false),
   createdAt: text("created_at").notNull(),
 });
+
+export const articles = sqliteTable("articles", {
+  slug: text("slug").primaryKey(),
+  date: text("date"),
+  title: text("title"),
+  topic: text("topic"),
+  status: text("status"),
+  metaJson: text("meta_json").notNull().default("{}"),
+  draftMd: text("draft_md"),
+  finalMd: text("final_md"),
+  qaReport: text("qa_report"),
+  articleHtml: text("article_html"),
+  contentHash: text("content_hash"),
+  reviewRound: integer("review_round").notNull().default(1),
+  isPublic: integer("is_public", { mode: "boolean" }).notNull().default(false),
+  topicId: integer("topic_id"),
+  syncedAt: text("synced_at").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  index("articles_date_idx").on(table.date, table.updatedAt),
+  index("articles_public_idx").on(table.isPublic, table.updatedAt),
+]);
+
+export const articleAssets = sqliteTable("article_assets", {
+  slug: text("slug").notNull(),
+  path: text("path").notNull(),
+  contentType: text("content_type").notNull(),
+  bytes: blob("bytes", { mode: "buffer" }).notNull(),
+  size: integer("size").notNull(),
+  sha256: text("sha256").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [primaryKey({ columns: [table.slug, table.path] })]);
+
+export const articleVersions = sqliteTable("article_versions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  targetType: text("target_type", { enum: ["article", "topic"] }).notNull(),
+  targetId: text("target_id").notNull(),
+  round: integer("round").notNull(),
+  html: text("html"),
+  markdown: text("markdown"),
+  contentHash: text("content_hash"),
+  createdAt: text("created_at").notNull(),
+}, (table) => [uniqueIndex("article_versions_target_round_idx").on(table.targetType, table.targetId, table.round)]);
+
+export const reviewMarks = sqliteTable("review_marks", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  targetType: text("target_type", { enum: ["article", "topic"] }).notNull(),
+  targetId: text("target_id").notNull(),
+  round: integer("round").notNull(),
+  userId: integer("user_id").notNull(),
+  kind: text("kind", { enum: ["good", "change"] }).notNull(),
+  exact: text("exact").notNull(),
+  prefix: text("prefix").notNull().default(""),
+  suffix: text("suffix").notNull().default(""),
+  startOffset: integer("start_offset"),
+  endOffset: integer("end_offset"),
+  blockIndex: integer("block_index"),
+  comment: text("comment").notNull().default(""),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [index("review_marks_target_idx").on(table.targetType, table.targetId, table.round, table.startOffset)]);
+
+export const reviewRounds = sqliteTable("review_rounds", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  targetType: text("target_type", { enum: ["article", "topic"] }).notNull(),
+  targetId: text("target_id").notNull(),
+  round: integer("round").notNull(),
+  userId: integer("user_id").notNull(),
+  verdict: text("verdict", { enum: ["approved", "changes_requested", "comments"] }).notNull(),
+  comment: text("comment").notNull().default(""),
+  markCount: integer("mark_count").notNull().default(0),
+  feedbackJson: text("feedback_json").notNull(),
+  exportedAt: text("exported_at"),
+  exportPath: text("export_path"),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("review_rounds_target_round_idx").on(table.targetType, table.targetId, table.round),
+  index("review_rounds_export_idx").on(table.exportedAt, table.id),
+]);

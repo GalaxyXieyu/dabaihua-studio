@@ -81,6 +81,7 @@ export default async function TopicsPage() {
           <h1 className="text-lg font-bold">📋 选题看板</h1>
         </div>
         <nav className="flex items-center gap-2">
+          <a href="/articles" className="rounded-lg px-3 py-1.5 text-xs font-bold text-[var(--muted)] hover:bg-[var(--canvas)] hover:text-[var(--green)]">📰 文章</a>
           <a href="/strategy" className="rounded-lg px-3 py-1.5 text-xs font-bold text-[var(--muted)] hover:bg-[var(--canvas)] hover:text-[var(--green)]">⚙️ 策略</a>
           <a href="/" className="rounded-lg px-3 py-1.5 text-xs font-bold text-[var(--muted)] hover:bg-[var(--canvas)] hover:text-[var(--green)]">返回首页</a>
         </nav>

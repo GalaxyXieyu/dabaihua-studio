@@ -7,7 +7,7 @@ import { readXArticles, readXPost, readXProfile, xPostAddress, xProfileAddress }
 export type AppEnv = { DB: D1Database; AI?: { run: (model: string, input: unknown) => Promise<unknown> } };
 const now = () => new Date().toISOString();
 const day = () => new Date().toISOString().slice(0, 10);
-const SCHEMA_VERSION = "2026-08-03.4";
+const SCHEMA_VERSION = "2026-08-03.5";
 const schemaReady = new WeakMap<object, Promise<void>>();
 
 async function initializeSchema(db: D1Database) {
@@ -62,6 +62,16 @@ async function initializeSchema(db: D1Database) {
     db.prepare("CREATE INDEX IF NOT EXISTS content_strategies_active_idx ON content_strategies(is_active, version DESC)"),
     db.prepare("CREATE INDEX IF NOT EXISTS retrospectives_active_idx ON retrospectives(is_active, date DESC)"),
     db.prepare("CREATE INDEX IF NOT EXISTS retrospectives_title_idx ON retrospectives(title, version DESC)"),
+    db.prepare("CREATE TABLE IF NOT EXISTS articles (slug TEXT PRIMARY KEY, date TEXT, title TEXT, topic TEXT, status TEXT, meta_json TEXT NOT NULL DEFAULT '{}', draft_md TEXT, final_md TEXT, qa_report TEXT, article_html TEXT, content_hash TEXT, review_round INTEGER NOT NULL DEFAULT 1, is_public INTEGER NOT NULL DEFAULT 0, topic_id INTEGER, synced_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS articles_date_idx ON articles(date DESC, updated_at DESC)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS articles_public_idx ON articles(is_public, updated_at DESC)"),
+    db.prepare("CREATE TABLE IF NOT EXISTS article_assets (slug TEXT NOT NULL, path TEXT NOT NULL, content_type TEXT NOT NULL, bytes BLOB NOT NULL, size INTEGER NOT NULL, sha256 TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(slug, path))"),
+    db.prepare("CREATE TABLE IF NOT EXISTS article_versions (id INTEGER PRIMARY KEY AUTOINCREMENT, target_type TEXT NOT NULL, target_id TEXT NOT NULL, round INTEGER NOT NULL, html TEXT, markdown TEXT, content_hash TEXT, created_at TEXT NOT NULL, UNIQUE(target_type, target_id, round))"),
+    db.prepare("CREATE TABLE IF NOT EXISTS review_marks (id INTEGER PRIMARY KEY AUTOINCREMENT, target_type TEXT NOT NULL, target_id TEXT NOT NULL, round INTEGER NOT NULL, user_id INTEGER NOT NULL, kind TEXT NOT NULL, exact TEXT NOT NULL, prefix TEXT NOT NULL DEFAULT '', suffix TEXT NOT NULL DEFAULT '', start_offset INTEGER, end_offset INTEGER, block_index INTEGER, comment TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS review_marks_target_idx ON review_marks(target_type, target_id, round, start_offset)"),
+    db.prepare("CREATE TABLE IF NOT EXISTS review_rounds (id INTEGER PRIMARY KEY AUTOINCREMENT, target_type TEXT NOT NULL, target_id TEXT NOT NULL, round INTEGER NOT NULL, user_id INTEGER NOT NULL, verdict TEXT NOT NULL, comment TEXT NOT NULL DEFAULT '', mark_count INTEGER NOT NULL DEFAULT 0, feedback_json TEXT NOT NULL, exported_at TEXT, export_path TEXT, created_at TEXT NOT NULL, UNIQUE(target_type, target_id, round))"),
+    db.prepare("CREATE INDEX IF NOT EXISTS review_rounds_target_idx ON review_rounds(target_type, target_id, round DESC)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS review_rounds_export_idx ON review_rounds(exported_at, id)"),
   ]);
   const legacyFollowCleanupKey = "legacy_source_follow_seed_cleanup_v1";
   const legacyFollowCleanup = await db.prepare("SELECT value FROM app_meta WHERE key = ?").bind(legacyFollowCleanupKey).first<{ value: string }>();
