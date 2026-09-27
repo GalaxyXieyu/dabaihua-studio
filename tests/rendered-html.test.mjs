@@ -597,3 +597,24 @@ test("parses review markdown into safe blocks and inline tokens", async () => {
   const unsafe = parseInline("[点我](javascript:alert(1))");
   assert.equal(unsafe.some((token) => token.type === "link"), false);
 });
+
+test("ships a draft-box-only WeChat publish pipeline and reworks drafts from review feedback", async () => {
+  const [publish, store, draft] = await Promise.all([
+    readFile(new URL("../scripts/publish-draft.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../lib/store.ts", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/draft-article.mjs", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(publish, /gzh_article_publish/);
+  assert.match(publish, /publish_article/);
+  assert.match(publish, /freepublish/);
+  assert.match(publish, /群发/);
+  assert.match(publish, /process\.env\.DABAIHUA_WENYAN_API_KEY/);
+  assert.match(publish, /--upload/);
+  assert.match(publish, /stdio: \["ignore"/);
+  assert.doesNotMatch(publish, /"message\/mass/);
+  assert.doesNotMatch(publish, /freepublish\/submit/);
+  assert.match(store, /publish_status/);
+  assert.match(draft, /review-feedback\.md/);
+  assert.match(draft, /resolved = 1/);
+});

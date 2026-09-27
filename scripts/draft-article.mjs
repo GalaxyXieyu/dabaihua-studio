@@ -152,6 +152,68 @@ function saveDraft(dbPath, id, markdown) {
   }
 }
 
+// ---------- 审稿反馈（打回意见 + 未解决批注）----------
+
+function tableExists(db, name) {
+  return Boolean(db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
+}
+
+function loadReviewFeedback(dbPath, topicId) {
+  const db = new DatabaseSync(dbPath);
+  try {
+    db.exec("PRAGMA busy_timeout = 5000");
+    if (!tableExists(db, "topic_reviews")) return { reject: null, annotations: [] };
+    const reject = db.prepare("SELECT body, created_at AS createdAt FROM topic_reviews WHERE topic_id = ? AND kind = 'reject' ORDER BY created_at DESC, id DESC LIMIT 1").get(topicId) || null;
+    const annotations = db.prepare("SELECT block_index AS blockIndex, quote, body, created_at AS createdAt FROM topic_reviews WHERE topic_id = ? AND kind = 'annotation' AND resolved = 0 ORDER BY block_index ASC, created_at ASC").all(topicId);
+    return { reject, annotations };
+  } finally {
+    db.close();
+  }
+}
+
+function hasReviewFeedback(feedback) {
+  return Boolean(feedback && ((feedback.reject && String(feedback.reject.body || "").trim()) || feedback.annotations.length));
+}
+
+function writeReviewFiles(workDir, topic, feedback) {
+  mkdirSync(workDir, { recursive: true });
+  writeFileSync(path.join(workDir, "00-previous-draft.md"), `${String(topic.draft_markdown || "")}\n`, "utf8");
+  const lines = ["# 审稿反馈", "", "## 打回意见", ""];
+  lines.push(feedback.reject?.body ? String(feedback.reject.body).trim() : "（无）");
+  lines.push("", "## 段落批注", "");
+  if (feedback.annotations.length) {
+    for (const annotation of feedback.annotations) {
+      const quote = annotation.quote ? `引文「${annotation.quote}」` : "引文（未提供）";
+      lines.push(`- [段落 ${annotation.blockIndex}] ${quote} → 意见：${annotation.body}`);
+    }
+  } else {
+    lines.push("（无）");
+  }
+  writeFileSync(path.join(workDir, "review-feedback.md"), `${lines.join("\n")}\n`, "utf8");
+}
+
+function markReviewResolved(dbPath, topicId) {
+  const db = new DatabaseSync(dbPath);
+  try {
+    db.exec("PRAGMA busy_timeout = 5000");
+    const timestamp = new Date().toISOString();
+    let resolvedCount = 0;
+    if (tableExists(db, "topic_reviews")) {
+      const info = db.prepare("UPDATE topic_reviews SET resolved = 1, updated_at = ? WHERE topic_id = ? AND kind = 'annotation' AND resolved = 0").run(timestamp, topicId);
+      resolvedCount = Number(info.changes || 0);
+    }
+    const topicColumns = new Set(db.prepare("PRAGMA table_info(topics)").all().map((column) => column.name));
+    let reviewReset = false;
+    if (topicColumns.has("review_status") && topicColumns.has("review_comment")) {
+      db.prepare("UPDATE topics SET review_status = 'pending', review_comment = NULL, updated_at = ? WHERE id = ?").run(timestamp, topicId);
+      reviewReset = true;
+    }
+    return { resolvedCount, reviewReset };
+  } finally {
+    db.close();
+  }
+}
+
 // ---------- 来源材料 ----------
 
 function extractMarkdownLinks(text) {
@@ -383,42 +445,52 @@ function positioningPrompt(workDir) {
   ].join("\n");
 }
 
-function writerPrompt(workDir) {
+function reworkRules(workDir) {
+  return [
+    "这是返工稿：必须逐条回应审稿意见（打回意见优先），保留上一稿中未被批评且符合风格契约的部分，仍只用 sources.md 的事实/链接。",
+    `读取 ${workFile(workDir, "00-previous-draft.md")} 和 ${workFile(workDir, "review-feedback.md")}。`,
+  ].join("\n");
+}
+
+function writerPrompt(workDir, hasFeedback = false) {
   return [
     "你是「大白话讲AI」内容生产流水线的 writer 阶段。",
     COMMON_RULES,
     STYLE_CONTRACT,
+    ...(hasFeedback ? [reworkRules(workDir)] : []),
     `读取 ${skillPath("writer/SKILL.md")}、${contentPath("author-voice.md")}、${skillPath("writer/references/style_examples.md")}、${contentPath("platform-specs.json")}、${workFile(workDir, "topic.md")}、${workFile(workDir, "sources.md")}、${workFile(workDir, "01-positioning.md")}。`,
     `用 write 工具只写 ${workFile(workDir, "02-draft.md")}，这是完整公众号主稿 markdown。`,
   ].join("\n");
 }
 
-function editorPrompt(workDir) {
+function editorPrompt(workDir, hasFeedback = false) {
   return [
     "你是「大白话讲AI」内容生产流水线的 wechat-draft-editor 阶段，使用修改模式。",
     COMMON_RULES,
     STYLE_CONTRACT,
+    ...(hasFeedback ? [reworkRules(workDir)] : []),
     `读取 ${skillPath("wechat-draft-editor/SKILL.md")}、${contentPath("author-voice.md")}、${workFile(workDir, "02-draft.md")}，必要时读 ${workFile(workDir, "sources.md")} 以保持事实锚点与链接不变。`,
     `用 write 工具只写 ${workFile(workDir, "03-edited.md")}，输出完整修改稿正文（不含诊断），保持风格契约和所有事实锚点、链接不变。`,
   ].join("\n");
 }
 
-function qaPrompt(workDir) {
+function qaPrompt(workDir, hasFeedback = false) {
   return [
     "你是「大白话讲AI」内容生产流水线的 qa 阶段，做发布前质检与修复。",
     COMMON_RULES,
     STYLE_CONTRACT,
+    ...(hasFeedback ? [reworkRules(workDir), "qa 报告的「审稿意见处理」小节须逐条列出审稿意见（打回意见优先）及处理方式。"] : []),
     `读取 ${skillPath("qa/SKILL.md")}、${contentPath("platform-specs.json")}、${contentPath("author-voice.md")}、${workFile(workDir, "sources.md")}、${workFile(workDir, "03-edited.md")}。`,
     `用 write 工具写两个文件：${workFile(workDir, "04-qa-report.md")}（规格检查 + L1-L5 结论、发现的问题、已修复项、待作者确认）和 ${workFile(workDir, "05-final.md")}（应用 QA 修复后的完整终稿）。`,
     "05-final.md 必须存在、非空，且仍满足上面的风格契约。",
   ].join("\n");
 }
 
-async function runPipeline(workDir) {
+async function runPipeline(workDir, hasFeedback = false) {
   await runStage(STAGE_NAMES[0], positioningPrompt(workDir), workFile(workDir, "01-positioning.md"));
-  await runStage(STAGE_NAMES[1], writerPrompt(workDir), workFile(workDir, "02-draft.md"));
-  await runStage(STAGE_NAMES[2], editorPrompt(workDir), workFile(workDir, "03-edited.md"));
-  return runStage(STAGE_NAMES[3], qaPrompt(workDir), workFile(workDir, "05-final.md"), {
+  await runStage(STAGE_NAMES[1], writerPrompt(workDir, hasFeedback), workFile(workDir, "02-draft.md"));
+  await runStage(STAGE_NAMES[2], editorPrompt(workDir, hasFeedback), workFile(workDir, "03-edited.md"));
+  return runStage(STAGE_NAMES[3], qaPrompt(workDir, hasFeedback), workFile(workDir, "05-final.md"), {
     fallbackFile: workFile(workDir, "03-edited.md"),
     cleanupFiles: [workFile(workDir, "04-qa-report.md")],
   });
@@ -554,11 +626,20 @@ async function main() {
   }
 
   const workDir = path.join(outDir, ".work", `${date}-${topic.id}`);
+  const feedback = loadReviewFeedback(dbPath, topic.id);
+  const hasFeedback = hasReviewFeedback(feedback);
+  if (hasFeedback) {
+    log(`发现未处理审稿反馈：打回意见 ${feedback.reject?.body ? "有" : "无"}，未解决批注 ${feedback.annotations.length} 条`);
+  }
   const sources = await collectSources(topic);
   writeWorkFiles(workDir, topic, sources);
+  if (hasFeedback) {
+    writeReviewFiles(workDir, topic, feedback);
+    log("已写出审稿反馈文件：00-previous-draft.md、review-feedback.md");
+  }
   log(`work 目录：${workDir}（来源 ${sources.length} 个）`);
 
-  const finalRaw = await runPipeline(workDir);
+  const finalRaw = await runPipeline(workDir, hasFeedback);
   const { markdown: cleaned, removed } = validateLinks(finalRaw, new Set(collectSourceLinks(topic).map((link) => link.normalized)));
   if (removed.length) warn(`移除未授权链接 ${removed.length} 个：${removed.join("、")}`);
 
@@ -573,9 +654,21 @@ async function main() {
   log(`已写出 ${draftFile}`);
 
   let dbUpdated = false;
+  let resolvedCount = 0;
+  let reviewReset = false;
   try {
     saveDraft(dbPath, topic.id, cleaned);
     dbUpdated = true;
+    if (hasFeedback) {
+      try {
+        const outcome = markReviewResolved(dbPath, topic.id);
+        resolvedCount = outcome.resolvedCount;
+        reviewReset = outcome.reviewReset;
+        log(`已处理审稿反馈：批注 ${resolvedCount} 条置为已解决${reviewReset ? "，review_status 重置为 pending" : ""}`);
+      } catch (error) {
+        warn(`审稿反馈状态更新失败（草稿已保存）：${error.message}`);
+      }
+    }
   } catch (error) {
     warn(`草稿入库失败（文件已保留）：${error.message}`);
   }
@@ -588,6 +681,8 @@ async function main() {
   process.stdout.write(`H2 问句比：${questionRatio}\n`);
   process.stdout.write(`加粗：${report.bold} 处\n`);
   process.stdout.write(`移除链接：${removed.length} 个\n`);
+  process.stdout.write(`审稿反馈处理：${hasFeedback ? `批注 ${resolvedCount} 条` : "无"}\n`);
+  process.stdout.write(`review_status：${reviewReset ? "pending（待复审）" : "未改动"}\n`);
   process.stdout.write(`DB 更新：${dbUpdated ? "是" : "否"}\n`);
 }
 

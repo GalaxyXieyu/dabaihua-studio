@@ -16,7 +16,8 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "digest": "node scripts/daily-ai-digest.mjs",
-    "draft": "node scripts/draft-article.mjs"
+    "draft": "node scripts/draft-article.mjs",
+    "publish:draft": "node scripts/publish-draft.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

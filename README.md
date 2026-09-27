@@ -133,11 +133,54 @@ npm run draft -- 42
 ```
 
 - `--any-status`：跳过「必须 approved」的状态门槛（不会修改选题状态）
-- `--force`：即使已有草稿也强制重新生成
+- `--force`：即使已有草稿也强制重新生成；若该选题存在未处理的审稿反馈（最新打回意见 + 未解决批注），会把反馈带入 writer / editor / qa 阶段逐条回应，并在保存新稿后把已处理批注标记为 resolved、把 `review_status` 重置为 `pending` 等待复审
 - `--date YYYY-MM-DD`：指定日期（默认 Asia/Shanghai 今天）
 
 可选环境变量：`DRAFT_MODEL`、`PI_BIN`、`DRAFT_OUT_DIR`、`DIGEST_D1_PATH`、`GITHUB_TOKEN`。
-中间产物（定位、初稿、修改稿、QA 报告）保存在 `DRAFT_OUT_DIR/.work/<日期>-<选题ID>/`。
+中间产物（定位、初稿、修改稿、QA 报告、审稿反馈）保存在 `DRAFT_OUT_DIR/.work/<日期>-<选题ID>/`。
+
+## 公众号 HTML 与草稿箱 (publish-draft)
+
+`npm run publish:draft -- <选题ID>` 读取本地 D1 中已审稿通过的选题终稿，用 `pi` CLI 依次执行
+`wechat-article-publisher` 的 mobile-layout（手机端语意分行）与 render（主题渲染）两个阶段，
+产出公众号正文 HTML 片段与可复制预览页，并把状态回写 `topics.publish_*`。
+
+```bash
+export PATH=/home/box/.local/bin:$PATH   # node 22 + pi
+export OPENCODE_API_KEY=...              # 来自你的密钥库，切勿提交
+npm run publish:draft -- 42
+# 或：node scripts/publish-draft.mjs <topic-id> [--any-review] [--theme <id>] [--upload] [--cover <url>] [--author <name>] [--list-tools] [--force] [--date YYYY-MM-DD]
+```
+
+- `--any-review`：跳过「审稿必须 approved」的门槛（不会修改审稿或选题状态）
+- `--theme <id>`：排版主题，默认 `red-white`（深度分析/观点）；可用主题见 `.agents/skills/wechat-article-publisher/references/theme-index.md`
+- `--upload`：显式上传到公众号草稿箱（外部写操作，需要作者确认）
+- `--cover <url>`：草稿封面图 URL（微信草稿必须有封面）
+- `--author <name>`：作者名（也可用 `WENYAN_AUTHOR`）
+- `--list-tools`：只读列出 wenyan-mcp 的工具与参数 schema，然后退出
+- `--force`：即使已有 `html_ready`/`draft_saved` 也重新排版
+- `--date YYYY-MM-DD`：指定日期（默认 Asia/Shanghai 今天）
+
+输出：`DRAFT_OUT_DIR`（默认 `/workspace/projects/drafts`）下的 `<日期>-<选题ID>.html`（正文片段）与
+`<日期>-<选题ID>_预览.html`（可复制预览）；中间产物在 `.work/<日期>-<选题ID>-publish/`，
+其中 `05-validation.md` 汇总 layout / render / HTML 合规校验结果。
+
+可选环境变量：`PUBLISH_MODEL`、`PI_BIN`、`DRAFT_OUT_DIR`、`DIGEST_D1_PATH`、
+`DABAIHUA_WENYAN_API_KEY`、`DABAIHUA_WENYAN_MCP_URL`、`WENYAN_THEME`、`WENYAN_AUTHOR`。
+
+**安全边界**：本流水线最多只会把文章存进公众号「草稿箱」，不接受、也不会调用任何群发/发布类工具。
+上传工具名有固定白名单（`gzh_article_publish`、`publish_article`），并叠加禁止名单正则
+（`mass`、`freepublish`、`submit`、`broadcast`、`群发` 等）；命中即中止。上传必须由作者显式加 `--upload`。
+
+上传需要你先准备：
+
+- `DABAIHUA_WENYAN_API_KEY`：项目级 `wenyan-mcp` 服务的 API Key（服务器地址见 `.mcp.example.json`，
+  默认 `http://120.76.159.103:39000/mcp`）。只从环境变量读取，脚本绝不打印。
+- 一个封面图 URL（`--cover`）。没有封面时微信草稿无法保存，wenyan 会退回用正文第一张图；
+  本流水线正文没有图片，因此上传会失败。
+- 服务器端已配置公众号 AppID/Secret 和 IP 白名单（否则远端调用会 401 或失败）。
+
+上传成功后到公众号后台「草稿箱」检查，再自己点击发布。Agent 不会替你发布。
 
 ## 数据与版权
 

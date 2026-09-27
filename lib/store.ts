@@ -7,7 +7,7 @@ import { readXArticles, readXPost, readXProfile, xPostAddress, xProfileAddress }
 export type AppEnv = { DB: D1Database; AI?: { run: (model: string, input: unknown) => Promise<unknown> } };
 const now = () => new Date().toISOString();
 const day = () => new Date().toISOString().slice(0, 10);
-const SCHEMA_VERSION = "2026-08-03.3";
+const SCHEMA_VERSION = "2026-08-03.4";
 const schemaReady = new WeakMap<object, Promise<void>>();
 
 async function initializeSchema(db: D1Database) {
@@ -138,6 +138,12 @@ async function initializeSchema(db: D1Database) {
     ["review_status", "TEXT"],
     ["review_comment", "TEXT"],
     ["reviewed_at", "TEXT"],
+    ["publish_status", "TEXT"],
+    ["publish_html", "TEXT"],
+    ["publish_html_at", "TEXT"],
+    ["wechat_draft_media_id", "TEXT"],
+    ["wechat_draft_saved_at", "TEXT"],
+    ["publish_error", "TEXT"],
   ];
   for (const [name, type] of topicNewCols) {
     if (!topicExisting.has(name)) {
