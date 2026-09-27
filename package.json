@@ -12,7 +12,8 @@
     "test": "npm run build && node --test tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
-    "digest": "node scripts/daily-ai-digest.mjs"
+    "digest": "node scripts/daily-ai-digest.mjs",
+    "draft": "node scripts/draft-article.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

@@ -131,6 +131,8 @@ async function initializeSchema(db: D1Database) {
     ["notes", "TEXT"],
     ["platform_detail", "TEXT"],
     ["metrics", "TEXT"],
+    ["draft_markdown", "TEXT"],
+    ["draft_updated_at", "TEXT"],
   ];
   for (const [name, type] of topicNewCols) {
     if (!topicExisting.has(name)) {

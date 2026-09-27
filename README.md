@@ -82,6 +82,26 @@ npm run digest
 可选环境变量：`DIGEST_MODEL`、`PI_BIN`、`DIGEST_OUT_DIR`、`DIGEST_D1_PATH`、`GITHUB_TOKEN`。
 同一日期重复运行会复用 `.cache/<日期>.json`，因此重跑是幂等的。
 
+## 选题写稿 (draft-article)
+
+`npm run draft -- <选题ID>` 读取本地 D1 中已 `approved` 的选题，抓取选题 notes/angle 里的来源材料，
+再用 `pi` CLI 依次执行定位、主稿、去 AI 味、发布前质检四个 Skill 阶段，写出终稿到
+`DRAFT_OUT_DIR`（默认 `/workspace/projects/drafts/<日期>-<选题ID>.md`），并把正文回写 `topics.draft_markdown`。
+
+```bash
+export PATH=/home/box/.local/bin:$PATH   # node 22 + pi
+export OPENCODE_API_KEY=...              # 来自你的密钥库，切勿提交
+npm run draft -- 42
+# 或：node scripts/draft-article.mjs <topic-id> [--any-status] [--force] [--date YYYY-MM-DD]
+```
+
+- `--any-status`：跳过「必须 approved」的状态门槛（不会修改选题状态）
+- `--force`：即使已有草稿也强制重新生成
+- `--date YYYY-MM-DD`：指定日期（默认 Asia/Shanghai 今天）
+
+可选环境变量：`DRAFT_MODEL`、`PI_BIN`、`DRAFT_OUT_DIR`、`DIGEST_D1_PATH`、`GITHUB_TOKEN`。
+中间产物（定位、初稿、修改稿、QA 报告）保存在 `DRAFT_OUT_DIR/.work/<日期>-<选题ID>/`。
+
 ## 数据与版权
 
 本仓库只提供软件代码，不附带抓取的文章正文、用户数据或第三方媒体。使用者需要自行确认订阅、存储和展示内容的合法性，并遵守内容来源的服务条款和版权要求。

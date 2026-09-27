@@ -531,3 +531,19 @@ test("ships unified subscriptions, daily sync, translation, reading, and idea wo
   assert.match(worker, /scheduled/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 });
+
+test("ships topic drafts through the pi editing pipeline", async () => {
+  const [store, topics, route, draft] = await Promise.all([
+    readFile(new URL("../lib/store.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/topics.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/topics/[id]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/draft-article.mjs", import.meta.url), "utf8"),
+  ]);
+  assert.match(store, /"draft_markdown"/);
+  assert.match(store, /"draft_updated_at"/);
+  assert.match(topics, /export async function getTopic/);
+  assert.match(topics, /hasDraft/);
+  assert.match(route, /export async function GET/);
+  assert.match(draft, /validateLinks/);
+  assert.match(draft, /stdio: \["ignore"/);
+});
