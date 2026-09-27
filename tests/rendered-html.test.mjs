@@ -5,6 +5,7 @@ import { htmlToMarkdown } from "../lib/article.ts";
 import { collectXArticlePages } from "../lib/x-pagination.ts";
 import { normalizeXPublishedAt } from "../lib/x-date.ts";
 import { inferSourceCategory, isSourceCategory } from "../lib/source-category.ts";
+import { matchesHostPattern, secureRedirectResponse, upgradeForwardedRequest, upgradeForwardedRequestWithFlag } from "../lib/trusted-proxy.ts";
 
 test("converts entity-escaped feed HTML before rendering Markdown", () => {
   const markdown = htmlToMarkdown('&lt;img src=&quot;https://cdn.example.com/cover.jpg&quot; alt=&quot;封面&quot;&gt;&lt;p&gt;&lt;strong&gt;最新文字&lt;/strong&gt;&lt;br&gt;正文&lt;/p&gt;');
@@ -211,6 +212,9 @@ test("keeps lightweight routes off the reading-data path and progressively rende
   assert.match(store, /SELECT value FROM app_meta WHERE key = 'schema_version'/);
   assert.doesNotMatch(dashboardBody, /promotePendingXArticles/);
   assert.match(worker, /await promotePendingXArticles\(env\)/);
+  assert.match(worker, /upgradeForwardedRequestWithFlag/);
+  assert.match(worker, /secureRedirectResponse/);
+  assert.match(worker, /upgrade\.upgraded/);
   assert.ok(sessionBody.indexOf("cookieValue") < sessionBody.indexOf("ensureSchema"), "anonymous session checks must avoid schema maintenance");
   assert.match(dashboardRoute, /needsReadingData/);
   assert.match(dashboardRoute, /itemsLoaded: false/);
@@ -751,4 +755,125 @@ test("ships the phone-first article reviewer with range marks and verdict action
   assert.match(reviewPage, /ArticleReviewer/);
   assert.match(reviewPage, /redirect\(/);
   assert.match(topicsPage, /\/articles/);
+});
+
+test("matches trusted proxy host patterns with exact names and leading wildcards", () => {
+  assert.equal(matchesHostPattern("abc.trycloudflare.com", ["*.trycloudflare.com"]), true);
+  assert.equal(matchesHostPattern("ABC.TryCloudflare.com", ["*.trycloudflare.com"]), true);
+  assert.equal(matchesHostPattern("abc.trycloudflare.com:443", ["*.trycloudflare.com"]), true);
+  assert.equal(matchesHostPattern("trycloudflare.com", ["*.trycloudflare.com"]), false);
+  assert.equal(matchesHostPattern("evil-trycloudflare.com", ["*.trycloudflare.com"]), false);
+  assert.equal(matchesHostPattern("example.com", ["example.com"]), true);
+  assert.equal(matchesHostPattern("Example.com:8443", ["example.com"]), true);
+  assert.equal(matchesHostPattern("sub.example.com", ["example.com"]), false);
+  assert.equal(matchesHostPattern("example.com", []), false);
+  assert.equal(matchesHostPattern("example.com", ["other.com", "example.com"]), true);
+});
+
+test("upgrades forwarded https requests on trusted hosts and leaves everything else alone", async () => {
+  const request = new Request("http://abc.trycloudflare.com/articles/1?x=1", {
+    headers: { host: "abc.trycloudflare.com", "x-forwarded-proto": "https" },
+  });
+  const upgraded = upgradeForwardedRequest(request, "*.trycloudflare.com");
+  assert.equal(upgraded.url, "https://abc.trycloudflare.com/articles/1?x=1");
+  assert.equal(upgraded.method, "GET");
+
+  assert.equal(upgradeForwardedRequest(request, undefined).url, "http://abc.trycloudflare.com/articles/1?x=1");
+  assert.equal(upgradeForwardedRequest(request, "example.com").url, "http://abc.trycloudflare.com/articles/1?x=1");
+
+  const alreadySecure = new Request("https://abc.trycloudflare.com/");
+  assert.equal(upgradeForwardedRequest(alreadySecure, "*.trycloudflare.com").url, "https://abc.trycloudflare.com/");
+
+  const noForwardedProto = new Request("http://abc.trycloudflare.com/", { headers: { host: "abc.trycloudflare.com" } });
+  assert.equal(upgradeForwardedRequest(noForwardedProto, "*.trycloudflare.com").url, "http://abc.trycloudflare.com/");
+
+  const forwardedHttp = new Request("http://abc.trycloudflare.com/", {
+    headers: { host: "abc.trycloudflare.com", "x-forwarded-proto": "http" },
+  });
+  assert.equal(upgradeForwardedRequest(forwardedHttp, "*.trycloudflare.com").url, "http://abc.trycloudflare.com/");
+
+  const post = new Request("http://abc.trycloudflare.com/api/auth", {
+    method: "POST",
+    headers: { host: "abc.trycloudflare.com", "x-forwarded-proto": "https, http" },
+    body: "payload",
+  });
+  const upgradedPost = upgradeForwardedRequest(post, "*.trycloudflare.com");
+  assert.equal(upgradedPost.url, "https://abc.trycloudflare.com/api/auth");
+  assert.equal(upgradedPost.method, "POST");
+  assert.equal(await upgradedPost.text(), "payload");
+});
+
+test("rewrites proxy-injected insecure origins only when they match the trusted host", async () => {
+  const withOrigin = (origin) => new Request("http://abc.trycloudflare.com/login?next=/today", {
+    method: "POST",
+    headers: { host: "abc.trycloudflare.com", "x-forwarded-proto": "https", origin, "content-type": "application/json" },
+    body: "{}",
+  });
+
+  const matching = upgradeForwardedRequestWithFlag(withOrigin("http://abc.trycloudflare.com"), "*.trycloudflare.com");
+  assert.equal(matching.upgraded, true);
+  assert.equal(matching.request.url, "https://abc.trycloudflare.com/login?next=/today");
+  assert.equal(matching.request.headers.get("origin"), "https://abc.trycloudflare.com");
+  assert.equal(matching.request.headers.get("content-type"), "application/json");
+  assert.equal(await matching.request.text(), "{}");
+
+  const uppercase = upgradeForwardedRequest(withOrigin("HTTP://ABC.TryCloudflare.com"), "*.trycloudflare.com");
+  assert.equal(uppercase.headers.get("origin"), "https://abc.trycloudflare.com");
+
+  const foreign = upgradeForwardedRequest(withOrigin("http://evil.example"), "*.trycloudflare.com");
+  assert.equal(foreign.headers.get("origin"), "http://evil.example");
+
+  const secureOrigin = upgradeForwardedRequest(withOrigin("https://abc.trycloudflare.com"), "*.trycloudflare.com");
+  assert.equal(secureOrigin.headers.get("origin"), "https://abc.trycloudflare.com");
+
+  const notUpgraded = upgradeForwardedRequestWithFlag(withOrigin("http://abc.trycloudflare.com"), undefined);
+  assert.equal(notUpgraded.upgraded, false);
+  assert.equal(notUpgraded.request.headers.get("origin"), "http://abc.trycloudflare.com");
+});
+
+test("rewrites same-host absolute redirect Locations to relative on upgraded responses and leaves others alone", async () => {
+  const request = new Request("https://abc.trycloudflare.com/login", { headers: { host: "abc.trycloudflare.com" } });
+
+  const absolute = secureRedirectResponse(new Response(null, { status: 302, headers: { location: "http://abc.trycloudflare.com/login?next=/today" } }), request);
+  assert.equal(absolute.status, 302);
+  assert.equal(absolute.headers.get("location"), "/login?next=/today");
+
+  const bareHost = secureRedirectResponse(new Response(null, { status: 307, headers: { location: "http://abc.trycloudflare.com" } }), request);
+  assert.equal(bareHost.status, 307);
+  assert.equal(bareHost.headers.get("location"), "/");
+
+  const foreign = secureRedirectResponse(new Response(null, { status: 302, headers: { location: "http://evil.example/login" } }), request);
+  assert.equal(foreign.headers.get("location"), "http://evil.example/login");
+
+  const alreadySecure = secureRedirectResponse(new Response(null, { status: 302, headers: { location: "https://abc.trycloudflare.com/login" } }), request);
+  assert.equal(alreadySecure.headers.get("location"), "/login");
+
+  const relative = secureRedirectResponse(new Response(null, { status: 303, headers: { location: "/login?next=/today" } }), request);
+  assert.equal(relative.headers.get("location"), "/login?next=/today");
+
+  const protocolRelative = secureRedirectResponse(new Response(null, { status: 302, headers: { location: "//evil.com/login" } }), request);
+  assert.equal(protocolRelative.headers.get("location"), "//evil.com/login");
+
+  const plain = secureRedirectResponse(new Response("ok", { status: 200 }), request);
+  assert.equal(plain.status, 200);
+  assert.equal(await plain.text(), "ok");
+
+  const streamed = secureRedirectResponse(new Response(new ReadableStream({ start(controller) { controller.enqueue(new TextEncoder().encode("body")); controller.close(); } }), { status: 302, headers: { location: "http://abc.trycloudflare.com/x" } }), request);
+  assert.equal(await streamed.text(), "body");
+  assert.equal(streamed.headers.get("location"), "/x");
+});
+
+test("gates registration behind DABAIHUA_ALLOW_REGISTER and an optional invite code", async () => {
+  const [auth, route, page] = await Promise.all([
+    readFile(new URL("../lib/auth.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/auth/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(auth, /DABAIHUA_ALLOW_REGISTER/);
+  assert.match(auth, /DABAIHUA_REGISTER_INVITE_CODE/);
+  assert.match(auth, /注册已关闭，请联系管理员/);
+  assert.match(auth, /邀请码不正确/);
+  assert.match(route, /inviteCode\?: string/);
+  assert.match(page, /inviteCode: authInviteCode/);
 });

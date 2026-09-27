@@ -1,6 +1,6 @@
 import { ensureSchema } from "./store";
 
-export type AuthEnv = { DB: D1Database };
+export type AuthEnv = { DB: D1Database; DABAIHUA_ALLOW_REGISTER?: string; DABAIHUA_REGISTER_INVITE_CODE?: string };
 export type SessionUser = {
   id: number;
   account: string;
@@ -195,8 +195,12 @@ export async function requireSessionUser(env: AuthEnv, request: Request) {
   return user;
 }
 
-export async function registerUser(env: AuthEnv, request: Request, input: { account?: string; password?: string; confirmPassword?: string; nickname?: string }) {
+export async function registerUser(env: AuthEnv, request: Request, input: { account?: string; password?: string; confirmPassword?: string; nickname?: string; inviteCode?: string }) {
   assertSameOrigin(request);
+  const allowRegister = (env.DABAIHUA_ALLOW_REGISTER || "").trim().toLowerCase();
+  if (["0", "false", "no", "off", "closed"].includes(allowRegister)) throw new AuthError("注册已关闭，请联系管理员", 403);
+  const inviteCode = (env.DABAIHUA_REGISTER_INVITE_CODE || "").trim();
+  if (inviteCode && !constantTimeEqual((input.inviteCode || "").trim(), inviteCode)) throw new AuthError("邀请码不正确", 403);
   await ensureSchema(env.DB);
   const { account, normalized } = normalizeAccount(input.account || "");
   const password = validatePassword(input.password || "");

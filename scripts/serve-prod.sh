@@ -15,6 +15,18 @@
 #   PORT   listen port                  (default: 3100)
 #   HOST   bind address                 (default: 0.0.0.0)
 #   BUILD  1 = force `npm run build` first (also runs if the build output is missing)
+#
+# Optional worker vars (for running behind an HTTPS reverse proxy/tunnel):
+#   DABAIHUA_TRUSTED_PROXY_HOSTS   comma-separated trusted host patterns (e.g.
+#                                  "*.trycloudflare.com") whose forwarded https
+#                                  requests should be treated as https.
+#   DABAIHUA_ALLOW_REGISTER        "0/false/no/off/closed" disables registration;
+#                                  anything else (or unset) leaves it open.
+#   DABAIHUA_REGISTER_INVITE_CODE  when set, registration requires this invite code.
+# These are read from the current shell env first, then from the optional file
+# `.wrangler/prod/prod.env` (KEY=VALUE lines, `#` comments, gitignored). Only
+# non-empty values are forwarded to wrangler as `--var KEY:VALUE`; secret values
+# are never printed (only their key names are logged).
 
 set -euo pipefail
 
@@ -33,8 +45,51 @@ WATCH_LOG_FILE="${PROD_DIR}/articles-watch.log"
 WATCH_PID_FILE="${PROD_DIR}/articles-watch.pid"
 WRANGLER_LOG_PATH_ENV=".wrangler/prod/wrangler.log"
 WRANGLER_CONFIG="dist/server/wrangler.json"
+PROD_ENV_FILE="${PROD_DIR}/prod.env"
+
+# Worker vars that may be forwarded to wrangler (values stay out of the logs).
+FORWARDED_VAR_KEYS=(DABAIHUA_TRUSTED_PROXY_HOSTS DABAIHUA_ALLOW_REGISTER DABAIHUA_REGISTER_INVITE_CODE)
 
 mkdir -p -- "${PROD_DIR}"
+
+# Reads KEY=VALUE from $PROD_ENV_FILE (trimmed, `#` comments and blank lines ignored,
+# optional surrounding single/double quotes stripped). Prints the value, or nothing.
+env_file_value() {
+  local key="$1"
+  [[ -f "${PROD_ENV_FILE}" ]] || return 0
+  local line
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    line="${line%$'\r'}"
+    [[ "${line}" =~ ^[[:space:]]*# ]] && continue
+    [[ "${line}" =~ ^[[:space:]]*$ ]] && continue
+    [[ "${line}" == *=* ]] || continue
+    local entry_key="${line%%=*}"
+    entry_key="$(printf '%s' "${entry_key}" | tr -d '[:space:]')"
+    [[ "${entry_key}" == "${key}" ]] || continue
+    local value="${line#*=}"
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+    if [[ ${#value} -ge 2 ]]; then
+      local first="${value:0:1}" last="${value: -1}"
+      if [[ ("${first}" == '"' || "${first}" == "'") && "${last}" == "${first}" ]]; then
+        value="${value:1:${#value}-2}"
+      fi
+    fi
+    printf '%s' "${value}"
+    return 0
+  done < "${PROD_ENV_FILE}"
+}
+
+# Shell env wins over the optional prod.env file.
+resolve_var() {
+  local key="$1" shell_value
+  shell_value="$(printenv "${key}" 2>/dev/null || true)"
+  if [[ -n "${shell_value}" ]]; then
+    printf '%s' "${shell_value}"
+    return 0
+  fi
+  env_file_value "${key}"
+}
 
 is_running() {
   [[ -f "${PID_FILE}" ]] || return 1
@@ -104,6 +159,14 @@ start() {
   fi
 
   echo "starting production worker on ${HOST}:${PORT}..."
+  local wrangler_vars=()
+  local key value
+  for key in "${FORWARDED_VAR_KEYS[@]}"; do
+    value="$(resolve_var "${key}")"
+    [[ -n "${value}" ]] || continue
+    echo "passing worker var: ${key}"
+    wrangler_vars+=(--var "${key}:${value}")
+  done
   setsid env WRANGLER_LOG_PATH="${WRANGLER_LOG_PATH_ENV}" \
     npx wrangler dev \
       -c "${WRANGLER_CONFIG}" \
@@ -111,6 +174,7 @@ start() {
       --ip "${HOST}" \
       --persist-to .wrangler/state \
       --show-interactive-dev-session=false \
+      "${wrangler_vars[@]}" \
       >"${LOG_FILE}" 2>&1 &
   local pid=$!
   echo "${pid}" > "${PID_FILE}"

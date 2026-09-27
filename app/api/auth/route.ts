@@ -11,7 +11,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json() as { action?: "register" | "login" | "logout"; account?: string; password?: string; confirmPassword?: string; nickname?: string };
+    const body = await request.json() as { action?: "register" | "login" | "logout"; account?: string; password?: string; confirmPassword?: string; nickname?: string; inviteCode?: string };
     if (body.action === "register") {
       const result = await registerUser(env, request, body);
       return Response.json({ user: result.user }, { headers: { "set-cookie": result.cookie } });

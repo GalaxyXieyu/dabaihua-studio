@@ -2,11 +2,15 @@
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
 import { processPendingItems, promotePendingXArticles, syncDueSources } from "../lib/store";
+import { secureRedirectResponse, upgradeForwardedRequestWithFlag } from "../lib/trusted-proxy";
 
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
   AI?: { run(model: string, input: unknown): Promise<unknown> };
+  DABAIHUA_TRUSTED_PROXY_HOSTS?: string;
+  DABAIHUA_ALLOW_REGISTER?: string;
+  DABAIHUA_REGISTER_INVITE_CODE?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -29,20 +33,23 @@ interface ExecutionContext {
 
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const upgrade = upgradeForwardedRequestWithFlag(request, env.DABAIHUA_TRUSTED_PROXY_HOSTS);
+    request = upgrade.request;
+    const secure = (response: Response) => (upgrade.upgraded ? secureRedirectResponse(response, request) : response);
     const url = new URL(request.url);
 
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
-      return handleImageOptimization(request, {
+      return secure(await handleImageOptimization(request, {
         fetchAsset: (path) => env.ASSETS.fetch(new Request(new URL(path, request.url))),
         transformImage: async (body, { width, format, quality }) => {
           const result = await env.IMAGES.input(body).transform(width > 0 ? { width } : {}).output({ format, quality });
           return result.response();
         },
-      }, allowedWidths);
+      }, allowedWidths));
     }
 
-    return handler.fetch(request, env, ctx);
+    return secure(await handler.fetch(request, env, ctx));
   },
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil((async () => {
