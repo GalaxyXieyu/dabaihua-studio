@@ -547,3 +547,53 @@ test("ships topic drafts through the pi editing pipeline", async () => {
   assert.match(draft, /validateLinks/);
   assert.match(draft, /stdio: \["ignore"/);
 });
+
+test("ships the mobile topic review page with persisted annotations and decisions", async () => {
+  const [store, schema, migration, route, reviews, page, topicCard] = await Promise.all([
+    readFile(new URL("../lib/store.ts", import.meta.url), "utf8"),
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0013_topic_reviews.sql", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/topics/[id]/reviews/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/reviews.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/review/[id]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/topics/_components/TopicCard.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(store, /CREATE TABLE IF NOT EXISTS topic_reviews/);
+  assert.match(store, /"review_status"/);
+  assert.match(schema, /export const topicReviews/);
+  assert.match(migration, /topic_reviews/);
+  assert.match(route, /requireSessionUser/);
+  assert.match(route, /"reject"/);
+  assert.match(reviews, /打回必须填写意见/);
+  assert.doesNotMatch(reviews, /SET status/);
+  assert.match(page, /redirect\(/);
+  assert.match(page, /\/login\?next=/);
+  assert.match(topicCard, /\/review\//);
+});
+
+test("parses review markdown into safe blocks and inline tokens", async () => {
+  const { parseMarkdownBlocks, parseInline } = await import("../lib/review-markdown.ts");
+
+  const blocks = parseMarkdownBlocks("# 标题\n\n正文一段\n\n- 甲\n- 乙\n\n1. 一\n2. 二\n\n> 引用\n\n```js\nconst x = 1;\n```\n\n---");
+  assert.equal(blocks[0].type, "heading");
+  assert.equal(blocks[0].level, 1);
+  assert.equal(blocks[0].text, "标题");
+  assert.equal(blocks[0].index, 0);
+  const paragraph = blocks.find((block) => block.type === "paragraph");
+  assert.equal(paragraph.text, "正文一段");
+  const unordered = blocks.find((block) => block.type === "list" && !block.ordered);
+  assert.deepEqual(unordered.items, ["甲", "乙"]);
+  const ordered = blocks.find((block) => block.type === "list" && block.ordered);
+  assert.deepEqual(ordered.items, ["一", "二"]);
+  const quote = blocks.find((block) => block.type === "blockquote");
+  assert.equal(quote.text, "引用");
+  const code = blocks.find((block) => block.type === "code");
+  assert.equal(code.text, "const x = 1;");
+  assert.equal(blocks.at(-1).type, "hr");
+
+  assert.deepEqual(parseInline("**重点**"), [{ type: "bold", value: "重点" }]);
+  assert.deepEqual(parseInline("[官网](https://example.com)"), [{ type: "link", value: "官网", href: "https://example.com" }]);
+  const unsafe = parseInline("[点我](javascript:alert(1))");
+  assert.equal(unsafe.some((token) => token.type === "link"), false);
+});

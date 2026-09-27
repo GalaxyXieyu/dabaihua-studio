@@ -7,7 +7,7 @@ import { readXArticles, readXPost, readXProfile, xPostAddress, xProfileAddress }
 export type AppEnv = { DB: D1Database; AI?: { run: (model: string, input: unknown) => Promise<unknown> } };
 const now = () => new Date().toISOString();
 const day = () => new Date().toISOString().slice(0, 10);
-const SCHEMA_VERSION = "2026-08-03.2";
+const SCHEMA_VERSION = "2026-08-03.3";
 const schemaReady = new WeakMap<object, Promise<void>>();
 
 async function initializeSchema(db: D1Database) {
@@ -43,6 +43,8 @@ async function initializeSchema(db: D1Database) {
     db.prepare("CREATE TABLE IF NOT EXISTS profile_likes (user_id INTEGER NOT NULL, profile_user_id INTEGER NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(user_id, profile_user_id), FOREIGN KEY(user_id) REFERENCES users(id), FOREIGN KEY(profile_user_id) REFERENCES users(id))"),
     db.prepare("CREATE TABLE IF NOT EXISTS profile_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, profile_user_id INTEGER NOT NULL, author_user_id INTEGER NOT NULL, body TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(profile_user_id) REFERENCES users(id), FOREIGN KEY(author_user_id) REFERENCES users(id))"),
     db.prepare("CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, actor_user_id INTEGER NOT NULL, type TEXT NOT NULL, annotation_id INTEGER, profile_message_id INTEGER, is_read INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id), FOREIGN KEY(actor_user_id) REFERENCES users(id), FOREIGN KEY(annotation_id) REFERENCES annotations(id), FOREIGN KEY(profile_message_id) REFERENCES profile_messages(id))"),
+    db.prepare("CREATE TABLE IF NOT EXISTS topic_reviews (id INTEGER PRIMARY KEY AUTOINCREMENT, topic_id INTEGER NOT NULL, user_id INTEGER NOT NULL, kind TEXT NOT NULL, block_index INTEGER, quote TEXT, body TEXT NOT NULL DEFAULT '', resolved INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id))"),
+    db.prepare("CREATE INDEX IF NOT EXISTS topic_reviews_topic_idx ON topic_reviews(topic_id, block_index, created_at)"),
     db.prepare("CREATE INDEX IF NOT EXISTS items_created_idx ON items(created_at DESC)"),
     db.prepare("CREATE INDEX IF NOT EXISTS items_source_idx ON items(source_id)"),
     db.prepare("CREATE INDEX IF NOT EXISTS auth_sessions_user_idx ON auth_sessions(user_id)"),
@@ -133,6 +135,9 @@ async function initializeSchema(db: D1Database) {
     ["metrics", "TEXT"],
     ["draft_markdown", "TEXT"],
     ["draft_updated_at", "TEXT"],
+    ["review_status", "TEXT"],
+    ["review_comment", "TEXT"],
+    ["reviewed_at", "TEXT"],
   ];
   for (const [name, type] of topicNewCols) {
     if (!topicExisting.has(name)) {

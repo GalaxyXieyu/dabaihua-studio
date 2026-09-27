@@ -90,6 +90,7 @@ export async function listTopics(env: Env, status: string) {
   const rows = await env.DB.prepare(`SELECT id, title, angle, reason, platform, content_type AS contentType, heat,
       match_score AS matchScore, feasibility, total, hkr, status, item_ids AS itemIds, created_at AS createdAt, updated_at AS updatedAt,
       draft_updated_at AS draftUpdatedAt,
+      review_status AS reviewStatus, review_comment AS reviewComment, reviewed_at AS reviewedAt,
       CASE WHEN draft_markdown IS NOT NULL AND draft_markdown != '' THEN 1 ELSE 0 END AS hasDraft
     FROM topics WHERE (? = '' OR status = ?) ORDER BY total DESC, id DESC LIMIT 100`).bind(status, status).all();
   return rows.results;
@@ -100,6 +101,7 @@ export async function getTopic(env: Env, id: number) {
   const row = await env.DB.prepare(`SELECT id, title, angle, reason, platform, content_type AS contentType, heat,
       match_score AS matchScore, feasibility, total, hkr, status, item_ids AS itemIds, created_at AS createdAt, updated_at AS updatedAt,
       draft_updated_at AS draftUpdatedAt,
+      review_status AS reviewStatus, review_comment AS reviewComment, reviewed_at AS reviewedAt,
       CASE WHEN draft_markdown IS NOT NULL AND draft_markdown != '' THEN 1 ELSE 0 END AS hasDraft,
       draft_markdown AS draftMarkdown
     FROM topics WHERE id = ?`).bind(id).first();

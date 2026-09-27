@@ -37,6 +37,43 @@ npm run dev
 
 没有 AI 绑定时，RSS 收集、中文内容、收藏和批注仍可工作；需要翻译的外文条目会保留原文并等待处理。
 
+## 手机审稿页 (/review/[id])
+
+选题生成草稿后，可以在手机上完成审稿：
+
+```bash
+npm run draft -- <id>
+```
+
+然后打开 `/review/<id>`（需先登录）。逐段阅读草稿，点段落即可添加批注；底部操作栏可以「通过」或「打回」——打回必须填写意见，结果会记录在审稿历史里。选题看板中带草稿的卡片会显示「📝 审稿」入口，以及最新的审稿状态。
+
+### 生产模式与部署
+
+本地验证生产构建（Cloudflare Worker 产物）时，用生产模式脚本启动：
+
+```bash
+npm run build && npm run prod:start
+```
+
+- 默认监听 `3100` 端口，可用 `PORT` 和 `HOST` 环境变量覆盖（如 `PORT=3101 HOST=127.0.0.1 npm run prod:start`）。
+- `npm run prod:status` 查看运行状态（running/stopped + pid + 端口），`npm run prod:stop` 停止。
+- 脚本依据 `dist/server/wrangler.json` 运行；若该文件不存在或设置 `BUILD=1`，会自动先执行 `npm run build`。
+- 日志写入 `.wrangler/prod/server.log`（wrangler 自身日志在 `.wrangler/prod/wrangler.log`），pid 记录在 `.wrangler/prod/server.pid`。
+- 使用 `--persist-to .wrangler/state`，与 `npm run dev` 共享同一份本地 D1 数据；两者不能同时占用同一端口，但数据互通。
+- 手机审稿需先登录，未登录访问 `/review/<id>` 会跳到 `/login?next=/review/<id>`，登录后回到原页面。
+
+如果要让手机通过公网 HTTPS 访问，使用 nginx 反向代理 `deploy/nginx/review.aigalaxy.top.conf`：
+
+```bash
+sudo cp deploy/nginx/review.aigalaxy.top.conf /etc/nginx/sites-available/
+sudo ln -s /etc/nginx/sites-available/review.aigalaxy.top.conf /etc/nginx/sites-enabled/
+sudo mkdir -p /var/www/certbot
+sudo certbot --nginx -d review.aigalaxy.top
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+注意：`review.aigalaxy.top` 的 DNS **目前尚未配置**。需要先确认该域名的 DNS 服务商，并添加一条指向本机公网 IP 的 A 记录，certbot 的 HTTP-01 校验才能通过。生产环境务必通过 HTTPS 访问；会话 Cookie 在非 localhost 主机上会自动带上 `Secure` 标记，只应经 HTTPS 传输。
+
 ## 验证
 
 ```bash

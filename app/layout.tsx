@@ -1,12 +1,13 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import "./globals.css";
+import { requestOrigin } from "../lib/request-origin";
+
+export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
-  const host = requestHeaders.get("x-forwarded-host") || requestHeaders.get("host") || "localhost:3000";
-  const protocol = requestHeaders.get("x-forwarded-proto") || (host.startsWith("localhost") ? "http" : "https");
-  const siteUrl = new URL(`${protocol}://${host}`);
+  const siteUrl = new URL(requestOrigin(requestHeaders));
   const title = "清流工作室 · RSS / X / 公众号";
   const description = "一起阅读、炼化心结、贡献订阅源，发现值得长期关注的 RSS、X 与公众号内容。";
   const image = new URL("/og-community.png", siteUrl).toString();

@@ -1,5 +1,7 @@
+/* eslint-disable @next/next/no-html-link-for-pages */
 import { headers } from "next/headers";
 import { Board } from "./_components/Board";
+import { requestOrigin } from "../../lib/request-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +26,10 @@ type Topic = {
   status: string;
   itemIds: string | null;
   createdAt: string;
-  updatedAt: string | null;
+  updatedAt: string;
+  hasDraft?: number | boolean | null;
+  draftUpdatedAt?: string | null;
+  reviewStatus?: string | null;
 };
 
 type SeriesSummary = {
@@ -56,9 +61,7 @@ async function fetchSeries(origin: string, cookie: string | null): Promise<Serie
 
 export default async function TopicsPage() {
   const requestHeaders = await headers();
-  const host = requestHeaders.get("x-forwarded-host") || requestHeaders.get("host") || "localhost:3000";
-  const protocol = requestHeaders.get("x-forwarded-proto") || (host.startsWith("localhost") ? "http" : "https");
-  const origin = `${protocol}://${host}`;
+  const origin = requestOrigin(requestHeaders);
   const cookie = requestHeaders.get("cookie");
 
   const [topics, series] = await Promise.all([

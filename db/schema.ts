@@ -285,6 +285,19 @@ export const profileMessages = sqliteTable("profile_messages", {
   updatedAt: text("updated_at").notNull(),
 });
 
+export const topicReviews = sqliteTable("topic_reviews", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  topicId: integer("topic_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  kind: text("kind", { enum: ["annotation", "approve", "reject"] }).notNull(),
+  blockIndex: integer("block_index"),
+  quote: text("quote"),
+  body: text("body").notNull().default(""),
+  resolved: integer("resolved", { mode: "boolean" }).notNull().default(false),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [index("topic_reviews_topic_idx").on(table.topicId, table.blockIndex, table.createdAt)]);
+
 export const notifications = sqliteTable("notifications", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   userId: integer("user_id").notNull().references(() => users.id),

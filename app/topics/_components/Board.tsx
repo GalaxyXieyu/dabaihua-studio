@@ -25,6 +25,9 @@ export type Topic = {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
+  hasDraft?: number | boolean | null;
+  draftUpdatedAt?: string | null;
+  reviewStatus?: string | null;
 };
 
 export type SeriesSummary = {
@@ -109,7 +112,7 @@ export function Board({ initialTopics, initialSeries }: { initialTopics: Topic[]
           body: JSON.stringify({ date }),
         });
         if (!resp.ok) {
-          const err = await resp.json().catch(() => ({}));
+          const err = await resp.json().catch(() => ({})) as { message?: string };
           throw new Error(err?.message || "排期失败");
         }
         setTopics((prev) => prev.map((t) => (t.id === id ? { ...t, status: "scheduled", scheduledDate: date } as Topic : t)));
