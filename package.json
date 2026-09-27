@@ -11,8 +11,7 @@
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "test": "npm run build && node --test tests/rendered-html.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate",
-    "sync:wechat": "node scripts/wechat-subscription-sync.mjs"
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

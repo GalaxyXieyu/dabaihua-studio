@@ -1,15 +1,10 @@
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
 import test from "node:test";
 import { htmlToMarkdown } from "../lib/article.ts";
 import { collectXArticlePages } from "../lib/x-pagination.ts";
 import { normalizeXPublishedAt } from "../lib/x-date.ts";
 import { inferSourceCategory, isSourceCategory } from "../lib/source-category.ts";
-import { localImageReferences, readMarkdownDocument } from "../scripts/backfill-wechat-markdown.mjs";
-import { dailySyncDecision, describeCollectorError, describeSyncResultError, isManagedCacheDirectory, managedCacheRoot, normalizeWechatProfileName, normalizeWechatPublishTime, retryablePartialImport } from "../scripts/wechat-subscription-sync.mjs";
 
 test("converts entity-escaped feed HTML before rendering Markdown", () => {
   const markdown = htmlToMarkdown('&lt;img src=&quot;https://cdn.example.com/cover.jpg&quot; alt=&quot;封面&quot;&gt;&lt;p&gt;&lt;strong&gt;最新文字&lt;/strong&gt;&lt;br&gt;正文&lt;/p&gt;');
@@ -249,64 +244,6 @@ test("background reading heartbeats never mark an article read or replace the ac
   assert.doesNotMatch(page, /有效阅读满 10 秒的文章会自动移动到这里/);
 });
 
-test("normalizes WeChat publication time from Asia Shanghai", () => {
-  assert.equal(normalizeWechatPublishTime("2026-07-14 17:47:40"), "2026-07-14T09:47:40.000Z");
-  assert.equal(normalizeWechatPublishTime(""), undefined);
-});
-
-test("waits until 09:30 Shanghai time and catches up after a late login", () => {
-  assert.deepEqual(dailySyncDecision(new Date("2026-07-16T01:29:59.000Z"), "2026-07-15\n"), {
-    today: "2026-07-16",
-    shouldRun: false,
-    reason: "before-window",
-  });
-  assert.deepEqual(dailySyncDecision(new Date("2026-07-16T01:30:00.000Z"), "2026-07-15\n"), {
-    today: "2026-07-16",
-    shouldRun: true,
-    reason: "ready",
-  });
-  assert.equal(dailySyncDecision(new Date("2026-07-16T04:00:00.000Z"), "2026-07-15").shouldRun, true);
-  assert.deepEqual(dailySyncDecision(new Date("2026-07-16T04:00:00.000Z"), "2026-07-16\n"), {
-    today: "2026-07-16",
-    shouldRun: false,
-    reason: "completed",
-  });
-});
-
-test("treats expired WeChat sessions and empty sync results as failures", () => {
-  assert.equal(describeCollectorError({ base_resp: { ret: 200003, err_msg: "invalid session" } }), "invalid session");
-  assert.equal(describeSyncResultError({ ok: true, fetched_count: 0 }), "公众号没有返回任何文章，登录态可能已失效");
-  assert.equal(describeSyncResultError({ ok: true, fetched_count: 20 }), "");
-});
-
-test("uses curl and a browser User-Agent for the WeChat exporter edge", () => {
-  const wrapper = fileURLToPath(new URL("../scripts/wechat-exporter-browser.py", import.meta.url));
-  const result = spawnSync("python3", [wrapper, "--probe-transport"], { encoding: "utf8" });
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  const payload = JSON.parse(result.stdout);
-  assert.equal(payload.transport, "curl");
-  assert.match(payload.user_agent, /^Mozilla\/5\.0/);
-  assert.doesNotMatch(payload.user_agent, /^Moore-WeChat-Exporter\//);
-});
-
-test("keeps the public-account nickname separate from article author and follow UI", () => {
-  assert.equal(normalizeWechatProfileName(" 摸鱼小李 ", "⮕点击关注"), "摸鱼小李");
-  assert.equal(normalizeWechatProfileName("⮕点击关注", "摸鱼小李"), "摸鱼小李");
-  assert.equal(normalizeWechatProfileName("36氪", "剡沛"), "36氪");
-  assert.equal(normalizeWechatProfileName("⮕点击关注"), "");
-  assert.equal(normalizeWechatProfileName("unknown-account"), "");
-});
-
-test("keeps a partial WeChat import pending until its history is complete", () => {
-  assert.deepEqual(retryablePartialImport({ resultName: "AI沃茨", itemCount: 1 }, "invalid session"), {
-    status: "pending",
-    stage: "retrying",
-    resultName: "AI沃茨",
-    itemCount: 1,
-    error: "invalid session",
-  });
-});
-
 test("rejects broken X epoch dates and falls back to reliable publication time", () => {
   const now = Date.parse("2026-07-15T00:00:00.000Z");
   assert.equal(
@@ -337,20 +274,6 @@ test("paginates X articles until the promised 20 unique entries are collected", 
   assert.deepEqual(cursors, ["", "next-page"]);
   assert.equal(statuses.length, 20);
   assert.deepEqual(statuses.map((status) => status.id), Array.from({ length: 20 }, (_, index) => String(index + 1)));
-});
-
-test("only treats hidden collector-owned directories as disposable cache", () => {
-  assert.equal(isManagedCacheDirectory(path.join(managedCacheRoot, "one-import")), true);
-  assert.equal(isManagedCacheDirectory(managedCacheRoot), false);
-  assert.equal(isManagedCacheDirectory(path.join(process.env.HOME || "/tmp", "Downloads", "wechat-articles")), false);
-});
-
-test("keeps downloaded WeChat body and discovers local images for upload", () => {
-  const downloaded = `---\nauthor: "示例作者"\nsource_url: "https://example.com/article"\n---\n\n第一段正文。\n\n![image](../images/006/001.png)\n\n第二段正文。`;
-  const parsed = readMarkdownDocument(downloaded);
-  assert.equal(parsed.metadata.author, "示例作者");
-  assert.equal(parsed.contentMarkdown, "第一段正文。\n\n![image](../images/006/001.png)\n\n第二段正文。");
-  assert.deepEqual(localImageReferences(parsed.contentMarkdown), [{ full: "![image](../images/006/001.png)", alt: "image", relativePath: "006/001.png" }]);
 });
 
 test("classifies existing sources into the six fixed navigation categories", () => {
@@ -510,7 +433,7 @@ test("defines the Dabaihua Studio shell", async () => {
 });
 
 test("ships unified subscriptions, daily sync, translation, reading, and idea workflows", async () => {
-  const [page, store, feed, xReader, worker, packageJson, aiRoute, ideaRoute, sourceRoute, sourceAvatarRoute, itemRoute, importQueueRoute, wechatSync, browserFetch, backfill, wechatLaunchAgent, viteConfig] = await Promise.all([
+  const [page, store, feed, xReader, worker, packageJson, aiRoute, ideaRoute, sourceRoute, sourceAvatarRoute, itemRoute, importQueueRoute, viteConfig] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/store.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/feed.ts", import.meta.url), "utf8"),
@@ -523,10 +446,6 @@ test("ships unified subscriptions, daily sync, translation, reading, and idea wo
     readFile(new URL("../app/api/source-avatar/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/items/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/import-queue/route.ts", import.meta.url), "utf8"),
-    readFile(new URL("../scripts/wechat-subscription-sync.mjs", import.meta.url), "utf8"),
-    readFile(new URL("../scripts/sites-browser-fetch.mjs", import.meta.url), "utf8"),
-    readFile(new URL("../scripts/backfill-wechat-markdown.mjs", import.meta.url), "utf8"),
-    readFile(new URL("../scripts/com.dabaihua-studio.wechat-sync.plist", import.meta.url), "utf8"),
     readFile(new URL("../vite.config.ts", import.meta.url), "utf8"),
   ]);
   assert.match(page, /\/api\/sources/);
@@ -569,19 +488,6 @@ test("ships unified subscriptions, daily sync, translation, reading, and idea wo
   assert.match(importQueueRoute, /pendingWechatSubscriptions/);
   assert.match(importQueueRoute, /requireImportAccess/);
   assert.match(importQueueRoute, /resultName/);
-  assert.match(browserFetch, /BROWSER_FETCH_TIMEOUT_MS = 90_000/);
-  assert.match(browserFetch, /浏览器采集桥请求超时/);
-  assert.match(wechatSync, /parsed\.ok === false/);
-  assert.match(wechatSync, /baseResponse\.ret/);
-  assert.match(wechatSync, /fetched_count/);
-  assert.match(wechatSync, /errors\.push\(`\$\{accountName\}: \$\{message\}`\)/);
-  assert.match(wechatSync, /if \(!result\.ok\) process\.exitCode = 1/);
-  assert.match(wechatSync, /avatarUrl: String\(account\.avatar_url/);
-  assert.match(wechatSync, /if \(failed === 0\)[\s\S]*writeFile\(stateFile/);
-  assert.match(wechatSync, /pending = \{[\s\S]*读取公众号导入队列失败/);
-  assert.match(wechatSync, /Number\(task\.itemCount\) > 0 && task\.resultName/);
-  assert.match(wechatSync, /if \(partialImport\)[\s\S]*retryablePartialImport/);
-  assert.match(wechatSync, /status: "pending"[\s\S]*stage: "retrying"/);
   assert.doesNotMatch(page, /网络有波动，正在自动重试/);
   assert.match(page, /历史文章会在后续同步中继续补齐/);
   assert.match(importQueueRoute, /itemCount/);
@@ -616,33 +522,12 @@ test("ships unified subscriptions, daily sync, translation, reading, and idea wo
   assert.match(page, /todayAvatarStack|today-avatar-stack/);
   assert.match(page, /\/api\/items\?sourceId=/);
   assert.doesNotMatch(page, /sourceCounts/);
-  assert.match(wechatSync, /exporter-account-by-url/);
-  assert.match(wechatSync, /extract_account_clues/);
-  assert.match(wechatSync, /await importDownloaded\(submitted\.outputDir/);
-  assert.match(wechatSync, /reportTask\(task, "reading"\)/);
-  assert.match(wechatSync, /reportTask\(task, "importing"/);
-  assert.match(wechatSync, /reportTask\(task, "history"/);
-  assert.match(wechatSync, /stage: "completed"/);
-  assert.match(wechatSync, /`request-\$\{Number\(requestId\)/);
-  assert.match(wechatSync, /--output-dir", requestCache/);
-  assert.match(wechatSync, /isManagedCacheDirectory/);
-  assert.match(wechatSync, /await rm\(directory, \{ recursive: true, force: true \}\)/);
-  assert.ok(wechatSync.indexOf("if (backfill.status !== 0)") < wechatSync.indexOf("await cleanupImportedCache(outputDir)"), "cache cleanup must happen only after upload succeeds");
-  assert.match(wechatSync, /exporter-sync/);
-  assert.ok(wechatSync.indexOf("await importDownloaded(submitted.outputDir") < wechatSync.indexOf("syncExporterAccount(account.id)"), "submitted WeChat article must be imported before history sync");
-  assert.doesNotMatch(wechatSync, /--no-assets/);
-  assert.match(wechatSync, /"20"/);
-  assert.match(wechatSync, /api\/import-queue/);
-  assert.match(backfill, /--account-name/);
   assert.match(page, /通常 1 分钟内开始识别/);
   assert.match(page, /2500/);
   assert.match(page, /aria-live="polite"/);
   assert.match(page, /正在识别公众号作者/);
   assert.match(page, /正在补齐/);
   assert.match(page, /已加入左侧/);
-  assert.match(wechatLaunchAgent, /<integer>60<\/integer>/);
-  assert.match(backfill, /readMarkdownDocument/);
-  assert.match(backfill, /articleHash/);
   assert.match(worker, /scheduled/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 });

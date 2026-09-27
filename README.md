@@ -59,19 +59,6 @@ npm run db:generate
 
 远程导入接口使用 `IMPORT_TOKEN` 保护。请在托管平台生成高强度随机值并作为 secret 配置，不要提交到 Git。`.env.example` 只列出变量名称和示例。
 
-## 微信公众号采集
-
-微信公众号采集是可选能力，依赖本机 Python 采集脚本和有效的公众号登录状态。配置这些环境变量后运行：
-
-```bash
-export RSS_AI_ENDPOINT=http://localhost:3000
-export WECHAT_WIZARD=/absolute/path/to/wechat_wizard.py
-export WECHAT_DOWNLOADER=/absolute/path/to/wechat_downloader.py
-npm run sync:wechat
-```
-
-macOS 定时任务模板位于 `scripts/com.dabaihua-studio.wechat-sync.plist`。使用前必须把其中的占位路径替换为自己机器上的绝对路径。请只导入你有权保存和使用的内容。
-
 ## 数据与版权
 
 本仓库只提供软件代码，不附带抓取的文章正文、用户数据或第三方媒体。使用者需要自行确认订阅、存储和展示内容的合法性，并遵守内容来源的服务条款和版权要求。
