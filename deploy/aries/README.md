@@ -1,0 +1,124 @@
+# Aries 部署操作手册
+
+`dabaihua-studio` 通过 ssh 主机别名 `Aries`（用户 `ubuntu`）部署运行，Caddy 终止
+TLS（`https://topic.aigalaxy.top`）并反向代理到 `127.0.0.1:3210`。
+
+## 目录布局
+
+| 路径 | 用途 |
+| --- | --- |
+| `/home/ubuntu/dabaihua-studio` | 代码（从本机 rsync 同步，含 `dist/` 构建产物，`npm ci` 安装依赖） |
+| `/home/ubuntu/dabaihua-data/state` | wrangler `--persist-to` 目录；D1 sqlite 位于 `state/v3/d1/miniflare-D1DatabaseObject/<hash>.sqlite` |
+| `/home/ubuntu/dabaihua-data/articles/<slug>/` | 文章目录（`meta.json`、`01-draft.md`、`02-final.md`、`qa-report.md`、`article.html`、`images/`） |
+| `/home/ubuntu/dabaihua-data/feedback` | 选题审稿反馈导出目录 |
+| `/home/ubuntu/dabaihua-data/prod.env` | 环境变量文件（`chmod 600`，**不在仓库中**） |
+
+`prod.env` 为 `KEY=VALUE` 行，例如：
+
+```
+IMPORT_TOKEN=...
+DABAIHUA_TRUSTED_PROXY_HOSTS=topic.aigalaxy.top
+DABAIHUA_ALLOW_REGISTER=1
+DABAIHUA_REGISTER_INVITE_CODE=...   # 可选
+```
+
+## systemd 单元
+
+- `dabaihua-studio.service`：前台运行 `deploy/aries/run-server.sh`（`wrangler dev`）。
+- `dabaihua-articles-watch.service`：运行 `deploy/aries/run-articles-watch.sh`，
+  等待 D1 sqlite 出现后监听文章目录并同步进 D1。
+
+两个单元都以 `ubuntu` 运行，`Restart=always`、`RestartSec=5`。监听单元通过
+`After`/`Wants=dabaihua-studio.service` 排在服务之后（**没有** `PartOf`，停止服务
+不会连带停止监听）。
+
+## 安装 / 启用
+
+```bash
+sudo cp deploy/aries/*.service /etc/systemd/system/ && \
+  sudo systemctl daemon-reload && \
+  sudo systemctl enable --now dabaihua-studio dabaihua-articles-watch
+```
+
+## 重启
+
+```bash
+sudo systemctl restart dabaihua-studio
+sudo systemctl restart dabaihua-articles-watch
+```
+
+## 查看日志
+
+```bash
+journalctl -u dabaihua-studio -f
+journalctl -u dabaihua-articles-watch -f
+```
+
+## 重新部署
+
+从本机仓库根目录：
+
+```bash
+rsync -az --delete \
+  --exclude node_modules --exclude .wrangler --exclude .git \
+  ./ Aries:/home/ubuntu/dabaihua-studio/
+```
+
+`package-lock.json` 有变化时再执行 `npm ci`：
+
+```bash
+ssh Aries 'cd /home/ubuntu/dabaihua-studio && npm ci'
+```
+
+然后重启服务：
+
+```bash
+ssh Aries 'sudo systemctl restart dabaihua-studio dabaihua-articles-watch'
+```
+
+> 代码需在本机先 `npm run build`，把 `dist/` 一起同步过去（`run-server.sh` 使用
+> `dist/server/wrangler.json`）。
+
+## 关闭注册
+
+在 `prod.env` 中设置 `DABAIHUA_ALLOW_REGISTER=0`，然后：
+
+```bash
+ssh Aries 'sudo systemctl restart dabaihua-studio'
+```
+
+可选邀请码：设置 `DABAIHUA_REGISTER_INVITE_CODE=<code>` 并重启同一服务。
+
+## 回滚到旧的 qingliu-reader
+
+服务器上保留有回滚脚本：
+
+```bash
+ssh Aries 'bash ~/backup/rollback-qingliu.sh'
+```
+
+该脚本会停用 `dabaihua-studio` 并重新启用 `qingliu.service`。
+
+## publish-review CLI
+
+本机推送一篇文章到 Aries 并触发导入，然后等待页面可访问：
+
+```bash
+npm run publish-review -- <slug> [--host Aries] [--dry-run] [--no-wait]
+```
+
+- `--host`：ssh 主机别名（默认取 `PUBLISH_REVIEW_HOST`，否则 `Aries`）。
+- `--dry-run`：只打印将要执行的 rsync/ssh 命令，不实际执行。
+- `--no-wait`：触发导入后立即返回，不轮询线上页面。
+
+环境变量覆盖：
+
+| 变量 | 默认值 |
+| --- | --- |
+| `PUBLISH_REVIEW_HOST` | `Aries` |
+| `PUBLISH_REVIEW_REMOTE_ARTICLES` | `/home/ubuntu/dabaihua-data/articles` |
+| `PUBLISH_REVIEW_BASE_URL` | `https://topic.aigalaxy.top` |
+| `ARTICLES_DIR`（本地） | `/workspace/projects/articles` |
+
+脚本只使用 Node 内置模块；保护服务器上已有的 `review-feedback-*` 反馈文件不被
+`--delete` 删除，并在本地 `meta.json` 不含审稿历史时合并服务器上的审稿字段。

@@ -877,3 +877,43 @@ test("gates registration behind DABAIHUA_ALLOW_REGISTER and an optional invite c
   assert.match(route, /inviteCode\?: string/);
   assert.match(page, /inviteCode: authInviteCode/);
 });
+
+test("ships the Aries deploy helpers and the publish-review CLI", async () => {
+  const [script, packageJson, runServer, runWatch, service, watchService] = await Promise.all([
+    readFile(new URL("../scripts/publish-review.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/aries/run-server.sh", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/aries/run-articles-watch.sh", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/aries/dabaihua-studio.service", import.meta.url), "utf8"),
+    readFile(new URL("../deploy/aries/dabaihua-articles-watch.service", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(script, /SLUG_RE = \/\^\[A-Za-z0-9\]\[A-Za-z0-9\._-\]\{0,120\}\$\//);
+  assert.match(script, /--filter/);
+  assert.match(script, /P review-feedback-\*/);
+  assert.match(script, /PUBLISH_REVIEW_REMOTE_ARTICLES/);
+  assert.match(script, /miniflare-D1DatabaseObject/);
+  assert.match(script, /sync-articles\.mjs --once --slug/);
+  assert.doesNotMatch(script, /exec\(|execSync|shell: true/);
+
+  const pkg = JSON.parse(packageJson);
+  assert.equal(pkg.scripts["publish-review"], "node scripts/publish-review.mjs");
+
+  assert.match(runServer, /--persist-to/);
+  assert.match(runServer, /3210/);
+  assert.match(runServer, /set -euo pipefail/);
+  assert.match(runWatch, /ARTICLES_DIR/);
+  assert.match(runWatch, /FEEDBACK_DIR/);
+  assert.match(runWatch, /miniflare-D1DatabaseObject/);
+  assert.match(runWatch, /sync-articles\.mjs --watch/);
+
+  assert.match(service, /User=ubuntu/);
+  assert.match(service, /WorkingDirectory=\/home\/ubuntu\/dabaihua-studio/);
+  assert.match(service, /EnvironmentFile=\/home\/ubuntu\/dabaihua-data\/prod\.env/);
+  assert.match(service, /ExecStart=\/bin\/bash deploy\/aries\/run-server\.sh/);
+  assert.match(service, /Restart=always/);
+  assert.match(watchService, /ExecStart=\/bin\/bash deploy\/aries\/run-articles-watch\.sh/);
+  assert.match(watchService, /Wants=network-online\.target dabaihua-studio\.service/);
+  assert.match(watchService, /After=network-online\.target dabaihua-studio\.service/);
+  assert.doesNotMatch(watchService, /PartOf=/);
+});

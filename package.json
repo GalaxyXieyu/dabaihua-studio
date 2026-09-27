@@ -19,7 +19,8 @@
     "draft": "node scripts/draft-article.mjs",
     "articles:sync": "node scripts/sync-articles.mjs",
     "articles:watch": "node scripts/sync-articles.mjs --watch",
-    "publish:draft": "node scripts/publish-draft.mjs"
+    "publish:draft": "node scripts/publish-draft.mjs",
+    "publish-review": "node scripts/publish-review.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

@@ -1,0 +1,19 @@
+[Unit]
+Description=dabaihua-studio worker (wrangler dev, fronted by Caddy at topic.aigalaxy.top)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/dabaihua-studio
+EnvironmentFile=/home/ubuntu/dabaihua-data/prod.env
+Environment=PORT=3210
+Environment=HOST=127.0.0.1
+Environment=PERSIST_DIR=/home/ubuntu/dabaihua-data/state
+Environment=NODE_ENV=production
+ExecStart=/bin/bash deploy/aries/run-server.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,19 @@
+[Unit]
+Description=dabaihua-studio articles watcher (sync articles dir into D1)
+After=network-online.target dabaihua-studio.service
+Wants=network-online.target dabaihua-studio.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/dabaihua-studio
+EnvironmentFile=/home/ubuntu/dabaihua-data/prod.env
+Environment=PORT=3210
+Environment=HOST=127.0.0.1
+Environment=PERSIST_DIR=/home/ubuntu/dabaihua-data/state
+Environment=NODE_ENV=production
+ExecStart=/bin/bash deploy/aries/run-articles-watch.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
