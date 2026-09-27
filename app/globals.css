@@ -35,8 +35,11 @@
 }
 
 * { box-sizing:border-box; }
-html,body { min-width:320px; height:100%; overflow:hidden; }
-body { margin:0; color:var(--ink); background:var(--canvas); font-family:"Avenir Next",-apple-system,"SF Pro Text","PingFang SC","Noto Sans SC",sans-serif; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+html,body { min-width:320px; }
+html { height:100%; }
+body { min-height:100%; margin:0; color:var(--ink); background:var(--canvas); font-family:"Avenir Next",-apple-system,"SF Pro Text","PingFang SC","Noto Sans SC",sans-serif; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; overflow-x:clip; }
+body :where(p,li,h1,h2,h3,h4,h5,h6,figcaption,blockquote,td,th,a,span,strong,small,time,em,code) { overflow-wrap:anywhere; }
+body :where(img,video,canvas,svg,table,pre) { max-width:100%; }
 button,input,textarea { font:inherit; }
 button { cursor:pointer; touch-action:manipulation; }
 button:disabled { cursor:not-allowed; opacity:.45; }
@@ -743,3 +746,96 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible 
 .settings-install pre code { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; line-height: 1.8; color: var(--ink); }
 .settings-install-note { color: var(--muted); font-size: 12px; line-height: 1.7; margin: 8px 0 0; }
 .settings-install-note code { background: var(--canvas); padding: 1px 5px; border-radius: 4px; word-break: break-all; }
+
+/* ── 独立页面（/topics、/strategy 等）紧凑页头 ── */
+.page-header-inner { min-height:60px; padding:10px 24px; display:flex; align-items:center; gap:14px; }
+.page-header-brand { display:flex; align-items:center; gap:9px; min-width:0; color:var(--muted); font-size:13px; font-weight:700; }
+.page-header-brand .brand-mark { width:34px; height:34px; display:grid; place-items:center; flex:0 0 auto; color:var(--paper); background:var(--green); border-radius:10px; font-size:16px; }
+.page-header-brand-name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.page-header-brand:hover { color:var(--green); }
+.page-header-title { margin:0; flex:0 0 auto; font-size:19px; font-weight:800; white-space:nowrap; }
+.page-header-nav { margin-left:auto; display:flex; align-items:center; gap:6px; }
+.page-header-nav a { min-height:40px; padding:0 12px; display:inline-flex; align-items:center; gap:5px; border-radius:var(--r-sm); color:var(--muted); font-size:13px; font-weight:700; white-space:nowrap; }
+.page-header-nav a:hover { color:var(--green); background:var(--green-wash); }
+
+.board-column-body { max-height:calc(100dvh - 220px); scrollbar-width:thin; scrollbar-color:var(--line) transparent; }
+
+/* ── 手机端（<=640px）：底部标签栏 + 页面留白 ── */
+@media (max-width:640px) {
+  .global-appbar { padding:0 12px; grid-template-columns:auto 1fr auto; min-height:56px; }
+  .global-appbar nav {
+    position:fixed; z-index:var(--z-appbar); left:0; right:0; bottom:0; top:auto;
+    margin:0; padding:5px 4px calc(5px + env(safe-area-inset-bottom));
+    display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:2px;
+    background:var(--paper); border-top:1px solid var(--line); border-radius:0;
+    box-shadow:0 -6px 22px oklch(22% .024 260 / .08);
+  }
+  .global-appbar nav button, .global-appbar nav a.nav-link {
+    width:auto; min-width:0; min-height:52px; padding:5px 2px; flex-direction:column; gap:3px;
+    justify-content:center; font-size:10px; font-weight:700; line-height:1; white-space:nowrap;
+  }
+  .global-appbar nav button svg { width:20px; height:20px; }
+  .global-appbar nav button.active, .global-appbar nav a.nav-link.active { background:var(--green-soft); }
+  .global-brand > span:last-child { display:none; }
+  .global-brand { min-width:44px; }
+
+  .today-scroll, .article-list, .reader-pane, .full-view { padding-bottom:calc(78px + env(safe-area-inset-bottom)) !important; }
+  .view-today .today-view, .view-discover .article-pane { padding-bottom:0; }
+
+  /* 表单与触控目标：避免 iOS 聚焦缩放 */
+  body input, body select, body textarea { font-size:16px !important; }
+  body { font-size:15px; }
+  .global-appbar nav button, .global-appbar nav a.nav-link,
+  .page-header-nav a, .page-header-brand { min-height:44px; }
+  button, [role="button"], a, select { touch-action:manipulation; }
+  .segmented button, .auth-switch button { min-height:44px; }
+  .article-status-tabs button, .article-pane-context > button, .article-search input { min-height:44px; }
+  .profile-edit-button, .profile-like-button, .today-start, .today-primary { min-height:44px; }
+
+  /* 长词/链接换行 */
+  .today-state h1, .today-opening-copy h1, .view-header h1, .reader-document > header h1,
+  .article-row h2, .profile-identity-copy h2, .page-header-title { overflow-wrap:anywhere; }
+  .today-state, .today-opening { width:100%; max-width:100%; }
+
+  /* 独立页面页头 */
+  .page-header-inner { min-height:56px; padding:9px 12px; gap:8px; }
+  .page-header-brand-name { display:none; }
+  .page-header-brand .brand-mark { width:36px; height:36px; }
+  .page-header-title { font-size:17px; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  .page-header-nav { gap:2px; }
+  .page-header-nav a { min-width:44px; min-height:44px; padding:0 8px; justify-content:center; font-size:12px; }
+
+  /* 看板：横向滑动 */
+  .board-columns { scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; }
+  .board-columns > * { scroll-snap-align:start; }
+  .board-column-body { max-height:none; overflow:visible; }
+
+  /* 弹窗：底部抽屉 */
+  .modal-backdrop { padding:0; align-items:end; justify-items:stretch; }
+  .modal-card, .modal-card.wide { width:100%; max-width:100%; max-height:92dvh; border-radius:18px 18px 0 0; padding:18px 16px calc(18px + env(safe-area-inset-bottom)); }
+  .modal-head button { width:44px; height:44px; }
+
+  /* 表格类列表在窄屏堆叠为卡片 */
+  .profile-metrics { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .token-create-form { flex-direction:column; }
+  .token-create-form input, .token-create-form .primary-button { width:100%; min-height:44px; }
+  .token-row { flex-direction:column; align-items:stretch; }
+  .token-revoke { justify-content:center; min-height:44px; }
+  .settings-install pre { overflow-x:auto; }
+}
+
+@media (max-width:640px) {
+  .source-context-header .source-pane-toggle { width:44px; height:44px; border-radius:10px; }
+  .strategy-status { min-height:44px; padding-inline:14px; }
+  .topic-review-link { min-height:36px; padding-inline:12px; display:inline-flex; align-items:center; }
+  .article-row h2 { -webkit-line-clamp:2; }
+}
+
+@media (max-width:640px) {
+  .sources-collapsed .source-context-header .source-pane-toggle { width:44px; height:44px; }
+}
+
+@media (max-width:640px) {
+  .toast { bottom:calc(78px + env(safe-area-inset-bottom)); }
+  .today-immersive .today-scroll, .discover-immersive .reader-pane { padding-bottom:0 !important; }
+}

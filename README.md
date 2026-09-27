@@ -1,8 +1,8 @@
-# 清流工作室
+# 大白话工作室 (Dabaihua Studio)
 
 一个可自行部署的阅读、心结与内容发现工作台。它聚合 RSS、X 与微信公众号，也把反复出现的个人问题记录为心结，供 Agent、CLI 和后续内容工作流持续炼化。
 
-![清流工作室预览](public/og-community.png)
+![大白话工作室预览](public/og-community.png)
 
 ## 功能
 

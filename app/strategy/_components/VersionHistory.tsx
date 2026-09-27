@@ -42,7 +42,7 @@ export function VersionHistory({ versions: initialVersions }: { versions: Versio
   };
 
   return (
-    <div className="sticky top-24">
+    <div className="lg:sticky lg:top-24">
       {/* Toast */}
       {toast && (
         <div className={`fixed right-6 top-20 z-50 rounded-lg px-4 py-2 text-sm font-medium shadow-lg ${toast.kind === "ok" ? "bg-green-600 text-white" : "bg-red-600 text-white"}`}>

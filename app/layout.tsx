@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import "./globals.css";
+import { BRAND_NAME, BRAND_TITLE } from "../lib/brand";
 import { requestOrigin } from "../lib/request-origin";
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };
@@ -8,7 +9,7 @@ export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
   const siteUrl = new URL(requestOrigin(requestHeaders));
-  const title = "清流工作室 · RSS / X / 公众号";
+  const title = BRAND_TITLE;
   const description = "一起阅读、炼化心结、贡献订阅源，发现值得长期关注的 RSS、X 与公众号内容。";
   const image = new URL("/og-community.png", siteUrl).toString();
 
@@ -24,10 +25,10 @@ export async function generateMetadata(): Promise<Metadata> {
       title,
       description,
       url: "/",
-      siteName: "清流工作室",
+      siteName: BRAND_NAME,
       locale: "zh_CN",
       type: "website",
-      images: [{ url: image, width: 1728, height: 910, alt: "清流工作室的阅读与贡献排行榜" }],
+      images: [{ url: image, width: 1728, height: 910, alt: `${BRAND_NAME}的阅读与贡献排行榜` }],
     },
     twitter: {
       card: "summary_large_image",

@@ -79,7 +79,7 @@ export function TopicCard({ topic, onClick }: { topic: Topic; onClick: () => voi
               href={`/review/${topic.id}`}
               onClick={(event) => event.stopPropagation()}
               onKeyDown={(event) => event.stopPropagation()}
-              className="rounded-full bg-[var(--green-soft)] px-2 py-0.5 text-[10px] font-bold text-[var(--green)] hover:brightness-95"
+              className="topic-review-link rounded-full bg-[var(--green-soft)] px-2 py-0.5 text-[10px] font-bold text-[var(--green)] hover:brightness-95"
             >
               📝 审稿
             </a>

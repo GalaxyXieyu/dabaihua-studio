@@ -1,6 +1,8 @@
+/* eslint-disable @next/next/no-html-link-for-pages */
 import { headers } from "next/headers";
 import { StrategyEditor } from "./_components/StrategyEditor";
 import { VersionHistory } from "./_components/VersionHistory";
+import { BRAND_NAME } from "../../lib/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -18,23 +20,27 @@ type VersionEntry = {
   createdAt: string;
 };
 
+async function fetchJson<T>(origin: string, path: string, cookie: string | null): Promise<T | null> {
+  try {
+    const response = await fetch(`${origin}${path}`, {
+      headers: cookie ? { cookie } : {},
+      cache: "no-store",
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchStrategy(origin: string, cookie: string | null): Promise<StrategyData | null> {
-  const response = await fetch(`${origin}/api/strategy`, {
-    headers: cookie ? { cookie } : {},
-    cache: "no-store",
-  });
-  if (!response.ok) return null;
-  return (await response.json()) as StrategyData;
+  return fetchJson<StrategyData>(origin, "/api/strategy", cookie);
 }
 
 async function fetchVersions(origin: string, cookie: string | null): Promise<VersionEntry[]> {
-  const response = await fetch(`${origin}/api/strategy/versions`, {
-    headers: cookie ? { cookie } : {},
-    cache: "no-store",
-  });
-  if (!response.ok) return [];
-  const data = (await response.json()) as { versions?: VersionEntry[] };
-  return data.versions ?? [];
+  const data = await fetchJson<{ versions?: VersionEntry[] }>(origin, "/api/strategy/versions", cookie);
+  return data?.versions ?? [];
 }
 
 export default async function StrategyPage() {
@@ -49,27 +55,24 @@ export default async function StrategyPage() {
     fetchVersions(origin, cookie),
   ]);
 
-  const contentJson = strategy ? JSON.stringify(strategy.data, null, 2) : "{}";
-
   return (
     <div className="min-h-screen bg-[var(--canvas)] text-[var(--ink)]">
-      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-[var(--line)] bg-[var(--paper)] px-6 py-4">
-        <div className="flex items-center gap-3">
-          <a href="/" className="flex items-center gap-2 text-sm font-bold text-[var(--muted)] hover:text-[var(--green)]">
-            <span className="text-base">🌊</span>
-            <span>清流工作室</span>
+      <header className="page-header sticky top-0 z-20 border-b border-[var(--line)] bg-[var(--paper)]">
+        <div className="page-header-inner">
+          <a href="/" className="page-header-brand" aria-label={`返回${BRAND_NAME}首页`}>
+            <span className="brand-mark">🌊</span>
+            <span className="page-header-brand-name">{BRAND_NAME}</span>
           </a>
-          <span className="text-[var(--line-strong)]">/</span>
-          <h1 className="text-lg font-bold">⚙️ 策略配置</h1>
+          <h1 className="page-header-title">⚙️ 策略配置</h1>
+          <nav className="page-header-nav" aria-label="页面导航">
+            <a href="/topics">📋 选题</a>
+            <a href="/">返回首页</a>
+          </nav>
         </div>
-        <nav className="flex items-center gap-2">
-          <a href="/topics" className="rounded-lg px-3 py-1.5 text-xs font-bold text-[var(--muted)] hover:bg-[var(--canvas)] hover:text-[var(--green)]">📋 选题</a>
-          <a href="/" className="rounded-lg px-3 py-1.5 text-xs font-bold text-[var(--muted)] hover:bg-[var(--canvas)] hover:text-[var(--green)]">返回首页</a>
-        </nav>
       </header>
 
-      <main className="flex gap-4 p-6">
-        <div className="flex-1">
+      <main className="flex flex-col gap-4 p-4 sm:p-6 lg:flex-row">
+        <div className="min-w-0 flex-1">
           {strategy ? (
             <StrategyEditor
               initialVersion={strategy.version}
@@ -77,10 +80,10 @@ export default async function StrategyPage() {
               initialData={strategy.data}
             />
           ) : (
-            <div className="flex h-40 items-center justify-center text-[var(--muted)]">策略加载失败，请检查登录状态</div>
+            <div className="flex h-40 items-center justify-center rounded-2xl border border-dashed border-[var(--line)] text-[var(--muted)]">策略加载失败，请检查登录状态</div>
           )}
         </div>
-        <div className="w-72 shrink-0">
+        <div className="w-full min-w-0 lg:w-72 lg:shrink-0">
           <VersionHistory versions={versions} />
         </div>
       </main>

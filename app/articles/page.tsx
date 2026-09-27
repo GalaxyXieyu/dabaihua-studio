@@ -42,13 +42,13 @@ export default async function ArticlesPage() {
       <header className="sticky top-0 z-20 border-b border-[var(--line)] bg-[var(--paper)]">
         <div className="mx-auto flex max-w-[720px] items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-2">
-            <a href="/topics" className="text-sm font-bold text-[var(--muted)] hover:text-[var(--green)]">← 选题看板</a>
+            <a href="/topics" className="inline-flex min-h-[44px] items-center text-sm font-bold text-[var(--muted)] hover:text-[var(--green)]">← 选题看板</a>
             <h1 className="text-base font-bold">📰 文章</h1>
           </div>
           {user ? (
             <span className="text-xs text-[var(--faint)]">共 {articles.length} 篇</span>
           ) : (
-            <a href="/login?next=/articles" className="rounded-lg bg-[var(--green-soft)] px-3 py-1.5 text-xs font-bold text-[var(--green)]">登录后查看全部</a>
+            <a href="/login?next=/articles" className="inline-flex min-h-[44px] items-center rounded-lg bg-[var(--green-soft)] px-3 text-xs font-bold text-[var(--green)]">登录后查看全部</a>
           )}
         </div>
       </header>

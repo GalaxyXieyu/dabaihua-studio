@@ -2,6 +2,7 @@
 
 /* eslint-disable @next/next/no-html-link-for-pages */
 import { useState, type FormEvent } from "react";
+import { BRAND_NAME } from "../../lib/brand";
 
 export default function LoginPage() {
   const [account, setAccount] = useState("");
@@ -37,7 +38,7 @@ export default function LoginPage() {
       <div className="w-full max-w-[380px]">
         <div className="mb-5 text-center">
           <div className="mb-2 text-2xl">🌊</div>
-          <h1 className="text-lg font-bold">登录清流工作室</h1>
+          <h1 className="text-lg font-bold">登录{BRAND_NAME}</h1>
           <p className="mt-1 text-xs text-[var(--muted)]">登录后即可进入手机审稿页审阅草稿</p>
         </div>
         <form onSubmit={submit} className="space-y-3 rounded-2xl border border-[var(--line)] bg-[var(--paper)] p-5 shadow-sm">
@@ -70,7 +71,7 @@ export default function LoginPage() {
           </button>
         </form>
         <div className="mt-4 text-center">
-          <a href="/" className="text-sm font-bold text-[var(--muted)] hover:text-[var(--green)]">← 返回首页</a>
+          <a href="/" className="inline-flex min-h-[44px] items-center text-sm font-bold text-[var(--muted)] hover:text-[var(--green)]">← 返回首页</a>
         </div>
       </div>
     </div>
