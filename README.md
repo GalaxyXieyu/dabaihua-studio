@@ -59,6 +59,29 @@ npm run db:generate
 
 远程导入接口使用 `IMPORT_TOKEN` 保护。请在托管平台生成高强度随机值并作为 secret 配置，不要提交到 Git。`.env.example` 只列出变量名称和示例。
 
+## 每日 AI 素材 (daily-ai-digest)
+
+`npm run digest` 会抓取 GitHub、Hacker News、厂商博客 RSS 与本地 D1 里的近几日文章，
+调用 `pi` CLI 过滤并生成 6-10 条中文干货和 3-5 个公众号选题，写出 markdown 到
+`DIGEST_OUT_DIR`（默认 `/workspace/projects/daily-topics/<日期>.md`），并把选题以
+`candidate` 状态写入本地 D1 的 `topics` 板。
+
+```bash
+export PATH=/home/box/.local/bin:$PATH   # node 22 + pi
+export OPENCODE_API_KEY=...              # 来自你的密钥库，切勿提交
+npm run digest
+# 或：node scripts/daily-ai-digest.mjs [--refresh] [--force] [--dry-run] [--no-board] [--date YYYY-MM-DD]
+```
+
+- `--refresh`：忽略当日缓存，重新抓取并调用模型
+- `--force`：即使当日已有写入记录，也强制写入选题板
+- `--dry-run`：不写文件、不写库，直接打印 markdown
+- `--no-board`：只写 markdown，跳过选题板
+- `--date YYYY-MM-DD`：指定日期（默认 Asia/Shanghai 今天）
+
+可选环境变量：`DIGEST_MODEL`、`PI_BIN`、`DIGEST_OUT_DIR`、`DIGEST_D1_PATH`、`GITHUB_TOKEN`。
+同一日期重复运行会复用 `.cache/<日期>.json`，因此重跑是幂等的。
+
 ## 数据与版权
 
 本仓库只提供软件代码，不附带抓取的文章正文、用户数据或第三方媒体。使用者需要自行确认订阅、存储和展示内容的合法性，并遵守内容来源的服务条款和版权要求。
