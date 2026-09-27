@@ -6,6 +6,7 @@ declare namespace Cloudflare {
     DABAIHUA_TRUSTED_PROXY_HOSTS?: string;
     DABAIHUA_ALLOW_REGISTER?: string;
     DABAIHUA_REGISTER_INVITE_CODE?: string;
+    DABAIHUA_PUBLIC_BASE_URL?: string;
     AI?: {
       run(model: string, input: unknown): Promise<unknown>;
     };

@@ -85,6 +85,7 @@ export default async function TopicsPage() {
           <h1 className="page-header-title">📋 选题看板</h1>
           <nav className="page-header-nav" aria-label="页面导航">
             <a href="/articles">📰 文章</a>
+            <a href="/weekly">📅 周报</a>
             <a href="/strategy">⚙️ 策略</a>
             <a href="/">返回首页</a>
           </nav>

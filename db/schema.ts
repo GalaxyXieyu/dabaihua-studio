@@ -388,3 +388,27 @@ export const reviewRounds = sqliteTable("review_rounds", {
   uniqueIndex("review_rounds_target_round_idx").on(table.targetType, table.targetId, table.round),
   index("review_rounds_export_idx").on(table.exportedAt, table.id),
 ]);
+
+export const weeklyReports = sqliteTable("weekly_reports", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  week: text("week").notNull().unique(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  bytes: integer("bytes").notNull(),
+  contentSha256: text("content_sha256").notNull(),
+  chunkCount: integer("chunk_count").notNull(),
+  currentVersion: integer("current_version").notNull().default(1),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const weeklyReportChunks = sqliteTable("weekly_report_chunks", {
+  reportId: integer("report_id").notNull(),
+  version: integer("version").notNull(),
+  idx: integer("idx").notNull(),
+  data: blob("data", { mode: "buffer" }).notNull(),
+}, (table) => [primaryKey({ columns: [table.reportId, table.version, table.idx] })]);
+
+export const weeklyUploadLog = sqliteTable("weekly_upload_log", {
+  userId: integer("user_id").notNull(),
+  at: text("at").notNull(),
+}, (table) => [index("weekly_upload_log_user_idx").on(table.userId, table.at)]);

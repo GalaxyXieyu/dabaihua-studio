@@ -141,16 +141,30 @@ async function createSession(env: AuthEnv, userId: number) {
 }
 
 async function apiTokenUser(env: AuthEnv, request: Request) {
+  const result = await authenticateApiKey(env, request);
+  return result.status === "ok" ? result.user : null;
+}
+
+export type ApiKeyAuthResult =
+  | { status: "missing" | "malformed" | "invalid" }
+  | { status: "ok"; user: SessionUser };
+
+/**
+ * Single implementation of the `Authorization: Bearer topk_...` scheme used by
+ * every authenticated `/api/*` route. Never logs the header or the key.
+ */
+export async function authenticateApiKey(env: AuthEnv, request: Request): Promise<ApiKeyAuthResult> {
   const header = request.headers.get("authorization") || "";
+  if (!header.trim()) return { status: "missing" };
   const matched = /^Bearer\s+(topk_[a-f0-9]{32,64})$/.exec(header);
-  if (!matched) return null;
+  if (!matched) return { status: "malformed" };
   await ensureSchema(env.DB);
   const tokenHash = await sha256(matched[1]);
   const row = await env.DB.prepare("SELECT u.id, u.account, u.nickname, u.bio, u.avatar_key AS avatarKey, u.role, u.created_at AS createdAt FROM api_tokens t JOIN users u ON u.id = t.user_id WHERE t.token_hash = ?")
     .bind(tokenHash).first<Record<string, unknown>>();
-  if (!row) return null;
+  if (!row) return { status: "invalid" };
   await env.DB.prepare("UPDATE api_tokens SET last_used_at = ? WHERE token_hash = ?").bind(new Date().toISOString(), tokenHash).run();
-  return publicUser(row);
+  return { status: "ok", user: publicUser(row) };
 }
 
 export async function createApiToken(env: AuthEnv, userId: number, name: string) {

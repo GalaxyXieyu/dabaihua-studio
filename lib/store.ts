@@ -7,7 +7,7 @@ import { readXArticles, readXPost, readXProfile, xPostAddress, xProfileAddress }
 export type AppEnv = { DB: D1Database; AI?: { run: (model: string, input: unknown) => Promise<unknown> } };
 const now = () => new Date().toISOString();
 const day = () => new Date().toISOString().slice(0, 10);
-const SCHEMA_VERSION = "2026-08-03.5";
+const SCHEMA_VERSION = "2026-08-03.6";
 const schemaReady = new WeakMap<object, Promise<void>>();
 
 async function initializeSchema(db: D1Database) {
@@ -72,6 +72,10 @@ async function initializeSchema(db: D1Database) {
     db.prepare("CREATE TABLE IF NOT EXISTS review_rounds (id INTEGER PRIMARY KEY AUTOINCREMENT, target_type TEXT NOT NULL, target_id TEXT NOT NULL, round INTEGER NOT NULL, user_id INTEGER NOT NULL, verdict TEXT NOT NULL, comment TEXT NOT NULL DEFAULT '', mark_count INTEGER NOT NULL DEFAULT 0, feedback_json TEXT NOT NULL, exported_at TEXT, export_path TEXT, created_at TEXT NOT NULL, UNIQUE(target_type, target_id, round))"),
     db.prepare("CREATE INDEX IF NOT EXISTS review_rounds_target_idx ON review_rounds(target_type, target_id, round DESC)"),
     db.prepare("CREATE INDEX IF NOT EXISTS review_rounds_export_idx ON review_rounds(exported_at, id)"),
+    db.prepare("CREATE TABLE IF NOT EXISTS weekly_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, week TEXT NOT NULL UNIQUE, user_id INTEGER NOT NULL, bytes INTEGER NOT NULL, content_sha256 TEXT NOT NULL, chunk_count INTEGER NOT NULL, current_version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id))"),
+    db.prepare("CREATE TABLE IF NOT EXISTS weekly_report_chunks (report_id INTEGER NOT NULL, version INTEGER NOT NULL, idx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY(report_id, version, idx))"),
+    db.prepare("CREATE TABLE IF NOT EXISTS weekly_upload_log (user_id INTEGER NOT NULL, at TEXT NOT NULL)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS weekly_upload_log_user_idx ON weekly_upload_log(user_id, at)"),
   ]);
   const legacyFollowCleanupKey = "legacy_source_follow_seed_cleanup_v1";
   const legacyFollowCleanup = await db.prepare("SELECT value FROM app_meta WHERE key = ?").bind(legacyFollowCleanupKey).first<{ value: string }>();
@@ -102,6 +106,8 @@ async function initializeSchema(db: D1Database) {
   if (!requestColumns.results.some((column) => column.name === "result_name")) await db.prepare("ALTER TABLE subscription_requests ADD COLUMN result_name TEXT").run();
   if (!requestColumns.results.some((column) => column.name === "item_count")) await db.prepare("ALTER TABLE subscription_requests ADD COLUMN item_count INTEGER NOT NULL DEFAULT 0").run();
   if (!requestColumns.results.some((column) => column.name === "requester_user_id")) await db.prepare("ALTER TABLE subscription_requests ADD COLUMN requester_user_id INTEGER REFERENCES users(id)").run();
+  const weeklyColumns = await db.prepare("PRAGMA table_info(weekly_reports)").all<{ name: string }>();
+  if (!weeklyColumns.results.some((column) => column.name === "current_version")) await db.prepare("ALTER TABLE weekly_reports ADD COLUMN current_version INTEGER NOT NULL DEFAULT 1").run();
   const itchColumns = await db.prepare("PRAGMA table_info(itches)").all<{ name: string }>();
   const itchExisting = new Set(itchColumns.results.map((column) => column.name));
   const itchNewColumns: Array<[string, string]> = [

@@ -20,6 +20,7 @@ IMPORT_TOKEN=...
 DABAIHUA_TRUSTED_PROXY_HOSTS=topic.aigalaxy.top
 DABAIHUA_ALLOW_REGISTER=1
 DABAIHUA_REGISTER_INVITE_CODE=...   # 可选
+DABAIHUA_PUBLIC_BASE_URL=https://topic.aigalaxy.top  # 可选，周报 URL 用
 ```
 
 ## systemd 单元
@@ -88,6 +89,20 @@ ssh Aries 'sudo systemctl restart dabaihua-studio'
 ```
 
 可选邀请码：设置 `DABAIHUA_REGISTER_INVITE_CODE=<code>` 并重启同一服务。
+
+## 周报（weekly report）
+
+`topics daily publish` 通过下面的接口把自包含 HTML 周报上传到站点，`/weekly/<week>/`
+在登录后提供阅读页面。
+
+- `PUT /api/weekly/<YYYY-Www>`：`Authorization: Bearer <topk key>`，`Content-Type: text/html`，
+  最大 5 MB；首次写入返回 `201`，覆盖返回 `200`，响应体为 `{url, week, bytes, updated_at}`。
+- `GET /api/weekly`：列出当前账号的周报（Bearer）。
+- `DELETE /api/weekly/<YYYY-Www>`：删除当前账号的周报（Bearer，管理员可删任意）。
+- `GET /weekly/<week>/`：需要登录，带 `Cache-Control: private, no-store` 和严格 CSP。
+
+`DABAIHUA_PUBLIC_BASE_URL` 用来拼响应里的周报 URL；不设置时回退到请求的 origin。
+反向代理终止 TLS 时通常应显式设置，例如 `https://topic.aigalaxy.top`。
 
 ## 回滚到旧的 qingliu-reader
 

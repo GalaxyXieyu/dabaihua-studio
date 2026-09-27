@@ -46,7 +46,10 @@ export default async function ArticlesPage() {
             <h1 className="text-base font-bold">📰 文章</h1>
           </div>
           {user ? (
-            <span className="text-xs text-[var(--faint)]">共 {articles.length} 篇</span>
+            <div className="flex shrink-0 items-center gap-3">
+              <a href="/weekly" className="inline-flex min-h-[44px] items-center text-xs font-bold text-[var(--muted)] hover:text-[var(--green)]">📅 周报</a>
+              <span className="text-xs text-[var(--faint)]">共 {articles.length} 篇</span>
+            </div>
           ) : (
             <a href="/login?next=/articles" className="inline-flex min-h-[44px] items-center rounded-lg bg-[var(--green-soft)] px-3 text-xs font-bold text-[var(--green)]">登录后查看全部</a>
           )}

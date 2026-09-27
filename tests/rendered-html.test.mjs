@@ -6,6 +6,7 @@ import { collectXArticlePages } from "../lib/x-pagination.ts";
 import { normalizeXPublishedAt } from "../lib/x-date.ts";
 import { inferSourceCategory, isSourceCategory } from "../lib/source-category.ts";
 import { matchesHostPattern, secureRedirectResponse, upgradeForwardedRequest, upgradeForwardedRequestWithFlag } from "../lib/trusted-proxy.ts";
+import { PayloadTooLargeError, discardBody, isValidIsoWeek, publicBaseUrl, readBodyWithLimit, shanghaiIso } from "../lib/weekly.ts";
 
 test("converts entity-escaped feed HTML before rendering Markdown", () => {
   const markdown = htmlToMarkdown('&lt;img src=&quot;https://cdn.example.com/cover.jpg&quot; alt=&quot;封面&quot;&gt;&lt;p&gt;&lt;strong&gt;最新文字&lt;/strong&gt;&lt;br&gt;正文&lt;/p&gt;');
@@ -687,7 +688,7 @@ test("keeps the article review backend, asset route, and sync script wired to th
   assert.match(store, /CREATE TABLE IF NOT EXISTS article_versions/);
   assert.match(store, /CREATE TABLE IF NOT EXISTS review_marks/);
   assert.match(store, /CREATE TABLE IF NOT EXISTS review_rounds/);
-  assert.match(store, /SCHEMA_VERSION = "2026-08-03\.5"/);
+  assert.match(store, /SCHEMA_VERSION = "2026-08-03\.6"/);
   assert.match(schema, /export const articles/);
   assert.match(schema, /export const articleAssets/);
   assert.match(schema, /export const articleVersions/);
@@ -919,4 +920,152 @@ test("ships the Aries deploy helpers and the publish-review CLI", async () => {
   assert.match(watchService, /Wants=network-online\.target dabaihua-studio\.service/);
   assert.match(watchService, /After=network-online\.target dabaihua-studio\.service/);
   assert.doesNotMatch(watchService, /PartOf=/);
+});
+
+test("validates ISO week labels and Shanghai timestamps", () => {
+  assert.equal(isValidIsoWeek("2026-W39"), true);
+  // 2026-01-01 is a Thursday, so (unlike the task text's parenthetical) 2026 has 53 ISO weeks.
+  assert.equal(isValidIsoWeek("2026-W53"), true);
+  assert.equal(isValidIsoWeek("2020-W53"), true);
+  assert.equal(isValidIsoWeek("2015-W53"), true);
+  assert.equal(isValidIsoWeek("2025-W53"), false);
+  assert.equal(isValidIsoWeek("2026-W00"), false);
+  assert.equal(isValidIsoWeek("2026-W99"), false);
+  assert.equal(isValidIsoWeek("2026-39"), false);
+  assert.equal(isValidIsoWeek("26-W39"), false);
+  assert.equal(isValidIsoWeek("2026-W3"), false);
+  assert.equal(isValidIsoWeek("2026-w39"), false);
+  assert.equal(isValidIsoWeek(""), false);
+
+  assert.equal(shanghaiIso(new Date("2026-09-27T16:41:12Z")), "2026-09-28T00:41:12+08:00");
+  assert.equal(shanghaiIso(new Date("2026-01-01T00:00:00.500Z")), "2026-01-01T08:00:00+08:00");
+});
+
+test("enforces the weekly upload byte limit while streaming", async () => {
+  const streamOf = (parts) => new ReadableStream({ start(controller) { for (const part of parts) controller.enqueue(part); controller.close(); } });
+  const under = new Request("https://example.com/api/weekly/2026-W39", {
+    method: "PUT",
+    body: streamOf([new Uint8Array(1024), new Uint8Array(1024)]),
+    duplex: "half",
+  });
+  assert.equal(under.headers.get("content-length"), null);
+  const bytes = await readBodyWithLimit(under, 2048);
+  assert.equal(bytes.byteLength, 2048);
+
+  const over = new Request("https://example.com/api/weekly/2026-W39", {
+    method: "PUT",
+    body: streamOf([new Uint8Array(1024), new Uint8Array(1024), new Uint8Array(1)]),
+    duplex: "half",
+  });
+  assert.equal(over.headers.get("content-length"), null);
+  await assert.rejects(() => readBodyWithLimit(over, 2048), (error) => error instanceof PayloadTooLargeError);
+
+  const declared = new Request("https://example.com/api/weekly/2026-W39", {
+    method: "PUT",
+    headers: { "content-length": "999999" },
+    body: "tiny",
+  });
+  await assert.rejects(() => readBodyWithLimit(declared, 100), (error) => error instanceof PayloadTooLargeError);
+
+  assert.equal(publicBaseUrl({ DABAIHUA_PUBLIC_BASE_URL: "https://topic.aigalaxy.top/" }, under), "https://topic.aigalaxy.top");
+  assert.equal(publicBaseUrl({}, under), "https://example.com");
+});
+
+test("drains rejected weekly uploads and discards streamed request bodies", async () => {
+  // Over-limit uploads keep draining the remaining stream instead of
+  // cancelling it immediately, so the dev proxy can release the connection.
+  let overCancelled = false;
+  const over = new Request("https://example.com/api/weekly/2026-W39", {
+    method: "PUT",
+    body: new ReadableStream({
+      start(controller) {
+        for (let i = 0; i < 4; i += 1) controller.enqueue(new Uint8Array(1024));
+        controller.close();
+      },
+      cancel() {
+        overCancelled = true;
+      },
+    }),
+    duplex: "half",
+  });
+  await assert.rejects(() => readBodyWithLimit(over, 2048), (error) => error instanceof PayloadTooLargeError);
+  assert.equal(overCancelled, false);
+
+  // discardBody drains a streamed body a handler would otherwise leave
+  // unconsumed, and is a safe no-op when called again.
+  const request = new Request("https://example.com/api/weekly/2026-W39", {
+    method: "PUT",
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array(2048));
+        controller.enqueue(new Uint8Array(2048));
+        controller.close();
+      },
+    }),
+    duplex: "half",
+  });
+  await discardBody(request);
+  await discardBody(request);
+
+  // The cap cancels the reader instead of draining a hostile endless upload.
+  let capped = false;
+  const huge = new Request("https://example.com/api/weekly/2026-W39", {
+    method: "PUT",
+    body: new ReadableStream({
+      start(controller) {
+        for (let i = 0; i < 16; i += 1) controller.enqueue(new Uint8Array(1024));
+      },
+      cancel() {
+        capped = true;
+      },
+    }),
+    duplex: "half",
+  });
+  await discardBody(huge, 4096);
+  assert.equal(capped, true);
+});
+
+test("serves weekly reports under login with a tight CSP", async () => {
+  const [serve, worker, collectionRoute, itemRoute, page, authorize, migration, drizzleSchema, journal] = await Promise.all([
+    readFile(new URL("../lib/weekly-serve.ts", import.meta.url), "utf8"),
+    readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/weekly/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/weekly/[week]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/weekly/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/auth.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0015_weekly_reports.sql", import.meta.url), "utf8"),
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/meta/_journal.json", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(serve, /\/login\?next=\/weekly\//);
+  assert.match(serve, /encodeURIComponent\(week\)/);
+  assert.match(serve, /default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:/);
+  assert.match(serve, /private, no-store/);
+  assert.match(serve, /x-robots-tag/i);
+  assert.match(serve, /x-content-type-options/i);
+  assert.match(serve, /referrer-policy/i);
+  assert.match(worker, /handleWeeklyRequest/);
+  assert.match(worker, /secure\(weekly\)/);
+
+  assert.match(collectionRoute, /listWeeklyReports/);
+  assert.match(itemRoute, /readBodyWithLimit/);
+  assert.match(itemRoute, /isValidIsoWeek/);
+  assert.match(itemRoute, /payload too large/);
+  assert.match(itemRoute, /rate limited/);
+  assert.match(itemRoute, /forbidden/);
+  assert.match(itemRoute, /unsupported media type/);
+
+  assert.match(authorize, /export async function authenticateApiKey/);
+  assert.match(authorize, /topk_\[a-f0-9\]\{32,64\}/);
+  assert.match(page, /topics daily publish weekly.html --week 2026-W39/);
+  assert.match(page, /redirect\("\/login\?next=\/weekly"\)/);
+
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS `weekly_reports`/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS `weekly_report_chunks`/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS `weekly_upload_log`/);
+  assert.match(drizzleSchema, /export const weeklyReports/);
+  assert.match(drizzleSchema, /export const weeklyReportChunks/);
+  assert.match(drizzleSchema, /export const weeklyUploadLog/);
+  assert.match(journal, /0015_weekly_reports/);
 });

@@ -2,6 +2,7 @@
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
 import { processPendingItems, promotePendingXArticles, syncDueSources } from "../lib/store";
+import { handleWeeklyRequest } from "../lib/weekly-serve";
 import { secureRedirectResponse, upgradeForwardedRequestWithFlag } from "../lib/trusted-proxy";
 
 interface Env {
@@ -11,6 +12,7 @@ interface Env {
   DABAIHUA_TRUSTED_PROXY_HOSTS?: string;
   DABAIHUA_ALLOW_REGISTER?: string;
   DABAIHUA_REGISTER_INVITE_CODE?: string;
+  DABAIHUA_PUBLIC_BASE_URL?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -47,6 +49,11 @@ const worker = {
           return result.response();
         },
       }, allowedWidths));
+    }
+
+    if (url.pathname.startsWith("/weekly/")) {
+      const weekly = await handleWeeklyRequest(request, env);
+      if (weekly) return secure(weekly);
     }
 
     return secure(await handler.fetch(request, env, ctx));
