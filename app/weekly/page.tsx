@@ -1,5 +1,5 @@
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { env } from "cloudflare:workers";
 import { getSessionUser } from "../../lib/auth";
 import { requestOrigin } from "../../lib/request-origin";
@@ -49,6 +49,7 @@ export default async function WeeklyPage() {
     }),
   );
   if (!user) redirect("/login?next=/weekly");
+  if (user.role !== "admin") notFound();
 
   const reports = await listWeeklyReports(env);
 

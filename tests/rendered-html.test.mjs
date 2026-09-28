@@ -1136,6 +1136,8 @@ test("serves weekly reports under login with a tight CSP", async () => {
   assert.match(authorize, /topk_\[a-f0-9\]\{32,64\}/);
   assert.match(page, /topics daily publish weekly.html --week 2026-W39/);
   assert.match(page, /redirect\("\/login\?next=\/weekly"\)/);
+  assert.match(serve, /if \(user\.role !== "admin"\) return notFoundResponse\(\)/);
+  assert.match(page, /if \(user\.role !== "admin"\) notFound\(\)/);
 
   assert.match(migration, /CREATE TABLE IF NOT EXISTS `weekly_reports`/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS `weekly_report_chunks`/);

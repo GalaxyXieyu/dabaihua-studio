@@ -52,6 +52,7 @@ export async function handleWeeklyRequest(request: Request, env: WeeklyEnv): Pro
   if (!user) {
     return new Response(null, { status: 307, headers: { location: `/login?next=/weekly/${week}/`, "cache-control": "no-store" } });
   }
+  if (user.role !== "admin") return notFoundResponse();
 
   const bytes = await getWeeklyReportHtml(env, week);
   if (!bytes) return notFoundResponse();
