@@ -4,13 +4,12 @@ import { env } from "cloudflare:workers";
 import { getSessionUser } from "../../lib/auth";
 import { requestOrigin } from "../../lib/request-origin";
 import { SiteAppBar } from "../_components/SiteAppBar";
-import careerJson from "../../content/career/career.json";
+import { loadCareerData } from "../../lib/career-data";
 import {
   formatShanghai,
   headerSummary,
   missingTitle,
   tierLabel,
-  type CareerData,
   type CareerGapMetricClass,
   type CareerJob,
   type CareerMissingItem,
@@ -19,8 +18,6 @@ import {
 export const dynamic = "force-dynamic";
 export const viewport = { width: "device-width", initialScale: 1 };
 export const metadata = { title: "职业 · 成长", robots: { index: false, follow: false } };
-
-const data = careerJson as unknown as CareerData;
 
 const sectionClass = "mt-6 border-t border-[var(--line)] pt-5";
 const headingClass = "text-base font-bold";
@@ -114,6 +111,24 @@ export default async function CareerPage() {
   );
   if (!user) redirect("/login?next=/career");
   if (user.role !== "admin") notFound();
+
+  const data = loadCareerData();
+
+  if (!data) {
+    return (
+      <div className="fixed inset-0 overflow-y-auto bg-[var(--canvas)] text-[var(--ink)]">
+        <SiteAppBar role={user.role} pathname="/career" />
+        <header className="border-b border-[var(--line)] bg-[var(--paper)]">
+          <div className="mx-auto flex max-w-[720px] items-center justify-between gap-3 px-4 py-3">
+            <h1 className="text-base font-bold">成长 · 职业</h1>
+          </div>
+        </header>
+        <main className="mx-auto max-w-[720px] px-4 py-4 pb-16">
+          <p className="text-sm text-[var(--muted)]">还没有数据</p>
+        </main>
+      </div>
+    );
+  }
 
   const { header, changes, gap, missing, jobs, results, sources, pending } = data;
   const targetJobs = jobs.filter((job) => job.group === "target");

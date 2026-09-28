@@ -57,3 +57,6 @@ next-env.d.ts
 # Project-local MCP credentials (use the tracked example files as templates)
 /.mcp.json
 /.codex/config.toml
+
+# 职业私密数据，由 career-site/build_data.py 生成，只随 rsync 部署，不进公开仓库
+/content/career/career.json

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { htmlToMarkdown } from "../lib/article.ts";
@@ -1168,17 +1169,23 @@ test("links the admin-only growth workspace from the main navigation", async () 
 });
 
 test("gates the admin-only career page and keeps raw result fields out of the data", async () => {
-  const [page, worker, lib, raw] = await Promise.all([
+  const [page, worker, lib, careerData, gitignore] = await Promise.all([
     readFile(new URL("../app/career/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/career.ts", import.meta.url), "utf8"),
-    readFile(new URL("../content/career/career.json", import.meta.url), "utf8"),
+    readFile(new URL("../lib/career-data.ts", import.meta.url), "utf8"),
+    readFile(new URL("../.gitignore", import.meta.url), "utf8"),
   ]);
 
   assert.match(page, /redirect\("\/login\?next=\/career"\)/);
   assert.match(page, /if \(user\.role !== "admin"\) notFound\(\)/);
   assert.match(page, /robots:\s*\{ index: false, follow: false \}/);
-  assert.match(page, /import careerJson from "\.\.\/\.\.\/content\/career\/career\.json"/);
+  assert.match(page, /loadCareerData\(\)/);
+  assert.match(page, /还没有数据/);
+  assert.doesNotMatch(page, /from "\.\.\/\.\.\/content\/career\/career\.json"/);
+  assert.match(careerData, /import\.meta\.glob\(/);
+  assert.match(careerData, /content\/career\/career\.json/);
+  assert.match(gitignore, /\/content\/career\/career\.json/);
   assert.match(worker, /url\.pathname === "\/career" \|\| url\.pathname\.startsWith\("\/career\/"\)/);
   assert.match(worker, /new Response\(response\.body, response\)/);
   assert.match(worker, /"x-robots-tag", "noindex, nofollow"/);
@@ -1190,13 +1197,18 @@ test("gates the admin-only career page and keeps raw result fields out of the da
   assert.match(page, /unlisted/);
   assert.match(page, /未归类，默认按过程算/);
 
-  // Private keys must never appear anywhere in the generated data.
-  assert.doesNotMatch(raw, /"(evidence|security_id)"\s*:/);
-  const data = JSON.parse(raw);
-  for (const result of data.results) {
-    if (result.public === true) continue;
-    for (const key of ["what", "problem", "decision", "influence", "evidence"]) {
-      assert.equal(key in result, false, `non-public result ${result.id} must not expose ${key}`);
+  // Private keys must never appear anywhere in the generated data. The raw file
+  // is private and only deployed over rsync, so skip these checks on a fresh clone.
+  const rawPath = new URL("../content/career/career.json", import.meta.url);
+  if (existsSync(rawPath)) {
+    const raw = await readFile(rawPath, "utf8");
+    assert.doesNotMatch(raw, /"(evidence|security_id)"\s*:/);
+    const data = JSON.parse(raw);
+    for (const result of data.results) {
+      if (result.public === true) continue;
+      for (const key of ["what", "problem", "decision", "influence", "evidence"]) {
+        assert.equal(key in result, false, `non-public result ${result.id} must not expose ${key}`);
+      }
     }
   }
 });

@@ -1,9 +1,11 @@
 /**
  * Types and small pure helpers for the admin-only `/career` page.
  *
- * The page imports `content/career/career.json` at build time and casts it to
- * `CareerData`. The types below mirror that generated file one-to-one; fields
- * the generator may omit are optional.
+ * The page optionally loads `content/career/career.json` via `lib/career-data.ts`.
+ * That loader uses `import.meta.glob`, so a fresh clone without the private file
+ * still builds; `loadCareerData()` returns `null` when the file is missing.
+ * The types below mirror that generated file one-to-one; fields the generator
+ * may omit are optional.
  */
 
 export type CareerGroup = "reachable" | "target";
