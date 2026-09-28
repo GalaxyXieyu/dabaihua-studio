@@ -407,7 +407,7 @@ test("ships secure accounts, personal state, source follows, contributors, and d
   assert.match(page, /阅读榜/);
   assert.match(page, /贡献榜/);
   assert.match(page, /className="global-appbar"/);
-  assert.match(page, /aria-label="主导航"/);
+  assert.match(page, /<SiteNavCluster/);
   assert.match(page, /className="brand-block source-context-header"/);
   assert.match(page, /immersiveTodayReading/);
   assert.match(page, /账号已经创建并自动登录/);
@@ -1151,13 +1151,20 @@ test("serves weekly reports under login with a tight CSP", async () => {
 });
 
 test("links the admin-only growth workspace from the main navigation", async () => {
-  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
-  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
-  assert.match(page, /href="\/career"/);
-  assert.match(page, /data\.user\?\.role === "admin" && <a className="nav-link" href="\/career">/);
-  assert.match(page, /^\s*Plant,$/m);
-  assert.match(page, /className=\{data\.user\?\.role === "admin" \? "has-growth" : undefined\}/);
-  assert.match(css, /\.global-appbar nav\.has-growth \{ grid-template-columns:repeat\(7, minmax\(0, 1fr\)\); \}/);
+  const [page, siteNav, css] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/_components/SiteNav.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+  assert.match(page, /<SiteNavCluster/);
+  assert.doesNotMatch(page, /onClick=\{\(\) => navigate\("annotations"\)\}/);
+  assert.doesNotMatch(page, /onClick=\{\(\) => navigate\("leaderboard"\)\}/);
+  assert.match(siteNav, /primaryNavItems\(/);
+  assert.match(siteNav, /sectionTabs\(/);
+  assert.match(siteNav, /className="section-tabs"/);
+  assert.match(siteNav, /^\s*Plant,?$/m);
+  assert.match(css, /\.global-appbar nav \{[^}]*repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.global-appbar nav\.has-growth \{ grid-template-columns:repeat\(3, minmax\(0, 1fr\)\); \}/);
 });
 
 test("gates the admin-only career page and keeps raw result fields out of the data", async () => {

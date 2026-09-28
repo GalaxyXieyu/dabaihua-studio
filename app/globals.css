@@ -63,6 +63,12 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible 
 .global-appbar nav a.nav-link { min-height:36px; padding:0 12px; display:flex; align-items:center; gap:6px; color:var(--muted); background:transparent; border-radius:var(--r-xs); font-size:11px; font-weight:700; white-space:nowrap; transition:transform 130ms var(--ease-out),background-color 150ms ease,color 150ms ease; }
 .global-appbar nav a.nav-link:hover { color:var(--green); background:var(--paper); box-shadow:var(--shadow-1); }
 .global-appbar nav a.nav-link:active { transform:scale(.97); }
+.global-appbar nav a.nav-link.active { color:var(--green); background:var(--paper); box-shadow:var(--shadow-1); }
+.global-nav-cluster { display:flex; align-items:center; gap:10px; min-width:0; }
+.section-tabs { display:flex; align-items:center; gap:2px; min-width:0; overflow-x:auto; scrollbar-width:none; }
+.section-tabs a { min-height:36px; padding:0 10px; display:inline-flex; align-items:center; border-radius:var(--r-xs); color:var(--muted); font-size:12px; font-weight:700; white-space:nowrap; }
+.section-tabs a:hover { color:var(--green); background:var(--green-wash); }
+.section-tabs a.active { color:var(--green); background:var(--green-soft); }
 .global-user-wrap { position:relative; justify-self:end; display:flex; align-items:center; gap:2px; }
 .global-user,.global-login { min-height:42px; padding:0 8px; display:flex; align-items:center; gap:8px; color:var(--ink); background:transparent; border:0; border-radius:var(--r-sm); font-size:11px; font-weight:700; white-space:nowrap; transition:transform 130ms var(--ease-out),background-color 150ms ease; }
 .global-user.active { color:var(--green); background:var(--green-soft); }
@@ -521,8 +527,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible 
   .global-brand .brand-mark { width:32px; height:32px; }
   .global-brand > span:last-child { display:none; }
   .global-appbar nav { margin-right:6px; }
-  .global-appbar nav button { width:40px; padding:0; justify-content:center; font-size:0; }
-  .global-appbar nav button svg { width:17px; height:17px; }
+  .global-appbar nav button, .global-appbar nav a.nav-link { width:40px; padding:0; justify-content:center; font-size:0; }
+  .global-appbar nav button svg, .global-appbar nav a.nav-link svg { width:17px; height:17px; }
   .global-user span,.global-user > svg { display:none; }
   .global-user { width:40px; padding:0; justify-content:center; }.global-user.has-unread::after { left:auto; right:4px; top:3px; }
   .global-user-wrap { gap:0; }
@@ -574,7 +580,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible 
 
 /* Legibility and interaction pass: preserve the existing visual language, raise the floor. */
 .global-brand small { font-size:12px; }
-.global-appbar nav button { min-height:42px; font-size:13px; }
+.global-appbar nav button, .global-appbar nav a.nav-link { min-height:42px; font-size:13px; }
 .global-user,.global-login { min-height:44px; font-size:13px; }
 .notification-menu > header span { font-size:11px; }
 .notification-menu > header button { min-height:40px; font-size:12px; }
@@ -683,7 +689,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible 
   .reader-resize-handle { display:none; }
   .reader-workspace { min-width:0; grid-template-columns:minmax(0,1fr); }
   .global-brand { min-width:44px; justify-content:center; }
-  .global-appbar nav button { width:44px; min-height:44px; font-size:0; }
+  .global-appbar nav button, .global-appbar nav a.nav-link { width:44px; min-height:44px; font-size:0; }
   .global-user { width:44px; }
   .global-user .user-avatar { display:grid; }
   .global-notification { width:44px; height:44px; }
@@ -769,16 +775,19 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible 
   .global-appbar nav {
     position:fixed; z-index:var(--z-appbar); left:0; right:0; bottom:0; top:auto;
     margin:0; padding:5px 4px calc(5px + env(safe-area-inset-bottom));
-    display:grid; grid-template-columns:repeat(6, minmax(0, 1fr)); gap:2px;
+    display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:2px;
     background:var(--paper); border-top:1px solid var(--line); border-radius:0;
     box-shadow:0 -6px 22px oklch(22% .024 260 / .08);
   }
-  .global-appbar nav.has-growth { grid-template-columns:repeat(7, minmax(0, 1fr)); }
+  .global-appbar nav.has-growth { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+  .global-nav-cluster { grid-column:2; min-width:0; justify-content:center; }
+  .section-tabs { min-width:0; overflow-x:auto; }
+  .section-tabs a { min-height:44px; font-size:13px; }
   .global-appbar nav button, .global-appbar nav a.nav-link {
     width:auto; min-width:0; min-height:52px; padding:5px 2px; flex-direction:column; gap:3px;
     justify-content:center; font-size:10px; font-weight:700; line-height:1; white-space:nowrap;
   }
-  .global-appbar nav button svg { width:20px; height:20px; }
+  .global-appbar nav button svg, .global-appbar nav a.nav-link svg { width:20px; height:20px; }
   .global-appbar nav button.active, .global-appbar nav a.nav-link.active { background:var(--green-soft); }
   .global-brand > span:last-child { display:none; }
   .global-brand { min-width:44px; }

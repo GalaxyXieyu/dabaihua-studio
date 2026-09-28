@@ -17,11 +17,9 @@ import {
   ChartBar,
   ChatText,
   CircleNotch,
-  ClipboardText,
   ClockCountdown,
   CornersIn,
   CornersOut,
-  Gear,
   Heart,
   LockKey,
   Key,
@@ -31,7 +29,6 @@ import {
   Password,
   PaperPlaneTilt,
   PencilSimple,
-  Plant,
   Plus,
   SignIn,
   SignOut,
@@ -44,6 +41,7 @@ import {
 } from "@phosphor-icons/react";
 import { SOURCE_CATEGORIES, sourceCategoryLabel, type SourceCategory } from "../lib/source-category";
 import { BRAND_NAME, BRAND_TAGLINE } from "../lib/brand";
+import { SiteNavCluster } from "./_components/SiteNav";
 
 type SessionUser = { id: number; account: string; nickname: string; bio: string; avatarUrl: string | null; role: "user" | "admin"; createdAt: string };
 type Source = { id: number; kind: "rss" | "wechat" | "x"; category: SourceCategory; name: string; url: string; enabled: number | boolean; lastSyncedAt: string | null; lastError: string | null; avatarUrl: string | null; itemCount: number; contributorUserId: number | null; contributorNickname: string; canManage: number | boolean; isFollowed: number | boolean };
@@ -1631,23 +1629,23 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
   const canToggleAnnotations = itemAnnotations.length > 0 || Boolean(selectionDraft);
   const unreadNotificationCount = notifications.filter((notification) => !notification.isRead).length;
 
+  const navSection = view === "today" ? "today" : view === "discover" || view === "annotations" || view === "leaderboard" ? "content" : null;
+  const navActiveTab = view === "discover" ? "reading" : null;
+  const handleNavSelect = (key: string, event: ReactMouseEvent<HTMLAnchorElement>) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (key === "today") { event.preventDefault(); navigate("today"); return; }
+    if (key === "content" || key === "reading") { event.preventDefault(); navigate("discover"); }
+  };
+
   return <main className={`reader-workspace ${sourcePaneCollapsed ? "sources-collapsed" : ""} ${mobileSourcePaneOpen ? "mobile-sources-open" : ""} view-${view} ${immersiveTodayReading ? "today-immersive" : ""} ${immersiveDiscoverReading ? "discover-immersive" : ""} ${showAnnotationSidebar ? "annotations-open" : ""}`} id="main-content" style={{ "--article-pane-width": `${articlePaneWidth}px` } as CSSProperties}>
     <a className="skip-link" href={view === "today" ? "#today-content" : view === "discover" ? immersiveDiscoverReading ? "#reader-pane" : "#article-list" : "#view-content"}>跳到主要内容</a>
 
     {!immersiveReading && <header className="global-appbar">
-      <button className="global-brand" onClick={() => navigate("today")} aria-label="前往今日阅读">
+      <button className="global-brand" onClick={() => navigate("today")} aria-label="前往今天">
         <span className="brand-mark"><Waves size={19} weight="bold" aria-hidden="true" /></span>
         <span><strong>{BRAND_NAME}</strong><small>{BRAND_TAGLINE}</small></span>
       </button>
-      <nav aria-label="主导航" className={data.user?.role === "admin" ? "has-growth" : undefined}>
-        <button className={view === "today" ? "active" : ""} aria-current={view === "today" ? "page" : undefined} onClick={() => navigate("today")}><BookOpenText size={16} weight="duotone" />今日阅读</button>
-        <button className={view === "discover" ? "active" : ""} aria-current={view === "discover" ? "page" : undefined} onClick={() => navigate("discover")}><MagnifyingGlass size={16} />发现来源</button>
-        <button className={view === "annotations" ? "active" : ""} aria-current={view === "annotations" ? "page" : undefined} onClick={() => navigate("annotations")}><ChatText size={16} weight="duotone" />批注广场</button>
-        <button className={view === "leaderboard" ? "active" : ""} aria-current={view === "leaderboard" ? "page" : undefined} onClick={() => navigate("leaderboard")}><Trophy size={16} />排行榜</button>
-        <a className="nav-link" href="/topics"><ClipboardText size={16} weight="duotone" />选题</a>
-        <a className="nav-link" href="/strategy"><Gear size={16} weight="duotone" />策略</a>
-        {data.user?.role === "admin" && <a className="nav-link" href="/career"><Plant size={16} weight="duotone" />成长</a>}
-      </nav>
+      <SiteNavCluster role={data.user?.role} section={navSection} activeTab={navActiveTab} onSelect={handleNavSelect} />
       {data.user
         ? <div className="global-user-wrap">
           <div className="global-notification-wrap">
