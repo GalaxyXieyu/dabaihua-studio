@@ -1,53 +1,17 @@
 /* 杂志风文章目录（/articles）。所有选择器挂在根类名 .art-a 下。 */
 
 .art-a-header {
-  padding: 40px 20px 0;
+  padding: 40px 0 0;
 }
 
 .art-a-head-inner {
-  max-width: 720px;
+  max-width: 760px;
   margin: 0 auto;
-}
-
-.art-a-kicker {
-  margin: 0;
-  font-size: 13px;
-  letter-spacing: 0.12em;
-  color: var(--muted);
-}
-
-.art-a-title {
-  margin: 10px 0 0;
-  font-family: var(--font-serif);
-  font-size: 32px;
-  font-weight: 700;
-  line-height: 1.15;
-  color: var(--ink);
-}
-
-.art-a-sub {
-  margin: 8px 0 0;
-  font-size: 15px;
-  color: var(--muted);
-}
-
-.art-a-double-rule {
-  position: relative;
-  margin-top: 18px;
-  border-top: 3px solid var(--ink);
-}
-
-.art-a-double-rule::after {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 5px;
-  border-top: 1px solid var(--ink);
-  content: "";
+  padding: 0 20px;
 }
 
 .art-a-list {
-  max-width: 720px;
+  max-width: 760px;
   margin: 0 auto;
   padding: 0 20px 64px;
 }
@@ -166,15 +130,15 @@
 
 @media (min-width: 900px) and (hover: hover) and (pointer: fine) {
   .art-a-header {
-    padding: 56px 24px 0;
+    padding: 56px 0 0;
+  }
+
+  .art-a-head-inner {
+    padding: 0 40px;
   }
 
   .art-a-list {
-    padding: 0 24px 96px;
-  }
-
-  .art-a-title {
-    font-size: 40px;
+    padding: 0 40px 96px;
   }
 
   .art-a-row {

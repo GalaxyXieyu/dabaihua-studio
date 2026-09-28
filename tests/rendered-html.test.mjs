@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 import { htmlToMarkdown } from "../lib/article.ts";
 import { isPublicPath, loginRedirectLocation, loginRedirectResponse } from "../lib/login-gate.ts";
@@ -1334,7 +1334,7 @@ test("maps paths to navigation sections and active tabs", () => {
 });
 
 test("mounts the shared site app bar on every content and growth subpage", async () => {
-  const [appBar, userMenu, topics, strategy, articles, weekly, career, styles] = await Promise.all([
+  const [appBar, userMenu, topics, strategy, articles, weekly, career, articleDetail, review, styles] = await Promise.all([
     readFile(new URL("../app/_components/SiteAppBar.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/_components/SiteUserMenu.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/topics/page.tsx", import.meta.url), "utf8"),
@@ -1342,6 +1342,8 @@ test("mounts the shared site app bar on every content and growth subpage", async
     readFile(new URL("../app/articles/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/weekly/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/career/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/articles/[slug]/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/review/[id]/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
 
@@ -1369,6 +1371,15 @@ test("mounts the shared site app bar on every content and growth subpage", async
     assert.match(page, new RegExp(`pathname="${pathname}"`));
     assert.doesNotMatch(page, /← 选题看板/);
   }
+
+  // 文章详情与审稿页也挂站点顶栏，并带 has-action-bar（手机端隐藏底部主导航）。
+  assert.match(articleDetail, /<SiteAppBar/);
+  assert.match(articleDetail, /pathname=\{`\/articles\/\$\{slug\}`\}/);
+  assert.match(articleDetail, /has-action-bar/);
+  assert.match(review, /<SiteAppBar/);
+  assert.match(review, /pathname=\{`\/review\/\$\{id\}`\}/);
+  assert.match(review, /has-action-bar/);
+  assert.match(styles, /body:has\(\.has-action-bar\) \.global-appbar nav/);
 
   // topics and strategy had no session lookup before; both must add the same
   // login defence as the other subpages.
@@ -1465,4 +1476,43 @@ test("keeps the retired visitor auth screens out of the desk app", async () => {
   assert.doesNotMatch(page, /global-login/);
   assert.match(page, /goToLogin/);
   assert.match(page, /\/login\?next=/);
+});
+
+const EMOJI_PATTERN = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/u;
+
+async function collectSourceFiles(root) {
+  const entries = await readdir(root, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    const url = new URL(`${entry.name}${entry.isDirectory() ? "/" : ""}`, root);
+    if (entry.isDirectory()) files.push(...(await collectSourceFiles(url)));
+    else if (/\.(tsx?|css)$/.test(entry.name)) files.push(url);
+  }
+  return files;
+}
+
+test("keeps emoji out of app and lib sources", async () => {
+  // 排版符号不在 emoji 范围内，不应误伤。
+  assert.doesNotMatch("→ ← · — 「」 ／", EMOJI_PATTERN);
+
+  const appFiles = await collectSourceFiles(new URL("../app/", import.meta.url));
+  assert.ok(appFiles.length > 0, "expected to scan app source files");
+  for (const file of appFiles) {
+    const source = await readFile(file, "utf8");
+    assert.doesNotMatch(source, EMOJI_PATTERN, `unexpected emoji in ${file.pathname}`);
+  }
+
+  const libFiles = await collectSourceFiles(new URL("../lib/", import.meta.url));
+  assert.ok(libFiles.length > 0, "expected to scan lib source files");
+  for (const file of libFiles) {
+    const source = await readFile(file, "utf8");
+    if (file.pathname.endsWith("/lib/topics.ts")) {
+      // 只允许小红书评论模板里的这一处 👇，出现次数与现在一致。
+      const hits = source.match(/👇/gu) ?? [];
+      assert.equal(hits.length, 1, "lib/topics.ts should keep exactly one 👇");
+      assert.doesNotMatch(source.replace(/👇/gu, ""), EMOJI_PATTERN, "lib/topics.ts may only contain 👇");
+      continue;
+    }
+    assert.doesNotMatch(source, EMOJI_PATTERN, `unexpected emoji in ${file.pathname}`);
+  }
 });

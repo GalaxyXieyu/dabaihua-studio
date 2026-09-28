@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { formatShanghaiDateTime } from "../../../lib/datetime";
 import type { Topic } from "./Board";
 
 type PublishData = {
@@ -332,8 +333,8 @@ export function TopicDrawer({
 
           {/* Metadata */}
           <div className="tp-meta">
-            <div>创建于 {new Date(topic.createdAt).toLocaleString("zh-CN")}</div>
-            {topic.updatedAt && <div>更新于 {new Date(topic.updatedAt).toLocaleString("zh-CN")}</div>}
+            <div>创建于 <time className="tp-meta-time">{formatShanghaiDateTime(topic.createdAt)}</time></div>
+            {topic.updatedAt && <div>更新于 <time className="tp-meta-time">{formatShanghaiDateTime(topic.updatedAt)}</time></div>}
             {topic.reason && <div className="mt-1">理由：{topic.reason}</div>}
           </div>
         </div>

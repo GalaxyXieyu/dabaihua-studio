@@ -5,6 +5,7 @@ import { getSessionUser } from "../../../lib/auth";
 import { getArticle, listMarks, listRounds } from "../../../lib/article-review";
 import { requestOrigin } from "../../../lib/request-origin";
 import { ArticleReviewer, type ReviewMark, type ReviewRoundSummary } from "../../_components/ArticleReviewer";
+import { SiteAppBar } from "../../_components/SiteAppBar";
 import { statusLabelFor } from "../../_components/article-status";
 import { ArticleHeaderActions } from "./ArticleHeaderActions";
 
@@ -34,20 +35,23 @@ export default async function ArticleDetailPage({ params }: { params: Promise<{ 
 
   if (!user) {
     return (
-      <ArticleReviewer
-        target={{ type: "article", id: slug }}
-        title={article.title || slug}
-        html={article.renderedHtml}
-        htmlSource={article.htmlSource}
-        round={article.reviewRound}
-        statusLabel={statusLabelFor(article.status)}
-        initialMarks={[]}
-        rounds={[]}
-        canReview={false}
-        currentUserId={null}
-        backHref="/articles"
-        updatedAt={article.updatedAt}
-      />
+      <div className="ar-page">
+        <SiteAppBar user={null} pathname={`/articles/${slug}`} />
+        <ArticleReviewer
+          target={{ type: "article", id: slug }}
+          title={article.title || slug}
+          html={article.renderedHtml}
+          htmlSource={article.htmlSource}
+          round={article.reviewRound}
+          statusLabel={statusLabelFor(article.status)}
+          initialMarks={[]}
+          rounds={[]}
+          canReview={false}
+          currentUserId={null}
+          backHref="/articles"
+          updatedAt={article.updatedAt}
+        />
+      </div>
     );
   }
 
@@ -56,22 +60,25 @@ export default async function ArticleDetailPage({ params }: { params: Promise<{ 
   const latestRound = rounds.length ? Number(rounds[0].round) : null;
 
   return (
-    <ArticleReviewer
-      target={{ type: "article", id: slug }}
-      title={article.title || slug}
-      html={article.renderedHtml}
-      htmlSource={article.htmlSource}
-      round={article.reviewRound}
-      statusLabel={statusLabelFor(article.status)}
-      initialMarks={marks}
-      rounds={rounds}
-      canReview
-      currentUserId={user.id}
-      backHref="/articles"
-      updatedAt={article.updatedAt}
-      extraHeader={
-        <ArticleHeaderActions slug={slug} initialPublic={article.isPublic} latestRound={latestRound} />
-      }
-    />
+    <div className="ar-page has-action-bar">
+      <SiteAppBar user={user} pathname={`/articles/${slug}`} />
+      <ArticleReviewer
+        target={{ type: "article", id: slug }}
+        title={article.title || slug}
+        html={article.renderedHtml}
+        htmlSource={article.htmlSource}
+        round={article.reviewRound}
+        statusLabel={statusLabelFor(article.status)}
+        initialMarks={marks}
+        rounds={rounds}
+        canReview
+        currentUserId={user.id}
+        backHref="/articles"
+        updatedAt={article.updatedAt}
+        extraHeader={
+          <ArticleHeaderActions slug={slug} initialPublic={article.isPublic} latestRound={latestRound} />
+        }
+      />
+    </div>
   );
 }

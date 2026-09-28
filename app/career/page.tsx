@@ -118,12 +118,11 @@ export default async function CareerPage() {
       <div className="career-a">
         <SiteAppBar user={user} pathname="/career" />
         <div className="career-a-masthead-wrap">
-          <div className="career-a-double-rule" />
           <header className="career-a-masthead">
-            <span className="career-a-kicker">成长 · 职业</span>
-            <h1 className="career-a-title">职业</h1>
+            <p className="page-kicker">成长 · 职业</p>
+            <h1 className="page-title">职业</h1>
           </header>
-          <div className="career-a-double-rule" />
+          <div className="double-rule" />
         </div>
         <main className="career-a-main">
           <p className="career-a-lede">还没有数据</p>
@@ -157,13 +156,12 @@ export default async function CareerPage() {
       <SiteAppBar user={user} pathname="/career" />
 
       <div className="career-a-masthead-wrap">
-        <div className="career-a-double-rule" />
         <header className="career-a-masthead">
-          <span className="career-a-kicker">成长 · 职业</span>
-          <h1 className="career-a-title">职业</h1>
-          <p className="career-a-asof">数据截至 {formatShanghai(header.data_as_of)}（北京时间）</p>
+          <p className="page-kicker">成长 · 职业</p>
+          <h1 className="page-title">职业</h1>
+          <p className="page-sub">数据截至 {formatShanghai(header.data_as_of)}（北京时间）</p>
         </header>
-        <div className="career-a-double-rule" />
+        <div className="double-rule" />
       </div>
 
       <main className="career-a-main">

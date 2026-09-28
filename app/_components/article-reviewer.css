@@ -6,6 +6,25 @@
   --ar-latin: var(--font-latin);
 }
 
+/* 页面骨架：顶栏 + 可滚动的审稿区。文章详情 / 审稿页共用。 */
+.ar-page {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  min-height: 0;
+  background: var(--canvas);
+}
+
+.ar-page > .site-appbar {
+  flex: 0 0 auto;
+}
+
+.ar-a {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 /* ── 刊头 ─────────────────────────────────────────────── */
 .ar-a-header {
   padding: 24px 20px 0;
@@ -118,8 +137,38 @@
 .ar-a-body > section {
   max-width: none !important;
   background: transparent !important;
+  box-shadow: none !important;
+  border: 0 !important;
   letter-spacing: normal !important;
   font-family: var(--font-sans) !important;
+}
+
+/* 正文第一块（标题块）：去白底 / 阴影 / 边框，宋体 22px 600，下方 1px --line。 */
+.ar-a-body > section > :first-child {
+  margin: 0 0 22px !important;
+  padding: 0 0 14px !important;
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--line) !important;
+  border-radius: 0 !important;
+  text-align: left !important;
+}
+
+.ar-a-body > section > :first-child h1,
+.ar-a-body > section > :first-child h2,
+.ar-a-body > section > :first-child p,
+.ar-a-body > section > h1:first-child,
+.ar-a-body > section > h2:first-child,
+.ar-a-body > section > p:first-child {
+  font-family: var(--font-serif) !important;
+  font-size: 22px !important;
+  font-weight: 600 !important;
+  line-height: 1.4 !important;
+  letter-spacing: 0 !important;
+  color: var(--ink) !important;
+  text-align: left !important;
 }
 
 .ar-a-body p {

@@ -72,14 +72,14 @@ export default async function StrategyPage() {
       <SiteAppBar user={user} pathname="/strategy" />
       <main className="strat-main">
         <header>
-          <p className="strat-kicker">内容 · 策略</p>
-          <h1 className="strat-title">策略</h1>
+          <p className="page-kicker">内容 · 策略</p>
+          <h1 className="page-title">策略</h1>
           {strategy && (
-            <p className="strat-subtitle">
+            <p className="page-sub">
               当前版本 v<span className="strat-num">{strategy.version}</span>
             </p>
           )}
-          <div className="strat-double-rule" />
+          <div className="double-rule" />
         </header>
 
         <div className="strat-layout">

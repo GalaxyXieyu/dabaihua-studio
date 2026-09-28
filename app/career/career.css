@@ -23,56 +23,26 @@
 
 .career-a-masthead-wrap,
 .career-a-main {
-  max-width: 820px;
+  max-width: 760px;
   margin: 0 auto;
-  padding-left: 48px;
-  padding-right: 48px;
+  padding-left: 20px;
+  padding-right: 20px;
 }
 
 .career-a-masthead-wrap {
   padding-top: 40px;
 }
 
-/* 报纸双线：3px 墨线 + 2px 间隔 + 1px 墨线 */
-.career-a-double-rule {
-  position: relative;
-  border-top: 3px solid var(--ink);
-}
-
-.career-a-double-rule::after {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 5px;
-  border-top: 1px solid var(--ink);
-  content: "";
-}
-
 .career-a-masthead {
-  padding: 18px 0 20px;
+  padding: 18px 0 0;
 }
 
-.career-a-kicker {
-  display: block;
-  font-size: 13px;
-  letter-spacing: 0.12em;
-  color: var(--muted);
-}
-
-.career-a-title {
-  margin: 8px 0 6px;
-  font-family: var(--font-serif);
-  font-size: clamp(30px, 5vw, 42px);
-  font-weight: 700;
-  line-height: 1.05;
-}
-
-.career-a-asof {
-  margin: 0;
-  font-family: var(--font-latin);
-  font-size: 14px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums lining-nums;
+@media (min-width: 761px) {
+  .career-a-masthead-wrap,
+  .career-a-main {
+    padding-left: 40px;
+    padding-right: 40px;
+  }
 }
 
 .career-a-main {
@@ -238,8 +208,8 @@
     padding-top: 28px;
   }
 
-  .career-a-title {
-    font-size: 30px;
+  .career-a-table {
+    min-width: 560px;
   }
 
   .career-a-main {

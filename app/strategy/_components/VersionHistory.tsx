@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { formatShanghaiDateTime } from "../../../lib/datetime";
 
 type VersionEntry = {
   id: number;
@@ -77,7 +78,7 @@ export function VersionHistory({ versions: initialVersions }: { versions: Versio
                 <p className="strat-history-note">{v.note}</p>
               )}
               <p className="strat-history-date">
-                {new Date(v.createdAt).toLocaleString("zh-CN")}
+                {formatShanghaiDateTime(v.createdAt)}
               </p>
             </div>
           );

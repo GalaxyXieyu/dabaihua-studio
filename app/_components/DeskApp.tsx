@@ -1680,7 +1680,6 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
         {loading && <div className="today-loading" role="status"><i /><i /><i /><span>正在整理今天的更新</span></div>}
 
         {!loading && data.user && followedSourceIds.size === 0 && <div className="today-state today-onboarding-state">
-          <span className="today-state-mark"><Plus size={26} weight="duotone" /></span>
           <small>第一次来到这里</small>
           <h1>先关注几位你想长期阅读的作者</h1>
           <p>关注决定你的阅读边界。以后登录时，这里会直接出现他们当天的新内容。</p>
@@ -1737,7 +1736,6 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
         </div>}
 
         {!loading && data.user && todaySessionStarted && !selectedItem && todayItems.length > 0 && <div className="today-state today-complete-state reading-complete">
-          <span className="today-state-mark"><Check size={28} weight="bold" /></span>
           <small>{todayHeading()}</small>
           <h1>今天的更新已经读完</h1>
           <p>你处理了 {todayItems.length} 篇内容，收藏的文章可以以后慢慢重读。</p>

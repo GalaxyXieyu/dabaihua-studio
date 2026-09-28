@@ -64,15 +64,14 @@ export default async function WeeklyPage() {
       <SiteAppBar user={user} pathname="/weekly" />
 
       <div className="weekly-a-masthead-wrap">
-        <div className="weekly-a-double-rule" />
         <header className="weekly-a-masthead">
-          <span className="weekly-a-kicker">成长 · 周报</span>
-          <h1 className="weekly-a-title">周报</h1>
-          <p className="weekly-a-subtitle">
+          <p className="page-kicker">成长 · 周报</p>
+          <h1 className="page-title">周报</h1>
+          <p className="page-sub">
             共 <span className="weekly-a-count">{reports.length}</span> 期已发布
           </p>
         </header>
-        <div className="weekly-a-double-rule" />
+        <div className="double-rule" />
       </div>
 
       <main className="weekly-a-list-wrap">

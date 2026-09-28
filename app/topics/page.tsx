@@ -92,10 +92,10 @@ export default async function TopicsPage() {
       <SiteAppBar user={user} pathname="/topics" />
       <main className="tp-main">
         <header>
-          <p className="tp-kicker">内容 · 选题</p>
-          <h1 className="tp-title">选题看板</h1>
-          <p className="tp-subtitle">共 <span className="tp-num">{topics.length}</span> 个选题</p>
-          <div className="tp-double-rule" />
+          <p className="page-kicker">内容 · 选题</p>
+          <h1 className="page-title">选题看板</h1>
+          <p className="page-sub">共 <span className="tp-num">{topics.length}</span> 个选题</p>
+          <div className="double-rule" />
         </header>
         <Board initialTopics={topics} initialSeries={series} />
       </main>

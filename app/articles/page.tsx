@@ -28,10 +28,10 @@ export default async function ArticlesPage() {
       <SiteAppBar user={user} pathname="/articles" />
       <header className="art-a-header">
         <div className="art-a-head-inner">
-          <p className="art-a-kicker">内容 · 文章</p>
-          <h1 className="art-a-title">文章</h1>
-          <p className="art-a-sub">共 {articles.length} 篇</p>
-          <div className="art-a-double-rule" />
+          <p className="page-kicker">内容 · 文章</p>
+          <h1 className="page-title">文章</h1>
+          <p className="page-sub">共 {articles.length} 篇</p>
+          <div className="double-rule" />
         </div>
       </header>
 

@@ -17,47 +17,10 @@
   .strat-main { padding: 40px 32px 80px; }
 }
 
-/* ── 页面刊头 ─────────────────────────────────────────── */
-.strat-kicker {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-  letter-spacing: 0.12em;
-}
-
-.strat-title {
-  margin: 8px 0 0;
-  font-family: var(--font-serif);
-  font-size: clamp(30px, 4vw, 42px);
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: 0.01em;
-}
-
-.strat-subtitle {
-  margin: 10px 0 0;
-  color: var(--muted);
-  font-size: 15px;
-}
-
+/* ── 页面刊头（统一使用 globals.css 的 .page-* / .double-rule） ── */
 .strat-num {
   font-family: var(--font-latin);
   font-variant-numeric: tabular-nums lining-nums;
-}
-
-.strat-double-rule {
-  position: relative;
-  margin-top: 18px;
-  border-top: 3px solid var(--ink);
-}
-
-.strat-double-rule::after {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 5px;
-  border-top: 1px solid var(--ink);
-  content: "";
 }
 
 .strat-layout {

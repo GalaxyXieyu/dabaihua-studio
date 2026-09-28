@@ -819,7 +819,7 @@ export function ArticleReviewer({
   );
 
   return (
-    <div ref={scrollRef} className="ar-a fixed inset-0 overflow-y-auto bg-[var(--canvas)] text-[var(--ink)]" style={{ WebkitOverflowScrolling: "touch" }}>
+    <div ref={scrollRef} className="ar-a bg-[var(--canvas)] text-[var(--ink)]" style={{ WebkitOverflowScrolling: "touch" }}>
       <div className="ar-a-wrap">
         <header className="ar-a-header" style={{ userSelect: "none" }}>
           <div className="ar-a-head-inner">

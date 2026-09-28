@@ -7,6 +7,10 @@ const STATUS_LABELS: Record<string, string> = {
   "changes-requested": "待修改",
   approved: "已通过",
   published: "已发布",
+  edited: "已编辑",
+  "draft-by-yu": "初稿",
+  pending: "待审",
+  rejected: "已打回",
 };
 
 export function statusLabelFor(status: string | null | undefined) {
