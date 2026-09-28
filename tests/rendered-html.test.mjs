@@ -1416,6 +1416,7 @@ test("builds the admin-only today page from real in-app signals and keeps /readi
     assert.match(todayPage, new RegExp(empty));
   }
   assert.match(todayPage, /isAdmin && data\.missing/);
+  assert.match(todayPage, /还没有职业数据/);
   assert.match(todayPage, /isAdmin && data\.weekly/);
   assert.match(todayPage, /→/);
   assert.match(todayPage, /dateLabel\(/);
@@ -1430,7 +1431,8 @@ test("builds the admin-only today page from real in-app signals and keeps /readi
   // The data layer reads the real tables and the bundled career data.
   assert.match(todayLib, /daily-ai-digest:/);
   assert.match(todayLib, /review_status/);
-  assert.match(todayLib, /content\/career\/career\.json/);
+  assert.match(todayLib, /loadCareerData\(/);
+  assert.doesNotMatch(todayLib, /from "\.\.\/content\/career\/career\.json"/);
   assert.match(todayLib, /listWeeklyReports/);
 
   // The old home page (today's reading) now lives at /reading.

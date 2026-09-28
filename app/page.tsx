@@ -118,7 +118,9 @@ export default async function TodayPage() {
             <li className={rowClass}>
               <span className={rowNameClass}>缺数字</span>
               <div className="min-w-0">
-                {data.missing.total > 0 ? (
+                {"unavailable" in data.missing ? (
+                  <p className={emptyClass}>还没有职业数据</p>
+                ) : data.missing.total > 0 ? (
                   <>
                     <p className={primaryClass}>{data.missing.total} 条成果缺数字</p>
                     <ul className="mt-1">
@@ -133,7 +135,7 @@ export default async function TodayPage() {
                   <p className={emptyClass}>没有缺数字的成果</p>
                 )}
               </div>
-              {data.missing.total > 0 && (
+              {"total" in data.missing && data.missing.total > 0 && (
                 <a className={actionClass} href="/career">
                   去补数字 →
                 </a>

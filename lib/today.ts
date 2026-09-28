@@ -9,9 +9,8 @@
 
 import { ensureSchema } from "./store";
 import { listWeeklyReports } from "./weekly";
-import careerJson from "../content/career/career.json";
+import { loadCareerData } from "./career-data";
 import { digestReason, isoWeekOf, missingLine, shanghaiDate } from "./today-core";
-import type { CareerData } from "./career";
 
 type Env = { DB: D1Database };
 
@@ -31,7 +30,7 @@ export type TodayData = {
   drafts: TodayDrafts;
   candidates: TodayCandidates;
   digest: TodayDigest;
-  missing: TodayMissing | null;
+  missing: TodayMissing | { unavailable: true } | null;
   weekly: TodayWeekly | null;
 };
 
@@ -83,7 +82,7 @@ export async function getTodayData(env: Env, { isAdmin }: { isAdmin: boolean }):
     .slice(0, 3)
     .map(({ title, href }) => ({ title, href }));
 
-  const missingData = (careerJson as unknown as CareerData).missing;
+  const career = loadCareerData();
   const latestReason = digestLatest?.reason || null;
 
   const latest = reports[0];
@@ -97,7 +96,11 @@ export async function getTodayData(env: Env, { isAdmin }: { isAdmin: boolean }):
       latestDate: latestReason ? latestReason.slice(DIGEST_PREFIX.length) : null,
       latestCount: latestReason ? Number(digestLatest?.c || 0) : 0,
     },
-    missing: isAdmin ? { total: missingData.total, items: missingData.top.slice(0, 3).map(missingLine) } : null,
+    missing: isAdmin
+      ? career
+        ? { total: career.missing.total, items: career.missing.top.slice(0, 3).map(missingLine) }
+        : { unavailable: true }
+      : null,
     weekly: isAdmin
       ? latest
         ? { week: latest.week, href: `/weekly/${latest.week}/`, isThisWeek: latest.week === thisWeek, thisWeek }
