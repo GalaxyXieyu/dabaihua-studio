@@ -1177,6 +1177,9 @@ test("gates the admin-only career page and keeps raw result fields out of the da
   assert.match(lib, /export function formatShanghai/);
   assert.match(page, /result_with_outcome_numbers/);
   assert.match(page, /条有结果数字/);
+  assert.match(page, /table_result/);
+  assert.match(page, /unlisted/);
+  assert.match(page, /未归类，默认按过程算/);
 
   // Private keys must never appear anywhere in the generated data.
   assert.doesNotMatch(raw, /"(evidence|security_id)"\s*:/);

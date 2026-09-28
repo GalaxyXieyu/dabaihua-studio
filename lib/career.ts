@@ -108,7 +108,15 @@ export type CareerReachableSummary = {
 export type CareerGapMetricClass = {
   name: string;
   class: "process" | "result";
+  source?: "table_result" | "table_process" | "unlisted";
   has_value: boolean;
+  suggestion?: string | null;
+};
+
+export type CareerGapMetricClassesFile = {
+  file: string | null;
+  present: boolean;
+  note: string | null;
 };
 
 export type CareerGap = {
@@ -119,6 +127,10 @@ export type CareerGap = {
   small_sample: boolean;
   items: CareerGapItem[];
   metric_classes?: CareerGapMetricClass[];
+  unlisted_metrics?: CareerGapMetricClass[];
+  metric_classes_file?: CareerGapMetricClassesFile;
+  metric_table_unmatched?: string[];
+  metric_table_conflicts?: string[];
   top_gap: string | null;
   suggestion: string | null;
   reachable: CareerReachableSummary;

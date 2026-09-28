@@ -32,6 +32,23 @@ function statusClass(status: string) {
   return "text-[var(--muted)]";
 }
 
+function stripTrailingPeriod(value: string): string {
+  return value.replace(/[。.]+$/, "");
+}
+
+function metricNames(items: CareerGapMetricClass[], withSuggestion = false): string {
+  if (items.length === 0) return "暂无";
+  return items
+    .map((item) => {
+      const name = item.has_value ? `${item.name}·有值` : item.name;
+      if (withSuggestion && item.suggestion) {
+        return `${name}（${stripTrailingPeriod(item.suggestion)}）`;
+      }
+      return name;
+    })
+    .join("、");
+}
+
 function MissingRow({ item }: { item: CareerMissingItem }) {
   return (
     <li className="border-b border-[var(--line)] py-2">
@@ -102,8 +119,20 @@ export default async function CareerPage() {
   const reachableJobs = jobs.filter((job) => job.group === "reachable");
   const gapReport = sources.gap_report;
   const metricClasses = gap.metric_classes ?? [];
-  const metricNames = (items: CareerGapMetricClass[]) =>
-    items.length > 0 ? items.map((item) => `${item.name}${item.has_value ? "·有值" : ""}`).join("、") : "暂无";
+  const unlistedMetrics = gap.unlisted_metrics ?? [];
+  const metricClassesFile = gap.metric_classes_file;
+  const metricTableUnmatched = gap.metric_table_unmatched ?? [];
+  const metricTableConflicts = gap.metric_table_conflicts ?? [];
+  const resultMetrics = metricClasses.filter((item) => item.source === "table_result");
+  const processMetrics = metricClasses.filter((item) => item.source === "table_process");
+  const unlistedMetricItems =
+    unlistedMetrics.length > 0 ? unlistedMetrics : metricClasses.filter((item) => item.source === "unlisted");
+  const metricTotal = resultMetrics.length + processMetrics.length + unlistedMetricItems.length;
+  const hasMetricInfo =
+    metricTotal > 0 ||
+    metricClassesFile?.present === false ||
+    metricTableUnmatched.length > 0 ||
+    metricTableConflicts.length > 0;
 
   return (
     <div className="fixed inset-0 overflow-y-auto bg-[var(--canvas)] text-[var(--ink)]">
@@ -195,16 +224,28 @@ export default async function CareerPage() {
             {gap.reachable.small_sample ? "（样本少）" : ""}
           </p>
           <p className={`mt-2 ${subtleClass}`}>
-            JD 统计按关键词匹配，一条 JD 一项最多计一次；成果库条目按有效条目计。有证据只认有值的结果类指标，提交数、测试数、行数、版本、文档这类算过程数字。
+            JD 统计按关键词匹配，一条 JD 一项最多计一次；成果库条目按有效条目计。有证据只认归类表里标为结果、且有值的指标；没写进归类表的指标一律按过程算。
           </p>
-          {metricClasses.length > 0 ? (
+          {hasMetricInfo ? (
             <details className="mt-2">
-              <summary className="cursor-pointer text-sm font-bold">指标怎么归类（{metricClasses.length} 个）</summary>
-              <p className="mt-1 text-xs leading-relaxed">
-                结果：{metricNames(metricClasses.filter((item) => item.class === "result"))}。
-              </p>
+              <summary className="cursor-pointer text-sm font-bold">指标怎么归类（{metricTotal} 个）</summary>
+              {metricClassesFile?.present === false ? (
+                <p className="mt-1 text-xs leading-relaxed text-[var(--accent)]">归类表缺失，所有指标都按过程算。</p>
+              ) : null}
+              {metricTableUnmatched.length > 0 ? (
+                <p className="mt-1 text-xs leading-relaxed">
+                  归类表里有 {metricTableUnmatched.length} 个名字在成果库里找不到：{metricTableUnmatched.join("、")}。
+                </p>
+              ) : null}
+              {metricTableConflicts.length > 0 ? (
+                <p className="mt-1 text-xs leading-relaxed">
+                  这些名字同时写在结果和过程里，按过程算：{metricTableConflicts.join("、")}。
+                </p>
+              ) : null}
+              <p className="mt-1 text-xs leading-relaxed">结果（归类表）：{metricNames(resultMetrics)}。</p>
+              <p className="text-xs leading-relaxed">过程（归类表）：{metricNames(processMetrics)}。</p>
               <p className="text-xs leading-relaxed">
-                过程：{metricNames(metricClasses.filter((item) => item.class === "process"))}。
+                未归类，默认按过程算：{metricNames(unlistedMetricItems, true)}。
               </p>
             </details>
           ) : null}
