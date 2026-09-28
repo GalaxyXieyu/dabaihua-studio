@@ -39,7 +39,7 @@ import {
   X,
 } from "@phosphor-icons/react";
 import { SOURCE_CATEGORIES, sourceCategoryLabel, type SourceCategory } from "../../lib/source-category";
-import { BRAND_NAME, BRAND_TAGLINE } from "../../lib/brand";
+import { BRAND_NAME } from "../../lib/brand";
 import { SiteNavCluster } from "./SiteNav";
 
 type SessionUser = { id: number; account: string; nickname: string; bio: string; avatarUrl: string | null; role: "user" | "admin"; createdAt: string };
@@ -1596,13 +1596,12 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
     if (key === "content" || key === "reading") { event.preventDefault(); navigate("discover"); }
   };
 
-  return <main className={`reader-workspace ${sourcePaneCollapsed ? "sources-collapsed" : ""} ${mobileSourcePaneOpen ? "mobile-sources-open" : ""} view-${view} ${immersiveTodayReading ? "today-immersive" : ""} ${immersiveDiscoverReading ? "discover-immersive" : ""} ${showAnnotationSidebar ? "annotations-open" : ""}`} id="main-content" style={{ "--article-pane-width": `${articlePaneWidth}px` } as CSSProperties}>
+  return <main className={`reader-workspace ${sourcePaneCollapsed ? "sources-collapsed" : ""} ${mobileSourcePaneOpen ? "mobile-sources-open" : ""} view-${view} ${navSection ? "has-subnav" : ""} ${immersiveTodayReading ? "today-immersive" : ""} ${immersiveDiscoverReading ? "discover-immersive" : ""} ${showAnnotationSidebar ? "annotations-open" : ""}`} id="main-content" style={{ "--article-pane-width": `${articlePaneWidth}px` } as CSSProperties}>
     <a className="skip-link" href={view === "today" ? "#today-content" : view === "discover" ? immersiveDiscoverReading ? "#reader-pane" : "#article-list" : "#view-content"}>跳到主要内容</a>
 
     {!immersiveReading && <header className="global-appbar">
       <a className="global-brand" href="/" aria-label="前往今天">
-        <span className="brand-mark"><Waves size={19} weight="bold" aria-hidden="true" /></span>
-        <span><strong>{BRAND_NAME}</strong><small>{BRAND_TAGLINE}</small></span>
+        {BRAND_NAME}
       </a>
       <SiteNavCluster role={data.user?.role} section={navSection} activeTab={navActiveTab} onSelect={handleNavSelect} />
       {data.user

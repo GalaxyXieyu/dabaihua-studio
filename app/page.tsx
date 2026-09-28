@@ -5,10 +5,7 @@ import { getSessionUser } from "../lib/auth";
 import { requestOrigin } from "../lib/request-origin";
 import { getTodayData } from "../lib/today";
 import { dateLabel } from "../lib/today-core";
-import { TodayHeader } from "./_components/today/TodayHeader";
-import "@fontsource-variable/noto-serif-sc";
-import "@fontsource-variable/newsreader";
-import "@fontsource-variable/newsreader/wght-italic.css";
+import { SiteAppBar } from "./_components/SiteAppBar";
 import "./today.css";
 
 export const dynamic = "force-dynamic";
@@ -17,21 +14,14 @@ export const metadata = { title: "今天", robots: { index: false, follow: false
 const WEEKDAY_CN = "日一二三四五六";
 const ROMAN = ["I", "II", "III", "IV", "V"];
 
-/** `2026-09-28` → `271`：今年第几天，用作刊号（与页脚一致）。 */
-function issueNumber(dateStr: string): number {
-  const date = new Date(`${dateStr}T00:00:00Z`);
-  const yearStart = Date.UTC(date.getUTCFullYear(), 0, 0);
-  return Math.round((date.getTime() - yearStart) / 86_400_000);
-}
-
-/** 报纸刊头第一行：`第 271 期 · 2026 年 9 月 28 日 · 星期一`。 */
+/** 报纸刊头第一行：`2026 年 9 月 28 日 · 星期一`。 */
 function mastheadLine(dateStr: string): string {
   const date = new Date(`${dateStr}T00:00:00Z`);
   const year = date.getUTCFullYear();
   const month = date.getUTCMonth() + 1;
   const day = date.getUTCDate();
   const weekday = WEEKDAY_CN[date.getUTCDay()];
-  return `第 ${issueNumber(dateStr)} 期 · ${year} 年 ${month} 月 ${day} 日 · 星期${weekday}`;
+  return `${year} 年 ${month} 月 ${day} 日 · 星期${weekday}`;
 }
 
 /** `2026-W40` → `40`，用于周报那一行的大数字。 */
@@ -63,13 +53,9 @@ export default async function TodayPage() {
   const isAdmin = user.role === "admin";
   const data = await getTodayData(env, { isAdmin });
 
-  const account = user.nickname || user.account;
-  const initial = (account || "?").slice(0, 1);
-  const issue = issueNumber(data.date);
-
   return (
     <div className="td-a">
-      <TodayHeader role={user.role} account={user.account} initial={initial} />
+      <SiteAppBar user={user} pathname="/" />
 
       <div className="td-a-masthead-wrap">
         <div className="td-a-double-rule" />
@@ -265,7 +251,7 @@ export default async function TodayPage() {
 
       <footer className="td-a-footer">
         <div className="td-a-footer-rule" />
-        <p className="td-a-footer-text">大白话工作室 · 每日简报 · 第 {issue} 期</p>
+        <p className="td-a-footer-text">大白话工作室 · 每日简报</p>
       </footer>
     </div>
   );

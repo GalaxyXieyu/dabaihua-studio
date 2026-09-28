@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
+import "@fontsource-variable/noto-serif-sc";
+import "@fontsource-variable/newsreader";
+import "@fontsource-variable/newsreader/wght-italic.css";
 import "./globals.css";
 import { BRAND_NAME, BRAND_TITLE } from "../lib/brand";
 import { requestOrigin } from "../lib/request-origin";

@@ -1,11 +1,6 @@
 "use client";
 
 import type { MouseEvent as ReactMouseEvent } from "react";
-import {
-  Plant,
-  Stack,
-  SunHorizon,
-} from "@phosphor-icons/react";
 import { primaryNavItems, sectionTabs, type NavSection } from "../../lib/site-nav";
 
 type SiteNavClusterProps = {
@@ -14,12 +9,6 @@ type SiteNavClusterProps = {
   activeTab: string | null;
   onSelect?: (key: string, event: ReactMouseEvent<HTMLAnchorElement>) => void;
 };
-
-const NAV_ICONS = {
-  today: SunHorizon,
-  content: Stack,
-  growth: Plant,
-} as const;
 
 /**
  * 主入口 + 子 tab 的共享导航。导航数据一律来自 lib/site-nav.ts，
@@ -36,7 +25,6 @@ export function SiteNavCluster({ role, section, activeTab, onSelect }: SiteNavCl
       <nav aria-label="主导航" className={isAdmin ? "has-growth" : undefined}>
         {items.map((item) => {
           const active = item.key === section;
-          const Icon = NAV_ICONS[item.key as keyof typeof NAV_ICONS];
           return (
             <a
               key={item.key}
@@ -45,7 +33,6 @@ export function SiteNavCluster({ role, section, activeTab, onSelect }: SiteNavCl
               aria-current={active ? "page" : undefined}
               onClick={(event) => onSelect?.(item.key, event)}
             >
-              {Icon && <Icon size={16} weight="duotone" aria-hidden="true" />}
               {item.label}
             </a>
           );

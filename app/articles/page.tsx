@@ -40,7 +40,7 @@ export default async function ArticlesPage() {
 
   return (
     <div className="fixed inset-0 overflow-y-auto bg-[var(--canvas)] text-[var(--ink)]">
-      <SiteAppBar role={user?.role} pathname="/articles" />
+      <SiteAppBar user={user} pathname="/articles" />
       <header className="border-b border-[var(--line)] bg-[var(--paper)]">
         <div className="mx-auto flex max-w-[720px] items-center justify-between gap-3 px-4 py-3">
           <h1 className="text-base font-bold">📰 文章</h1>

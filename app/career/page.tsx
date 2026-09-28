@@ -117,7 +117,7 @@ export default async function CareerPage() {
   if (!data) {
     return (
       <div className="fixed inset-0 overflow-y-auto bg-[var(--canvas)] text-[var(--ink)]">
-        <SiteAppBar role={user.role} pathname="/career" />
+        <SiteAppBar user={user} pathname="/career" />
         <header className="border-b border-[var(--line)] bg-[var(--paper)]">
           <div className="mx-auto flex max-w-[720px] items-center justify-between gap-3 px-4 py-3">
             <h1 className="text-base font-bold">成长 · 职业</h1>
@@ -152,7 +152,7 @@ export default async function CareerPage() {
 
   return (
     <div className="fixed inset-0 overflow-y-auto bg-[var(--canvas)] text-[var(--ink)]">
-      <SiteAppBar role={user.role} pathname="/career" />
+      <SiteAppBar user={user} pathname="/career" />
       <header className="border-b border-[var(--line)] bg-[var(--paper)]">
         <div className="mx-auto flex max-w-[720px] items-center justify-between gap-3 px-4 py-3">
           <h1 className="text-base font-bold">成长 · 职业</h1>

@@ -68,7 +68,7 @@ export default async function StrategyPage() {
 
   return (
     <div className="min-h-screen bg-[var(--canvas)] text-[var(--ink)]">
-      <SiteAppBar role={user.role} pathname="/strategy" />
+      <SiteAppBar user={user} pathname="/strategy" />
       <h1 className="px-4 pt-4 text-lg font-bold sm:px-6">⚙️ 策略配置</h1>
 
       <main className="flex flex-col gap-4 p-4 sm:p-6 lg:flex-row">

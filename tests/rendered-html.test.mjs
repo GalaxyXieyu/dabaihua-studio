@@ -1164,7 +1164,7 @@ test("links the admin-only growth workspace from the main navigation", async () 
   assert.match(siteNav, /primaryNavItems\(/);
   assert.match(siteNav, /sectionTabs\(/);
   assert.match(siteNav, /className="section-tabs"/);
-  assert.match(siteNav, /^\s*Plant,?$/m);
+  assert.doesNotMatch(siteNav, /@phosphor-icons\/react/);
   assert.match(css, /\.global-appbar nav \{[^}]*repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(css, /\.global-appbar nav\.has-growth \{ grid-template-columns:repeat\(3, minmax\(0, 1fr\)\); \}/);
 });
@@ -1334,8 +1334,9 @@ test("maps paths to navigation sections and active tabs", () => {
 });
 
 test("mounts the shared site app bar on every content and growth subpage", async () => {
-  const [appBar, topics, strategy, articles, weekly, career, styles] = await Promise.all([
+  const [appBar, userMenu, topics, strategy, articles, weekly, career, styles] = await Promise.all([
     readFile(new URL("../app/_components/SiteAppBar.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/_components/SiteUserMenu.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/topics/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/strategy/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/articles/page.tsx", import.meta.url), "utf8"),
@@ -1346,8 +1347,15 @@ test("mounts the shared site app bar on every content and growth subpage", async
 
   assert.match(appBar, /sectionForPath\(/);
   assert.match(appBar, /activeTabKey\(/);
-  assert.match(styles, /\.site-appbar/);
-  assert.match(styles, /\.site-appbar \{ --appbar-height:68px;/);
+  assert.match(appBar, /<SiteUserMenu/);
+  assert.match(appBar, /has-subnav/);
+  assert.match(userMenu, /"use client"/);
+  assert.match(userMenu, /\/api\/notifications/);
+  assert.match(userMenu, /action: "logout"/);
+  assert.match(userMenu, /href="\/profile"/);
+  assert.match(styles, /\.site-appbar \{ position:sticky; top:0; \}/);
+  assert.match(styles, /\.global-appbar\.has-subnav \{ --appbar-height:93px; \}/);
+  assert.match(styles, /\.reader-workspace\.has-subnav \{ --appbar-height:93px; \}/);
 
   const pages = [
     [topics, "/topics"],
@@ -1406,7 +1414,10 @@ test("builds the admin-only today page from real in-app signals and keeps /readi
 
   // Server component with a plain, decoration-free list of today's five rows.
   assert.doesNotMatch(todayPage, /"use client"/);
-  assert.match(todayPage, /<TodayHeader/);
+  assert.match(todayPage, /<SiteAppBar/);
+  assert.doesNotMatch(todayPage, /TodayHeader/);
+  assert.doesNotMatch(todayPage, /第 \$\{/);
+  assert.doesNotMatch(todayPage, /issueNumber|dayOfYear/);
   assert.match(todayPage, /getTodayData\(/);
   assert.match(todayPage, /redirect\("\/login\?next=\/"\)/);
   for (const row of ["待审稿件", "待挑选题", "每日 AI 简报", "缺数字", "本周周报"]) {

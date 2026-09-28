@@ -2,15 +2,15 @@
    所有选择器都挂在根类名 .td-a 下，不会污染其他页面。 */
 
 .td-a {
-  --a-paper: #F5F0E6;
-  --a-ink: #1B1915;
-  --a-ink-2: #4A453C;
-  --a-ink-3: #8A8274;
-  --a-rule: #D8CFBE;
-  --a-accent: #9A3412;
-  --a-serif: "Noto Serif SC Variable", "Songti SC", "STSong", "Source Han Serif SC", serif;
-  --a-sans: "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
-  --a-latin: "Newsreader Variable", Georgia, "Times New Roman", serif;
+  --a-paper: var(--canvas);
+  --a-ink: var(--ink);
+  --a-ink-2: var(--muted);
+  --a-ink-3: var(--faint);
+  --a-rule: var(--line);
+  --a-accent: var(--accent);
+  --a-serif: var(--font-serif);
+  --a-sans: var(--font-sans);
+  --a-latin: var(--font-latin);
 
   min-height: 100dvh;
   background: var(--a-paper);
@@ -25,7 +25,7 @@
 /* 整页纸色，html / body 背后也不露白灰。 */
 html:has(.td-a),
 body:has(.td-a) {
-  background: #F5F0E6;
+  background: var(--canvas);
 }
 
 .td-a ::selection {
@@ -36,85 +36,6 @@ body:has(.td-a) {
 .td-a a:focus-visible {
   outline: 2px solid var(--a-accent);
   outline-offset: 3px;
-}
-
-/* ── 顶栏 ─────────────────────────────────────────────── */
-.td-a-topbar {
-  height: 52px;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: 24px;
-  padding: 0 28px;
-  border-bottom: 1px solid var(--a-rule);
-}
-
-.td-a-brand {
-  justify-self: start;
-  color: var(--a-ink);
-  font-family: var(--a-serif);
-  font-size: 17px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  white-space: nowrap;
-}
-
-.td-a-nav {
-  justify-self: center;
-  display: flex;
-  align-items: center;
-  gap: 26px;
-}
-
-.td-a-nav-link {
-  display: inline-flex;
-  align-items: center;
-  height: 52px;
-  color: var(--a-ink-3);
-  font-size: 13px;
-  letter-spacing: 0.08em;
-  transition: color 150ms ease;
-}
-
-.td-a-nav-link:hover {
-  color: var(--a-ink);
-}
-
-.td-a-nav-link.is-current {
-  color: var(--a-ink);
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-decoration-color: var(--a-ink);
-  text-underline-offset: 6px;
-}
-
-.td-a-account {
-  justify-self: end;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--a-ink-2);
-}
-
-.td-a-avatar {
-  width: 24px;
-  height: 24px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--a-rule);
-  border-radius: 50%;
-  background: var(--a-paper);
-  color: var(--a-ink-2);
-  font-family: var(--a-serif);
-  font-size: 12px;
-  line-height: 1;
-}
-
-.td-a-account-name {
-  font-family: var(--a-sans);
-  font-size: 13px;
-  letter-spacing: 0.01em;
-  color: var(--a-ink-2);
 }
 
 /* ── 刊头 ─────────────────────────────────────────────── */
@@ -374,30 +295,6 @@ body:has(.td-a) {
 
 /* ── 手机 ─────────────────────────────────────────────── */
 @media (max-width: 640px) {
-  .td-a-topbar {
-    grid-template-columns: auto 1fr;
-    gap: 12px;
-    padding: 0 20px;
-  }
-
-  .td-a-brand {
-    font-size: 15px;
-  }
-
-  .td-a-nav {
-    justify-self: end;
-    gap: 18px;
-  }
-
-  .td-a-nav-link {
-    height: 44px;
-    padding: 0 2px;
-  }
-
-  .td-a-account {
-    display: none;
-  }
-
   .td-a-masthead-wrap,
   .td-a-briefing,
   .td-a-footer {
@@ -446,6 +343,6 @@ body:has(.td-a) {
   }
 
   .td-a-footer {
-    padding-bottom: 48px;
+    padding-bottom: calc(78px + env(safe-area-inset-bottom));
   }
 }

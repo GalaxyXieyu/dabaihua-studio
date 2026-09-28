@@ -88,7 +88,7 @@ export default async function TopicsPage() {
 
   return (
     <div className="min-h-screen bg-[var(--canvas)] text-[var(--ink)]">
-      <SiteAppBar role={user.role} pathname="/topics" />
+      <SiteAppBar user={user} pathname="/topics" />
       <main className="p-4 sm:p-6">
         <h1 className="mb-3 text-lg font-bold">📋 选题看板</h1>
         <Board initialTopics={topics} initialSeries={series} />
