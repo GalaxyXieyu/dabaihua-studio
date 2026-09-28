@@ -1157,3 +1157,32 @@ test("links the admin-only growth workspace from the main navigation", async () 
   assert.match(page, /className=\{data\.user\?\.role === "admin" \? "has-growth" : undefined\}/);
   assert.match(css, /\.global-appbar nav\.has-growth \{ grid-template-columns:repeat\(7, minmax\(0, 1fr\)\); \}/);
 });
+
+test("gates the admin-only career page and keeps raw result fields out of the data", async () => {
+  const [page, worker, lib, raw] = await Promise.all([
+    readFile(new URL("../app/career/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/career.ts", import.meta.url), "utf8"),
+    readFile(new URL("../content/career/career.json", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(page, /redirect\("\/login\?next=\/career"\)/);
+  assert.match(page, /if \(user\.role !== "admin"\) notFound\(\)/);
+  assert.match(page, /robots:\s*\{ index: false, follow: false \}/);
+  assert.match(page, /import careerJson from "\.\.\/\.\.\/content\/career\/career\.json"/);
+  assert.match(worker, /url\.pathname === "\/career" \|\| url\.pathname\.startsWith\("\/career\/"\)/);
+  assert.match(worker, /new Response\(response\.body, response\)/);
+  assert.match(worker, /"x-robots-tag", "noindex, nofollow"/);
+  assert.match(worker, /"cache-control", "private, no-store"/);
+  assert.match(lib, /export function formatShanghai/);
+
+  // Private keys must never appear anywhere in the generated data.
+  assert.doesNotMatch(raw, /"(evidence|security_id)"\s*:/);
+  const data = JSON.parse(raw);
+  for (const result of data.results) {
+    if (result.public === true) continue;
+    for (const key of ["what", "problem", "decision", "influence", "evidence"]) {
+      assert.equal(key in result, false, `non-public result ${result.id} must not expose ${key}`);
+    }
+  }
+});
