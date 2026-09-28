@@ -10,7 +10,7 @@ import { SiteAppBar } from "../../_components/SiteAppBar";
 import { statusLabelFor } from "../../_components/article-status";
 
 export const dynamic = "force-dynamic";
-export const viewport = { width: "device-width", initialScale: 1 };
+export const viewport = { width: "device-width", initialScale: 1, interactiveWidget: "resizes-content" as const };
 
 export default async function ReviewPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: rawId } = await params;

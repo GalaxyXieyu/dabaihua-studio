@@ -445,6 +445,7 @@
   display: flex;
   align-items: flex-end;
   justify-content: center;
+  padding-bottom: var(--ar-keyboard-inset, 0px);
   background: rgba(27, 25, 21, 0.35);
 }
 
@@ -500,7 +501,7 @@
 .ar-a-actionbar {
   position: fixed;
   inset-inline: 0;
-  bottom: 0;
+  bottom: var(--ar-keyboard-inset, 0px);
   z-index: 40;
   padding: 10px 20px calc(10px + env(safe-area-inset-bottom));
   background: var(--paper);
@@ -532,6 +533,26 @@
   font-size: 12px;
   line-height: 1.5;
   color: var(--muted);
+}
+
+.ar-a-disabled-reason {
+  margin: 6px 0 0;
+  font-size: 12px;
+  text-align: center;
+  color: var(--faint);
+}
+
+/* 桌面：划词后紧跟选区的评价面板 */
+.ar-a-popover {
+  position: fixed;
+  z-index: 60;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  padding: 14px;
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-2);
 }
 
 .ar-a-login-link {

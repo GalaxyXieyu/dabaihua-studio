@@ -11,6 +11,7 @@ import { normalizeXPublishedAt } from "../lib/x-date.ts";
 import { inferSourceCategory, isSourceCategory } from "../lib/source-category.ts";
 import { matchesHostPattern, secureRedirectResponse, upgradeForwardedRequest, upgradeForwardedRequestWithFlag } from "../lib/trusted-proxy.ts";
 import { splitSentences } from "../lib/sentences.ts";
+import { decideReviewMode } from "../app/_components/review-mode.ts";
 import { PayloadTooLargeError, discardBody, isValidIsoWeek, publicBaseUrl, readBodyWithLimit, shanghaiIso } from "../lib/weekly.ts";
 
 test("converts entity-escaped feed HTML before rendering Markdown", () => {
@@ -51,6 +52,34 @@ test("splits sentences for the touch reviewer with offsets into the original tex
   ]);
 
   assert.deepEqual(splitSentences("  \n。 "), [{ text: "。", start: 3, end: 4 }]);
+});
+
+test("decides the reviewer input mode without trusting an over-eager pointer:fine", () => {
+  const mode = (overrides) => decideReviewMode({
+    width: 390,
+    coarse: false,
+    anyCoarse: false,
+    fine: false,
+    touchPoints: 0,
+    hasTouchEvent: false,
+    ua: "",
+    ...overrides,
+  });
+
+  // iPhone Safari / Android Chrome: coarse pointer, narrow viewport.
+  assert.equal(mode({ width: 390, coarse: true, anyCoarse: true, hasTouchEvent: true, touchPoints: 5, ua: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Mobile/15E148 Safari/604.1" }), "phone");
+  assert.equal(mode({ width: 412, coarse: true, ua: "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36" }), "phone");
+  // WeChat X5 / Quark lie about hover:hover + pointer:fine on touch at 393px.
+  assert.equal(mode({ width: 393, coarse: false, fine: true, anyCoarse: true, touchPoints: 5, ua: "Mozilla/5.0 (Linux; Android 13) MicroMessenger/8.0.49" }), "phone");
+  assert.equal(mode({ width: 393, coarse: false, fine: true, touchPoints: 5, ua: "Mozilla/5.0 (Linux; Android 12) Quark/6.0" }), "phone");
+  // Small desktop browser without touch still uses the phone layout.
+  assert.equal(mode({ width: 800 }), "phone");
+  // A real desktop mouse is the only path to desktop mode...
+  assert.equal(mode({ width: 1440, fine: true, coarse: false }), "desktop");
+  // ...including touch-screen laptops that report maxTouchPoints but use a mouse.
+  assert.equal(mode({ width: 1440, fine: true, coarse: false, touchPoints: 10, ua: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15" }), "desktop");
+  // An iPad in landscape is still a tablet, not a desktop.
+  assert.equal(mode({ width: 1024, coarse: true, ua: "Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) Safari/604.1" }), "phone");
 });
 
 test("keeps heart-knot exploration versioned and direction confirmation explicit", async () => {
@@ -768,28 +797,35 @@ test("keeps the article review backend, asset route, and sync script wired to th
 });
 
 test("ships the phone-first article reviewer that adapts to desktop and range marks and verdict actions", async () => {
-  const [reviewer, articlePage, articlesList, reviewPage, topicsPage, styles] = await Promise.all([
+  const [reviewer, articlePage, articlesList, reviewPage, topicsPage, styles, reviewMode] = await Promise.all([
     readFile(new URL("../app/_components/ArticleReviewer.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/articles/[slug]/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/articles/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/review/[id]/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/topics/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/_components/review-mode.ts", import.meta.url), "utf8"),
   ]);
 
   assert.match(reviewer, /"use client"/);
   assert.match(reviewer, /selectionchange/);
-  // Primary pointer decides the input mode; a fine pointer (mouse/trackpad)
-  // must win even on touch-capable desktops, so the old maxTouchPoints /
-  // ontouchstart heuristics are gone.
-  assert.match(reviewer, /\(hover: hover\) and \(pointer: fine\)/);
-  assert.match(reviewer, /\(pointer: coarse\)/);
-  assert.doesNotMatch(reviewer, /ontouchstart/);
-  assert.doesNotMatch(reviewer, /maxTouchPoints/);
+  // Mode detection lives in a pure, unit-tested module: the component routes
+  // touch/pen to the block-tap flow and only mouse drags to range selection,
+  // so a webview that fakes pointer:fine can no longer block marking.
+  assert.match(reviewer, /decideReviewMode/);
+  assert.match(reviewer, /readReviewModeSignals/);
+  assert.match(reviewer, /pointerType/);
+  assert.match(reviewMode, /\(hover: hover\) and \(pointer: fine\)/);
+  assert.match(reviewMode, /\(pointer: coarse\)/);
+  assert.match(reviewMode, /any-pointer: coarse/);
+  assert.match(reviewMode, /ontouchstart/);
+  assert.match(reviewMode, /maxTouchPoints/);
+  assert.match(reviewMode, /MicroMessenger/);
   assert.match(reviewer, /userSelect: "none"/);
   assert.match(reviewer, /WebkitTouchCallout/);
   assert.match(reviewer, /splitSentences/);
   assert.match(reviewer, /data-testid="mark-action-bar"/);
+  assert.match(reviewer, /data-testid="mark-popover"/);
   assert.match(reviewer, /data-testid="mark-good"/);
   assert.match(reviewer, /data-testid="mark-change"/);
   assert.match(reviewer, /data-testid="mark-cancel"/);
@@ -800,6 +836,7 @@ test("ships the phone-first article reviewer that adapts to desktop and range ma
   assert.match(reviewer, /data-testid="mark-pending-text"/);
   assert.match(reviewer, /data-testid="mark-comment"/);
   assert.match(reviewer, /data-testid="mark-save"/);
+  assert.match(reviewer, /data-testid="mark-submit-reason"/);
   assert.match(reviewer, /data-testid="marks-list-button"/);
   // Desktop layout is a Tailwind v4 custom variant keyed off the primary
   // pointer + viewport width, so there is no JS layout flash.
@@ -808,7 +845,7 @@ test("ships the phone-first article reviewer that adapts to desktop and range ma
   assert.match(reviewer, /desk:px-12 desk:py-10/);
   assert.match(reviewPage, /desk:max-w-\[760px\]/);
   assert.match(reviewer, /点一下段落即可标记/);
-  assert.match(reviewer, /选中正文即可标记/);
+  assert.match(reviewer, /选中文字即可标记/);
   assert.match(reviewer, /prefix/);
   assert.match(reviewer, /suffix/);
   assert.match(reviewer, /exact/);

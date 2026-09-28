@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { splitSentences, type SentenceSpan } from "../../lib/sentences";
 import { htmlSourceLabel } from "./article-status";
+import { decideReviewMode, readReviewModeSignals } from "./review-mode";
 import "./article-reviewer.css";
 
 export type ReviewTargetType = "article" | "topic";
@@ -396,7 +397,16 @@ export function ArticleReviewer({
 }: ArticleReviewerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
   const debounceRef = useRef<number | undefined>(undefined);
+  // 最近一次 pointerdown 的指针类型：鼠标/触屏/笔分别路由。
+  const lastPointerRef = useRef<string>("mouse");
+  // 已挂起的桌面选区指纹，避免 renderHighlights 改动 DOM 触发的
+  // selectionchange 反复重设同一个 pending 造成循环。
+  const capturedKeyRef = useRef<string | null>(null);
+  // mouseup 时若存在正文内的非空拖选，标记一下，供紧随其后的 click 判断，
+  // 避免鼠标拖动选择（起点可能落在已保存的 mark 上）被误当成单击。
+  const dragSelectedRef = useRef(false);
 
   const [marks, setMarks] = useState<ReviewMark[]>(initialMarks);
   const [historical, setHistorical] = useState<ReviewMark[]>([]);
@@ -405,7 +415,9 @@ export function ArticleReviewer({
   const [pending, setPending] = useState<PendingSelection | null>(null);
   const [touchScope, setTouchScope] = useState<TouchScope | null>(null);
   const [touchHighlight, setTouchHighlight] = useState<{ start: number; end: number } | null>(null);
-  const [isTouch, setIsTouch] = useState(false);
+  const [phoneMode, setPhoneMode] = useState(false);
+  const [popover, setPopover] = useState<{ kind: MarkKind } | null>(null);
+  const [popoverPos, setPopoverPos] = useState<{ top: number; left: number; width: number } | null>(null);
   const [sheet, setSheet] = useState<Sheet>(null);
   const [comment, setComment] = useState("");
   const [verdictComment, setVerdictComment] = useState("");
@@ -442,25 +454,56 @@ export function ArticleReviewer({
     return data;
   }, []);
 
-  // ─── 输入方式检测（以主指针为准） ───
-  // 桌面/笔记本即使带触摸屏或触摸驱动，只要主指针是鼠标（fine + hover），
-  // 就应该保持桌面拖选体验，而不是被触摸点数量 / touch 事件探针误判为触屏。
+  // ─── 输入方式检测 ───
+  // 默认手机；只有「宽屏 + 精确指针 + 非粗指针 + 非移动 UA」才判桌面，
+  // 这样触屏 webview 谎报 pointer:fine 时也不会把手机 UI 顶掉。
+  // 真正的交互路由交给 pointerType（见 handleArticleClick / captureSelection）。
   useEffect(() => {
-    const fine = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const widthQuery = window.matchMedia("(max-width: 899px)");
     const coarse = window.matchMedia("(pointer: coarse)");
-    const update = () => setIsTouch(coarse.matches && !fine.matches);
+    const anyCoarse = window.matchMedia("(any-pointer: coarse)");
+    const fine = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const update = () => {
+      setPhoneMode(decideReviewMode(readReviewModeSignals(window)) === "phone");
+    };
     update();
-    fine.addEventListener?.("change", update);
+    widthQuery.addEventListener?.("change", update);
     coarse.addEventListener?.("change", update);
+    anyCoarse.addEventListener?.("change", update);
+    fine.addEventListener?.("change", update);
+    window.addEventListener("resize", update);
     return () => {
-      fine.removeEventListener?.("change", update);
+      widthQuery.removeEventListener?.("change", update);
       coarse.removeEventListener?.("change", update);
+      anyCoarse.removeEventListener?.("change", update);
+      fine.removeEventListener?.("change", update);
+      window.removeEventListener("resize", update);
     };
   }, []);
 
-  // ─── 划词捕获（桌面拖选） ───
+  // 手机软键盘遮住底部栏/抽屉时，用 visualViewport 抬高这些固定元素。
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const root = document.documentElement;
+    const update = () => {
+      const inset = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+      root.style.setProperty("--ar-keyboard-inset", `${inset}px`);
+    };
+    update();
+    viewport.addEventListener("resize", update);
+    viewport.addEventListener("scroll", update);
+    return () => {
+      viewport.removeEventListener("resize", update);
+      viewport.removeEventListener("scroll", update);
+      root.style.removeProperty("--ar-keyboard-inset");
+    };
+  }, []);
+
+  // ─── 划词捕获（桌面拖选，仅鼠标） ───
+  // 触屏/笔即使被误判为桌面，也不会走这里，而是走点段落的块选择流程。
   const captureSelection = useCallback(() => {
-    if (!canReview || isTouch) return;
+    if (!canReview || phoneMode || lastPointerRef.current !== "mouse") return;
     const container = containerRef.current;
     if (!container) return;
     const selection = window.getSelection();
@@ -470,26 +513,49 @@ export function ArticleReviewer({
     if (range.startContainer === range.endContainer && range.startOffset === range.endOffset) return;
     const anchor = buildAnchor(container, range);
     if (!anchor) return;
+    const key = `${anchor.startOffset}:${anchor.endOffset}:${anchor.exact}`;
+    if (capturedKeyRef.current === key) return;
+    capturedKeyRef.current = key;
+    // 桌面主路径：选中即挂 pending 高亮，并立刻弹出锚定面板。
     setPending(anchor);
-  }, [canReview, isTouch]);
+    setTouchHighlight({ start: anchor.startOffset, end: anchor.endOffset });
+    setComment("");
+    setPopover({ kind: "change" });
+  }, [canReview, phoneMode]);
 
   useEffect(() => {
-    if (!canReview || isTouch) return;
+    if (!canReview || phoneMode) return;
     const schedule = () => {
       window.clearTimeout(debounceRef.current);
       debounceRef.current = window.setTimeout(captureSelection, 150);
     };
     const onSelectionChange = () => schedule();
+    // 桌面松开鼠标时立即捕获，不再走 150ms 防抖，让评价面板立刻弹出。
+    // mouseup 早于 click，这里先记下拖选状态，供 click 判断；
+    // captureSelection 不清空原生选区，因此 click 时仍能看到它。
+    const onMouseUp = () => {
+      window.clearTimeout(debounceRef.current);
+      const selection = window.getSelection();
+      const root = containerRef.current;
+      if (
+        selection &&
+        !selection.isCollapsed &&
+        selection.rangeCount > 0 &&
+        !!selection.toString().trim() &&
+        !!root?.contains(selection.getRangeAt(0).startContainer)
+      ) {
+        dragSelectedRef.current = true;
+      }
+      captureSelection();
+    };
     document.addEventListener("selectionchange", onSelectionChange);
-    window.addEventListener("mouseup", schedule);
-    window.addEventListener("touchend", schedule);
+    window.addEventListener("mouseup", onMouseUp);
     return () => {
       window.clearTimeout(debounceRef.current);
       document.removeEventListener("selectionchange", onSelectionChange);
-      window.removeEventListener("mouseup", schedule);
-      window.removeEventListener("touchend", schedule);
+      window.removeEventListener("mouseup", onMouseUp);
     };
-  }, [canReview, isTouch, captureSelection]);
+  }, [canReview, phoneMode, captureSelection]);
 
   // ─── 高亮渲染 ───
   const renderHighlights = useCallback(() => {
@@ -526,7 +592,7 @@ export function ArticleReviewer({
 
   // ─── 触屏选中后自动让高亮避开顶栏和底部操作栏 ───
   useEffect(() => {
-    if (!isTouch || !touchHighlight) return;
+    if (!phoneMode || !touchHighlight) return;
     const frame = window.requestAnimationFrame(() => {
       const container = containerRef.current;
       if (!container) return;
@@ -566,7 +632,108 @@ export function ArticleReviewer({
       }
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [isTouch, touchHighlight]);
+  }, [phoneMode, touchHighlight]);
+
+  // ─── 手机/桌面输入路由 ───
+  const handlePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    lastPointerRef.current = event.pointerType || "mouse";
+    dragSelectedRef.current = false;
+  }, []);
+
+  // ─── 桌面锚定面板定位 ───
+  // 原生选区在 textarea 获得焦点后可能被清掉，所以用 pending 高亮
+  // (<mark data-pending>) 的 rect 来计算位置；滚动/缩放时重算。
+  const recomputePopover = useCallback(() => {
+    const container = containerRef.current;
+    const element = popoverRef.current;
+    if (!container || !element) return;
+    const segments = Array.from(container.querySelectorAll<HTMLElement>("mark[data-pending]"));
+    let top = Number.POSITIVE_INFINITY;
+    let bottom = Number.NEGATIVE_INFINITY;
+    let left = Number.POSITIVE_INFINITY;
+    let right = Number.NEGATIVE_INFINITY;
+    for (const segment of segments) {
+      const rect = segment.getBoundingClientRect();
+      if (!rect.width && !rect.height) continue;
+      top = Math.min(top, rect.top);
+      bottom = Math.max(bottom, rect.bottom);
+      left = Math.min(left, rect.left);
+      right = Math.max(right, rect.right);
+    }
+    if (!Number.isFinite(top) || !Number.isFinite(left)) return;
+    const margin = 16;
+    const width = Math.min(360, window.innerWidth - margin * 2);
+    const height = element.offsetHeight;
+    const leftPos = Math.max(margin, Math.min((left + right) / 2 - width / 2, window.innerWidth - width - margin));
+    let topPos = bottom + 8;
+    if (topPos + height > window.innerHeight - margin) {
+      const above = top - height - 8;
+      topPos = above >= margin ? above : Math.max(margin, window.innerHeight - height - margin);
+    }
+    setPopoverPos({ top: topPos, left: leftPos, width });
+  }, []);
+
+  useEffect(() => {
+    if (!popover) return;
+    const frame = window.requestAnimationFrame(recomputePopover);
+    return () => window.cancelAnimationFrame(frame);
+  }, [popover, pending, marks, html, recomputePopover]);
+
+  useEffect(() => {
+    if (!popover) return;
+    const onScroll = () => recomputePopover();
+    const scroller = scrollRef.current;
+    scroller?.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      scroller?.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [popover, recomputePopover]);
+
+  const cancelPopover = useCallback(() => {
+    setPopover(null);
+    setPopoverPos(null);
+    setComment("");
+    setPending(null);
+    setTouchScope(null);
+    setTouchHighlight(null);
+    capturedKeyRef.current = null;
+    window.getSelection()?.removeAllRanges();
+  }, []);
+
+  // 点击面板外部取消，但若这次拖选又是正文里的新选区（mouseup 会重新锚定）
+  // 则不取消，避免刚划完就被自己关掉。
+  useEffect(() => {
+    if (!popover) return;
+    const inside = (target: EventTarget | null) =>
+      target instanceof Node && !!popoverRef.current?.contains(target);
+    let outsideDown = false;
+    const onDown = (event: MouseEvent) => {
+      outsideDown = !inside(event.target);
+    };
+    const onUp = (event: MouseEvent) => {
+      if (inside(event.target) || !outsideDown) {
+        outsideDown = false;
+        return;
+      }
+      outsideDown = false;
+      const selection = window.getSelection();
+      const hasSelection =
+        !!selection &&
+        !selection.isCollapsed &&
+        selection.rangeCount > 0 &&
+        !!containerRef.current?.contains(selection.getRangeAt(0).startContainer);
+      if (hasSelection) return;
+      cancelPopover();
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("mouseup", onUp);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("mouseup", onUp);
+    };
+  }, [popover, cancelPopover]);
 
   const clearSelection = useCallback(() => {
     window.getSelection()?.removeAllRanges();
@@ -576,13 +743,22 @@ export function ArticleReviewer({
     setPending(null);
     setTouchScope(null);
     setTouchHighlight(null);
+    capturedKeyRef.current = null;
     clearSelection();
   }, [clearSelection]);
 
+  // 已保存/取消后收起面板，保证底部提交条回来，不会卡在 pending 态。
+  const closePopoverState = useCallback(() => {
+    setPopover(null);
+    setPopoverPos(null);
+  }, []);
+
   const openMarkSheet = useCallback((mark: ReviewMark) => {
     setComment(mark.comment);
+    closePopoverState();
+    clearPending();
     setSheet({ kind: "mark", markId: mark.id });
-  }, []);
+  }, [clearPending, closePopoverState]);
 
   const selectTouchBlock = useCallback((block: HTMLElement) => {
     const container = containerRef.current;
@@ -632,6 +808,21 @@ export function ArticleReviewer({
   }, [touchScope, applyTouchSentence]);
 
   const handleArticleClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    // 用户刚用鼠标拖选时，click 不应打开已存标记详情，也不应走触屏块选择。
+    // mouseup 已记下拖选状态；这里再读取原生选区兜底（captureSelection 不清空它），
+    // 读到后复位，避免影响后续普通单击。选区折叠的单击仍照旧。
+    const selection = window.getSelection();
+    const root = containerRef.current;
+    const hasDragSelection =
+      !!selection &&
+      !selection.isCollapsed &&
+      selection.rangeCount > 0 &&
+      !!selection.toString().trim() &&
+      !!root?.contains(selection.getRangeAt(0).startContainer);
+    if (dragSelectedRef.current || hasDragSelection) {
+      dragSelectedRef.current = false;
+      return;
+    }
     const element = (event.target as HTMLElement).closest("mark[data-mark-id]") as HTMLElement | null;
     if (element) {
       const id = Number(element.getAttribute("data-mark-id"));
@@ -639,7 +830,10 @@ export function ArticleReviewer({
       if (mark) openMarkSheet(mark);
       return;
     }
-    if (!isTouch || !canReview) return;
+    if (!canReview) return;
+    // 触屏/笔（或整体判为手机）走点段落的块选择流程，鼠标在桌面走划词流程。
+    const fromTouch = phoneMode || lastPointerRef.current === "touch" || lastPointerRef.current === "pen";
+    if (!fromTouch) return;
     const container = containerRef.current;
     if (!container) return;
     const target = event.target as HTMLElement;
@@ -650,10 +844,10 @@ export function ArticleReviewer({
     const block = findTouchBlock(container, target);
     if (!block) return;
     selectTouchBlock(block);
-  }, [isTouch, canReview, marks, historical, openMarkSheet, selectTouchBlock]);
+  }, [phoneMode, canReview, marks, historical, openMarkSheet, selectTouchBlock]);
 
-  async function saveNewMark(markKind: MarkKind) {
-    if (!pending) return;
+  const saveNewMark = useCallback(async (markKind: MarkKind) => {
+    if (!pending || busy) return;
     setBusy(true);
     setError("");
     try {
@@ -669,10 +863,12 @@ export function ArticleReviewer({
       });
       setMarks((current) => [...current, data.mark as ReviewMark]);
       setSheet(null);
+      closePopoverState();
       setPending(null);
       setTouchScope(null);
       setTouchHighlight(null);
       setComment("");
+      capturedKeyRef.current = null;
       clearSelection();
       showToast("已保存划词，记得在底部提交本轮审稿");
     } catch (caught) {
@@ -680,7 +876,23 @@ export function ArticleReviewer({
     } finally {
       setBusy(false);
     }
-  }
+  }, [pending, busy, api, base, comment, closePopoverState, clearSelection, showToast]);
+
+  // Esc 取消，Ctrl/⌘+Enter 保存：挂在 document 上，textarea 失焦也不丢。
+  useEffect(() => {
+    if (!popover) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        cancelPopover();
+      } else if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        void saveNewMark(popover.kind);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [popover, cancelPopover, saveNewMark]);
 
   async function patchMark(markId: number, patch: { kind?: MarkKind; comment?: string }) {
     setBusy(true);
@@ -845,7 +1057,7 @@ export function ArticleReviewer({
                 标注 ({marks.length})
               </button>
               {canReview ? (
-                <span className="ar-a-hint">{isTouch ? "点一下段落即可标记" : "选中正文即可标记"}</span>
+                <span className="ar-a-hint">{phoneMode ? "点一下段落即可标记" : "选中文字即可标记"}</span>
               ) : (
                 <a href={`/login?next=${encodeURIComponent("/" + (target.type === "article" ? `articles/${target.id}` : `review/${target.id}`))}`} className="ar-a-login-link">
                   登录后审稿
@@ -863,9 +1075,10 @@ export function ArticleReviewer({
               <div
                 ref={containerRef}
                 onClick={handleArticleClick}
-                onContextMenu={isTouch ? (event) => event.preventDefault() : undefined}
+                onPointerDown={handlePointerDown}
+                onContextMenu={phoneMode ? (event) => event.preventDefault() : undefined}
                 className="ar-a-body desk:max-w-[760px] desk:px-12 desk:py-10"
-                style={isTouch
+                style={phoneMode
                   ? { userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }
                   : { userSelect: "text", WebkitUserSelect: "text" }}
                 dangerouslySetInnerHTML={articleHtml}
@@ -885,14 +1098,14 @@ export function ArticleReviewer({
         </div>
       </div>
 
-      {pending && !sheet ? (
+      {pending && !sheet && !popover ? (
         <div
           data-testid="mark-action-bar"
           className="ar-a-actionbar"
           style={{ userSelect: "none" }}
         >
           <div className="ar-a-actionbar-inner">
-            {isTouch && touchScope && touchScope.sentences.length > 1 ? (
+            {touchScope && touchScope.sentences.length > 1 ? (
               <div className="ar-a-sentence">
                 <button
                   type="button"
@@ -962,6 +1175,59 @@ export function ArticleReviewer({
             >
               通过
             </button>
+          </div>
+          {marks.length === 0 ? (
+            <p data-testid="mark-submit-reason" className="ar-a-disabled-reason">先划线再提交批注</p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {popover && pending && !phoneMode ? (
+        <div
+          ref={popoverRef}
+          data-testid="mark-popover"
+          role="dialog"
+          aria-label="标记选中的文字"
+          className="ar-a-popover"
+          style={{
+            top: popoverPos?.top ?? -10000,
+            left: popoverPos?.left ?? -10000,
+            width: popoverPos?.width ?? 360,
+            visibility: popoverPos ? "visible" : "hidden",
+          }}
+        >
+          <div className="ar-a-btn-row" style={{ marginTop: 0 }}>
+            <button
+              type="button"
+              data-testid="mark-good"
+              onClick={() => setPopover({ kind: "good" })}
+              className={`ar-a-btn ar-a-btn-block ${popover.kind === "good" ? "ar-a-btn-primary" : ""}`}
+            >
+              写得好
+            </button>
+            <button
+              type="button"
+              data-testid="mark-change"
+              onClick={() => setPopover({ kind: "change" })}
+              className={`ar-a-btn ar-a-btn-block ${popover.kind === "change" ? "ar-a-btn-primary" : ""}`}
+            >
+              要改
+            </button>
+          </div>
+          <p className="ar-a-quote mt-3 line-clamp-2">「{pending.exact}」</p>
+          <textarea
+            autoFocus
+            data-testid="mark-comment"
+            value={comment}
+            onChange={(event) => setComment(event.target.value)}
+            rows={3}
+            maxLength={2000}
+            placeholder={popover.kind === "good" ? "可选：说说好在哪里" : "哪里要改？怎么改？"}
+            className="ar-a-textarea"
+          />
+          <div className="ar-a-btn-row">
+            <button type="button" data-testid="mark-cancel" onClick={cancelPopover} className="ar-a-btn ar-a-btn-block">取消</button>
+            <button type="button" data-testid="mark-save" onClick={() => void saveNewMark(popover.kind)} disabled={busy} className="ar-a-btn ar-a-btn-primary ar-a-btn-block">保存</button>
           </div>
         </div>
       ) : null}

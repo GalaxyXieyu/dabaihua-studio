@@ -10,7 +10,7 @@ import { statusLabelFor } from "../../_components/article-status";
 import { ArticleHeaderActions } from "./ArticleHeaderActions";
 
 export const dynamic = "force-dynamic";
-export const viewport = { width: "device-width", initialScale: 1 };
+export const viewport = { width: "device-width", initialScale: 1, interactiveWidget: "resizes-content" as const };
 
 const SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$/;
 
