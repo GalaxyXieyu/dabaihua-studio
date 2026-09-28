@@ -56,7 +56,14 @@ const worker = {
       if (weekly) return secure(weekly);
     }
 
-    return secure(await handler.fetch(request, env, ctx));
+    const response = secure(await handler.fetch(request, env, ctx));
+    if (url.pathname === "/career" || url.pathname.startsWith("/career/")) {
+      const noindexed = new Response(response.body, response);
+      noindexed.headers.set("x-robots-tag", "noindex, nofollow");
+      noindexed.headers.set("cache-control", "private, no-store");
+      return noindexed;
+    }
+    return response;
   },
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil((async () => {
