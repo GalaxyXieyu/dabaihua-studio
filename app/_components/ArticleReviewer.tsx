@@ -323,7 +323,7 @@ function Sheet({
       style={{ userSelect: "none" }}
     >
       <div
-        className="max-h-[82dvh] w-full overflow-y-auto rounded-t-2xl bg-[var(--paper)] p-4 text-[var(--ink)] shadow-2xl"
+        className="max-h-[82dvh] w-full overflow-y-auto rounded-t-2xl bg-[var(--paper)] p-4 text-[var(--ink)] shadow-2xl desk:mx-auto desk:mb-8 desk:w-[560px] desk:rounded-2xl"
         onClick={(event) => event.stopPropagation()}
         style={{ paddingBottom: "calc(16px + env(safe-area-inset-bottom))", userSelect: "text" }}
       >
@@ -434,18 +434,20 @@ export function ArticleReviewer({
     return data;
   }, []);
 
-  // ─── 触屏检测 ───
+  // ─── 输入方式检测（以主指针为准） ───
+  // 桌面/笔记本即使带触摸屏或触摸驱动，只要主指针是鼠标（fine + hover），
+  // 就应该保持桌面拖选体验，而不是被触摸点数量 / touch 事件探针误判为触屏。
   useEffect(() => {
-    const query = window.matchMedia("(pointer: coarse)");
-    const update = () => {
-      const coarse = query.matches;
-      const hasTouchStart = "ontouchstart" in window;
-      const hasTouchPoints = navigator.maxTouchPoints > 0;
-      setIsTouch(coarse || hasTouchStart || hasTouchPoints);
-    };
+    const fine = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const coarse = window.matchMedia("(pointer: coarse)");
+    const update = () => setIsTouch(coarse.matches && !fine.matches);
     update();
-    query.addEventListener?.("change", update);
-    return () => query.removeEventListener?.("change", update);
+    fine.addEventListener?.("change", update);
+    coarse.addEventListener?.("change", update);
+    return () => {
+      fine.removeEventListener?.("change", update);
+      coarse.removeEventListener?.("change", update);
+    };
   }, []);
 
   // ─── 划词捕获（桌面拖选） ───
@@ -760,16 +762,16 @@ export function ArticleReviewer({
   return (
     <div ref={scrollRef} className="fixed inset-0 overflow-y-auto bg-[var(--canvas)] text-[var(--ink)]" style={{ WebkitOverflowScrolling: "touch" }}>
       <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-[var(--paper)]" style={{ userSelect: "none" }}>
-        <div className="mx-auto flex max-w-[420px] items-center gap-2 px-3 pb-1 pt-2">
+        <div className="mx-auto flex max-w-[420px] items-center gap-2 px-3 pb-1 pt-2 desk:max-w-[760px]">
           <a href={backHref} className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-base font-bold text-[var(--muted)]" aria-label="返回">←</a>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-bold leading-tight">{title || "未命名"}</div>
+            <div className="truncate text-sm font-bold leading-tight desk:text-base">{title || "未命名"}</div>
             <div className="truncate text-[11px] text-[var(--faint)]">排版：{htmlSourceLabel(htmlSource)}</div>
           </div>
           <span className="shrink-0 rounded-full bg-[var(--green-soft)] px-2 py-1 text-[11px] font-bold text-[var(--green)]">第 {round} 轮</span>
           <span className="shrink-0 rounded-full bg-[var(--canvas)] px-2 py-1 text-[11px] font-bold text-[var(--muted)]">{statusLabel}</span>
         </div>
-        <div className="mx-auto flex max-w-[420px] flex-wrap items-center gap-2 px-3 pb-2">
+        <div className="mx-auto flex max-w-[420px] flex-wrap items-center gap-2 px-3 pb-2 desk:max-w-[760px]">
           <button
             type="button"
             data-testid="marks-list-button"
@@ -789,13 +791,13 @@ export function ArticleReviewer({
         </div>
       </header>
 
-      <div className="mx-auto w-full max-w-[420px] px-3" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 112px)" }}>
+      <div className="mx-auto w-full max-w-[420px] px-3 desk:max-w-[760px]" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 112px)" }}>
         {error ? <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--danger)]">{error}</p> : null}
         <div
           ref={containerRef}
           onClick={handleArticleClick}
           onContextMenu={isTouch ? (event) => event.preventDefault() : undefined}
-          className="my-3 w-full max-w-[420px] rounded-xl bg-[var(--paper)] p-4 shadow-sm"
+          className="my-3 w-full max-w-[420px] rounded-xl bg-[var(--paper)] p-4 shadow-sm desk:max-w-[760px] desk:px-12 desk:py-10"
           style={isTouch
             ? { userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }
             : { userSelect: "text", WebkitUserSelect: "text" }}
@@ -814,7 +816,7 @@ export function ArticleReviewer({
           className="fixed inset-x-0 z-40 border-t border-[var(--line)] bg-[var(--paper)] px-3 pt-2 shadow-[0_-6px_20px_rgba(0,0,0,0.08)]"
           style={{ bottom: 0, paddingBottom: "calc(10px + env(safe-area-inset-bottom))", userSelect: "none" }}
         >
-          <div className="mx-auto max-w-[420px]">
+          <div className="mx-auto max-w-[420px] desk:max-w-[760px]">
             {isTouch && touchScope && touchScope.sentences.length > 1 ? (
               <div className="mb-2 flex items-center gap-2">
                 <button
@@ -850,9 +852,9 @@ export function ArticleReviewer({
             ) : null}
             <p data-testid="mark-pending-text" className="mb-2 line-clamp-2 text-[12px] text-[var(--muted)]">「{pending.exact}」</p>
             <div className="flex gap-2">
-              <button type="button" data-testid="mark-good" onClick={() => { setComment(""); setSheet({ kind: "new", markKind: "good" }); }} className="min-h-[44px] flex-1 rounded-xl bg-emerald-50 text-sm font-bold text-emerald-700">👍 写得好</button>
-              <button type="button" data-testid="mark-change" onClick={() => { setComment(""); setSheet({ kind: "new", markKind: "change" }); }} className="min-h-[44px] flex-1 rounded-xl bg-amber-50 text-sm font-bold text-amber-700">✏️ 要改</button>
-              <button type="button" data-testid="mark-cancel" onClick={clearPending} className="min-h-[44px] rounded-xl border border-[var(--line)] px-4 text-sm font-bold text-[var(--muted)]">取消</button>
+              <button type="button" data-testid="mark-good" onClick={() => { setComment(""); setSheet({ kind: "new", markKind: "good" }); }} className="min-h-[44px] flex-1 rounded-xl bg-emerald-50 text-sm font-bold text-emerald-700 desk:min-h-[36px]">👍 写得好</button>
+              <button type="button" data-testid="mark-change" onClick={() => { setComment(""); setSheet({ kind: "new", markKind: "change" }); }} className="min-h-[44px] flex-1 rounded-xl bg-amber-50 text-sm font-bold text-amber-700 desk:min-h-[36px]">✏️ 要改</button>
+              <button type="button" data-testid="mark-cancel" onClick={clearPending} className="min-h-[44px] rounded-xl border border-[var(--line)] px-4 text-sm font-bold text-[var(--muted)] desk:min-h-[36px]">取消</button>
             </div>
           </div>
         </div>
@@ -863,12 +865,12 @@ export function ArticleReviewer({
           className="fixed inset-x-0 z-40 border-t border-[var(--line)] bg-[var(--paper)] px-3 pt-3 shadow-[0_-6px_20px_rgba(0,0,0,0.08)]"
           style={{ bottom: 0, paddingBottom: "calc(10px + env(safe-area-inset-bottom))", userSelect: "none" }}
         >
-          <div className="mx-auto flex max-w-[420px] gap-2">
+          <div className="mx-auto flex max-w-[420px] gap-2 desk:max-w-[760px]">
             <button
               type="button"
               onClick={() => { setVerdictComment(""); setSheet({ kind: "comments" }); }}
               disabled={busy || marks.length === 0}
-              className="min-h-[44px] flex-1 rounded-xl border border-[var(--line)] text-sm font-bold text-[var(--muted)] disabled:opacity-40"
+              className="min-h-[44px] flex-1 rounded-xl border border-[var(--line)] text-sm font-bold text-[var(--muted)] disabled:opacity-40 desk:min-h-[36px]"
             >
               提交批注{marks.length ? ` (${marks.length})` : ""}
             </button>
@@ -876,7 +878,7 @@ export function ArticleReviewer({
               type="button"
               onClick={() => { setVerdictComment(""); setSheet({ kind: "reject" }); }}
               disabled={busy}
-              className="min-h-[44px] flex-1 rounded-xl border border-[var(--danger)] text-sm font-bold text-[var(--danger)] disabled:opacity-40"
+              className="min-h-[44px] flex-1 rounded-xl border border-[var(--danger)] text-sm font-bold text-[var(--danger)] disabled:opacity-40 desk:min-h-[36px]"
             >
               ↩️ 打回
             </button>
@@ -884,7 +886,7 @@ export function ArticleReviewer({
               type="button"
               onClick={() => { setVerdictComment(""); setSheet({ kind: "approve" }); }}
               disabled={busy}
-              className="min-h-[44px] flex-1 rounded-xl bg-[var(--green)] text-sm font-bold text-white disabled:opacity-40"
+              className="min-h-[44px] flex-1 rounded-xl bg-[var(--green)] text-sm font-bold text-white disabled:opacity-40 desk:min-h-[36px]"
             >
               ✅ 通过
             </button>

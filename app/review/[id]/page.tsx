@@ -39,7 +39,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
   if (!topic.draftMarkdown || !String(topic.draftMarkdown).trim()) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--canvas)] px-6 text-center text-[var(--ink)]">
-        <div className="max-w-[420px]">
+        <div className="max-w-[420px] desk:max-w-[760px]">
           <div className="mb-2 text-2xl">📝</div>
           <h1 className="mb-2 text-lg font-bold">这个选题还没有草稿</h1>
           <p className="text-sm text-[var(--muted)]">

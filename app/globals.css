@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Desktop review layout: wide window + primary fine pointer (mouse/trackpad). */
+@custom-variant desk (@media (min-width: 900px) and (hover: hover) and (pointer: fine));
+
 :root {
   color-scheme:light;
   --canvas:oklch(97.4% .004 260);

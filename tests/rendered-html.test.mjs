@@ -763,20 +763,25 @@ test("keeps the article review backend, asset route, and sync script wired to th
   assert.match(draft, /写得好/);
 });
 
-test("ships the phone-first article reviewer with range marks and verdict actions", async () => {
-  const [reviewer, articlePage, articlesList, reviewPage, topicsPage] = await Promise.all([
+test("ships the phone-first article reviewer that adapts to desktop and range marks and verdict actions", async () => {
+  const [reviewer, articlePage, articlesList, reviewPage, topicsPage, styles] = await Promise.all([
     readFile(new URL("../app/_components/ArticleReviewer.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/articles/[slug]/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/articles/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/review/[id]/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/topics/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
 
   assert.match(reviewer, /"use client"/);
   assert.match(reviewer, /selectionchange/);
-  assert.match(reviewer, /pointer: coarse/);
-  assert.match(reviewer, /ontouchstart/);
-  assert.match(reviewer, /maxTouchPoints/);
+  // Primary pointer decides the input mode; a fine pointer (mouse/trackpad)
+  // must win even on touch-capable desktops, so the old maxTouchPoints /
+  // ontouchstart heuristics are gone.
+  assert.match(reviewer, /\(hover: hover\) and \(pointer: fine\)/);
+  assert.match(reviewer, /\(pointer: coarse\)/);
+  assert.doesNotMatch(reviewer, /ontouchstart/);
+  assert.doesNotMatch(reviewer, /maxTouchPoints/);
   assert.match(reviewer, /userSelect: "none"/);
   assert.match(reviewer, /WebkitTouchCallout/);
   assert.match(reviewer, /splitSentences/);
@@ -792,6 +797,12 @@ test("ships the phone-first article reviewer with range marks and verdict action
   assert.match(reviewer, /data-testid="mark-comment"/);
   assert.match(reviewer, /data-testid="mark-save"/);
   assert.match(reviewer, /data-testid="marks-list-button"/);
+  // Desktop layout is a Tailwind v4 custom variant keyed off the primary
+  // pointer + viewport width, so there is no JS layout flash.
+  assert.match(styles, /@custom-variant desk \(@media \(min-width: 900px\) and \(hover: hover\) and \(pointer: fine\)\);/);
+  assert.match(reviewer, /desk:max-w-\[760px\]/);
+  assert.match(reviewer, /desk:px-12 desk:py-10/);
+  assert.match(reviewPage, /desk:max-w-\[760px\]/);
   assert.match(reviewer, /点一下段落即可标记/);
   assert.match(reviewer, /选中正文即可标记/);
   assert.match(reviewer, /prefix/);
