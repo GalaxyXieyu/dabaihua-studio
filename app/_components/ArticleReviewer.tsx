@@ -9,6 +9,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { splitSentences, type SentenceSpan } from "../../lib/sentences";
 import { htmlSourceLabel } from "./article-status";
 
 export type ReviewTargetType = "article" | "topic";
@@ -66,6 +67,13 @@ type PendingSelection = {
   blockIndex: number | null;
 };
 
+type TouchScope = {
+  blockStart: number;
+  blockEnd: number;
+  sentences: SentenceSpan[];
+  index: number;
+};
+
 type Sheet =
   | { kind: "new"; markKind: MarkKind }
   | { kind: "mark"; markId: number }
@@ -77,6 +85,10 @@ type Sheet =
 
 const MARK_STYLE_GOOD = "background:rgba(16,185,129,.22);border-bottom:2px solid #10b981;";
 const MARK_STYLE_CHANGE = "background:rgba(245,158,11,.28);border-bottom:2px solid #ef4444;";
+const MARK_STYLE_PENDING = "background:rgba(59,130,246,.25);border-bottom:2px dashed #3b82f6;color:inherit;border-radius:2px;";
+
+const TOUCH_BLOCK_SELECTOR = "p, li, h1, h2, h3, h4, h5, h6, blockquote, figcaption, pre, td, th";
+const INLINE_DISPLAY = /^(inline|contents|ruby)/;
 
 
 function commonPrefix(left: string, right: string) {
@@ -107,6 +119,95 @@ function textOffset(container: HTMLElement, node: Node, offset: number) {
     return -1;
   }
   return range.toString().length;
+}
+
+function blockIndexFor(container: HTMLElement, node: Node) {
+  const scope = (container.querySelector(":scope > section") as HTMLElement | null) || container;
+  const children = Array.from(scope.children);
+  for (let index = 0; index < children.length; index += 1) {
+    if (children[index].contains(node)) return index;
+  }
+  return null;
+}
+
+function buildAnchor(container: HTMLElement, range: Range): PendingSelection | null {
+  const textContent = container.textContent || "";
+  let startOffset = textOffset(container, range.startContainer, range.startOffset);
+  let endOffset = textOffset(container, range.endContainer, range.endOffset);
+  if (startOffset < 0 || endOffset < 0 || endOffset <= startOffset) return null;
+  while (startOffset < endOffset && /\s/.test(textContent[startOffset])) startOffset += 1;
+  while (endOffset > startOffset && /\s/.test(textContent[endOffset - 1])) endOffset -= 1;
+  if (endOffset <= startOffset) return null;
+  if (endOffset - startOffset > 2000) endOffset = startOffset + 2000;
+  const exact = textContent.slice(startOffset, endOffset).normalize("NFC");
+  if (!exact) return null;
+  return {
+    exact,
+    prefix: textContent.slice(Math.max(0, startOffset - 32), startOffset),
+    suffix: textContent.slice(endOffset, endOffset + 32),
+    startOffset,
+    endOffset,
+    blockIndex: blockIndexFor(container, range.startContainer),
+  };
+}
+
+function rangeFromOffsets(root: HTMLElement, start: number, end: number): Range | null {
+  const range = document.createRange();
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let position = 0;
+  let started = false;
+  let node = walker.nextNode() as Text | null;
+  while (node) {
+    const nodeStart = position;
+    const nodeEnd = position + node.data.length;
+    if (!started && start < nodeEnd) {
+      range.setStart(node, Math.max(0, start - nodeStart));
+      started = true;
+    }
+    if (started && end <= nodeEnd) {
+      range.setEnd(node, Math.max(0, end - nodeStart));
+      return range;
+    }
+    position = nodeEnd;
+    node = walker.nextNode() as Text | null;
+  }
+  return null;
+}
+
+function hasOwnInlineText(element: HTMLElement) {
+  const view = element.ownerDocument.defaultView;
+  for (const child of Array.from(element.childNodes)) {
+    if (child.nodeType === Node.TEXT_NODE) {
+      if ((child.textContent || "").trim()) return true;
+      continue;
+    }
+    if (child.nodeType !== Node.ELEMENT_NODE) continue;
+    const childElement = child as HTMLElement;
+    if (childElement.tagName === "IMG") continue;
+    const display = view ? view.getComputedStyle(childElement).display : "";
+    if (INLINE_DISPLAY.test(display) && (childElement.textContent || "").trim()) return true;
+  }
+  return false;
+}
+
+function findTouchBlock(container: HTMLElement, target: HTMLElement): HTMLElement | null {
+  const explicit = target.closest(TOUCH_BLOCK_SELECTOR) as HTMLElement | null;
+  if (explicit && explicit !== container && container.contains(explicit)) {
+    return (explicit.textContent || "").trim() ? explicit : null;
+  }
+  let current: HTMLElement | null = target;
+  while (current && current !== container) {
+    if (current.tagName === "SECTION" && hasOwnInlineText(current)) return current;
+    current = current.parentElement;
+  }
+  current = target;
+  const view = target.ownerDocument.defaultView;
+  while (current && current !== container) {
+    const display = view ? view.getComputedStyle(current).display : "";
+    if (display && !INLINE_DISPLAY.test(display) && (current.textContent || "").trim()) return current;
+    current = current.parentElement;
+  }
+  return null;
 }
 
 function resolveRange(textContent: string, mark: ReviewMark): { start: number; end: number } | null {
@@ -140,7 +241,7 @@ function markStyle(mark: ReviewMark, currentRound: number) {
 }
 
 function unwrapHighlights(container: HTMLElement) {
-  const marks = Array.from(container.querySelectorAll("mark[data-mark-id]"));
+  const marks = Array.from(container.querySelectorAll("mark[data-mark-id], mark[data-pending]"));
   for (const element of marks) {
     const parent = element.parentNode;
     if (!parent) continue;
@@ -174,6 +275,33 @@ function wrapRange(container: HTMLElement, start: number, end: number, mark: Rev
     wrapper.setAttribute("data-kind", mark.type);
     wrapper.setAttribute("data-round", String(mark.round));
     wrapper.setAttribute("style", markStyle(mark, currentRound));
+    segment.parentNode?.replaceChild(wrapper, segment);
+    wrapper.appendChild(segment);
+  }
+}
+
+function wrapPendingRange(container: HTMLElement, start: number, end: number) {
+  const nodes: Array<{ node: Text; start: number }> = [];
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  let position = 0;
+  while (walker.nextNode()) {
+    const node = walker.currentNode as Text;
+    nodes.push({ node, start: position });
+    position += node.data.length;
+  }
+  for (const { node, start: nodeStart } of nodes) {
+    const nodeEnd = nodeStart + node.data.length;
+    const from = Math.max(start, nodeStart);
+    const to = Math.min(end, nodeEnd);
+    if (from >= to) continue;
+    const localStart = from - nodeStart;
+    const localEnd = to - nodeStart;
+    if (localEnd < node.data.length) node.splitText(localEnd);
+    let segment: Text = node;
+    if (localStart > 0) segment = node.splitText(localStart);
+    const wrapper = document.createElement("mark");
+    wrapper.setAttribute("data-pending", "1");
+    wrapper.setAttribute("style", MARK_STYLE_PENDING);
     segment.parentNode?.replaceChild(wrapper, segment);
     wrapper.appendChild(segment);
   }
@@ -259,6 +387,7 @@ export function ArticleReviewer({
   extraHeader,
 }: ArticleReviewerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const debounceRef = useRef<number | undefined>(undefined);
 
   const [marks, setMarks] = useState<ReviewMark[]>(initialMarks);
@@ -266,6 +395,9 @@ export function ArticleReviewer({
   const [showHistory, setShowHistory] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [pending, setPending] = useState<PendingSelection | null>(null);
+  const [touchScope, setTouchScope] = useState<TouchScope | null>(null);
+  const [touchHighlight, setTouchHighlight] = useState<{ start: number; end: number } | null>(null);
+  const [isTouch, setIsTouch] = useState(false);
   const [sheet, setSheet] = useState<Sheet>(null);
   const [comment, setComment] = useState("");
   const [verdictComment, setVerdictComment] = useState("");
@@ -276,6 +408,11 @@ export function ArticleReviewer({
   const [flashId, setFlashId] = useState<number | null>(null);
 
   const base = `/api/review/${target.type}/${target.id}`;
+
+  // React replaces a dangerouslySetInnerHTML node's content whenever the prop
+  // object identity changes. Memoizing it keeps the rendered article stable so
+  // the <mark> highlights we inject with renderHighlights() survive re-renders.
+  const articleHtml = useMemo(() => ({ __html: html }), [html]);
 
   const changeCount = useMemo(() => marks.filter((mark) => mark.type === "change").length, [marks]);
   const goodCount = useMemo(() => marks.filter((mark) => mark.type === "good").length, [marks]);
@@ -297,43 +434,37 @@ export function ArticleReviewer({
     return data;
   }, []);
 
-  // ─── 划词捕获 ───
+  // ─── 触屏检测 ───
+  useEffect(() => {
+    const query = window.matchMedia("(pointer: coarse)");
+    const update = () => {
+      const coarse = query.matches;
+      const hasTouchStart = "ontouchstart" in window;
+      const hasTouchPoints = navigator.maxTouchPoints > 0;
+      setIsTouch(coarse || hasTouchStart || hasTouchPoints);
+    };
+    update();
+    query.addEventListener?.("change", update);
+    return () => query.removeEventListener?.("change", update);
+  }, []);
+
+  // ─── 划词捕获（桌面拖选） ───
   const captureSelection = useCallback(() => {
-    if (!canReview) return;
+    if (!canReview || isTouch) return;
     const container = containerRef.current;
     if (!container) return;
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
     const range = selection.getRangeAt(0);
     if (!container.contains(range.startContainer) || !container.contains(range.endContainer)) return;
-    const exact = selection.toString().normalize("NFC").trim().slice(0, 2000);
-    if (!exact) return;
-    const startOffset = textOffset(container, range.startContainer, range.startOffset);
-    const endOffset = textOffset(container, range.endContainer, range.endOffset);
-    if (startOffset < 0 || endOffset < 0 || endOffset <= startOffset) return;
     if (range.startContainer === range.endContainer && range.startOffset === range.endOffset) return;
-    const textContent = container.textContent || "";
-    const scope = (container.querySelector(":scope > section") as HTMLElement | null) || container;
-    let blockIndex: number | null = null;
-    const children = Array.from(scope.children);
-    for (let index = 0; index < children.length; index += 1) {
-      if (children[index].contains(range.startContainer)) {
-        blockIndex = index;
-        break;
-      }
-    }
-    setPending({
-      exact,
-      prefix: textContent.slice(Math.max(0, startOffset - 32), startOffset),
-      suffix: textContent.slice(endOffset, endOffset + 32),
-      startOffset,
-      endOffset,
-      blockIndex,
-    });
-  }, [canReview]);
+    const anchor = buildAnchor(container, range);
+    if (!anchor) return;
+    setPending(anchor);
+  }, [canReview, isTouch]);
 
   useEffect(() => {
-    if (!canReview) return;
+    if (!canReview || isTouch) return;
     const schedule = () => {
       window.clearTimeout(debounceRef.current);
       debounceRef.current = window.setTimeout(captureSelection, 150);
@@ -348,7 +479,7 @@ export function ArticleReviewer({
       window.removeEventListener("mouseup", schedule);
       window.removeEventListener("touchend", schedule);
     };
-  }, [canReview, captureSelection]);
+  }, [canReview, isTouch, captureSelection]);
 
   // ─── 高亮渲染 ───
   const renderHighlights = useCallback(() => {
@@ -366,6 +497,9 @@ export function ArticleReviewer({
       }
       wrapRange(container, span.start, span.end, mark, round);
     }
+    if (touchHighlight) {
+      wrapPendingRange(container, touchHighlight.start, touchHighlight.end);
+    }
     if (flashId !== null) {
       const element = container.querySelector(`mark[data-mark-id="${flashId}"]`) as HTMLElement | null;
       if (element) element.style.outline = "3px solid var(--green)";
@@ -374,28 +508,139 @@ export function ArticleReviewer({
       if (current.size === unresolved.size && [...unresolved].every((id) => current.has(id))) return current;
       return unresolved;
     });
-  }, [marks, historical, showHistory, round, flashId]);
+  }, [marks, historical, showHistory, round, flashId, touchHighlight]);
 
   useEffect(() => {
     renderHighlights();
   }, [renderHighlights, html]);
 
+  // ─── 触屏选中后自动让高亮避开顶栏和底部操作栏 ───
+  useEffect(() => {
+    if (!isTouch || !touchHighlight) return;
+    const frame = window.requestAnimationFrame(() => {
+      const container = containerRef.current;
+      if (!container) return;
+      const segments = Array.from(container.querySelectorAll<HTMLElement>("mark[data-pending]"));
+      let top = Number.POSITIVE_INFINITY;
+      let bottom = Number.NEGATIVE_INFINITY;
+      for (const segment of segments) {
+        const rect = segment.getBoundingClientRect();
+        if (!rect.width && !rect.height) continue;
+        top = Math.min(top, rect.top);
+        bottom = Math.max(bottom, rect.bottom);
+      }
+      if (!Number.isFinite(top) || !Number.isFinite(bottom)) return;
+      const headerBottom = document.querySelector("header")?.getBoundingClientRect().bottom ?? 0;
+      const bar = document.querySelector('[data-testid="mark-action-bar"]') as HTMLElement | null;
+      const barTop = bar ? bar.getBoundingClientRect().top : window.innerHeight;
+      const topLimit = headerBottom + 12;
+      const bottomLimit = barTop - 12;
+      const available = bottomLimit - topLimit;
+      let delta = 0;
+      if (bottom - top > available) {
+        // Whole block (or a very long sentence) taller than the space between
+        // the sticky header and the action bar: at least reveal its first lines.
+        delta = top - topLimit;
+      } else if (bottom > bottomLimit) {
+        delta = bottom - bottomLimit;
+        if (top - delta < topLimit) delta = top - topLimit;
+      } else if (top < topLimit) {
+        delta = top - topLimit;
+      }
+      if (Math.abs(delta) < 1) return;
+      const scroller = scrollRef.current;
+      if (scroller) {
+        scroller.scrollBy({ top: delta, behavior: "smooth" });
+      } else {
+        window.scrollBy({ top: delta, behavior: "smooth" });
+      }
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [isTouch, touchHighlight]);
+
   const clearSelection = useCallback(() => {
     window.getSelection()?.removeAllRanges();
   }, []);
+
+  const clearPending = useCallback(() => {
+    setPending(null);
+    setTouchScope(null);
+    setTouchHighlight(null);
+    clearSelection();
+  }, [clearSelection]);
 
   const openMarkSheet = useCallback((mark: ReviewMark) => {
     setComment(mark.comment);
     setSheet({ kind: "mark", markId: mark.id });
   }, []);
 
+  const selectTouchBlock = useCallback((block: HTMLElement) => {
+    const container = containerRef.current;
+    if (!container) return;
+    const range = document.createRange();
+    range.selectNodeContents(block);
+    const anchor = buildAnchor(container, range);
+    if (!anchor) return;
+    setTouchScope({
+      blockStart: anchor.startOffset,
+      blockEnd: anchor.endOffset,
+      sentences: splitSentences(anchor.exact),
+      index: -1,
+    });
+    setTouchHighlight({ start: anchor.startOffset, end: anchor.endOffset });
+    setPending(anchor);
+  }, []);
+
+  const applyTouchSentence = useCallback((index: number) => {
+    if (!touchScope) return;
+    const container = containerRef.current;
+    if (!container) return;
+    const total = touchScope.sentences.length;
+    const clamped = index < 0 ? -1 : Math.max(0, Math.min(index, total - 1));
+    const whole = clamped < 0 || total === 0;
+    const start = whole ? touchScope.blockStart : touchScope.blockStart + touchScope.sentences[clamped].start;
+    const end = whole ? touchScope.blockEnd : touchScope.blockStart + touchScope.sentences[clamped].end;
+    // Rebuild the range from container-level offsets instead of a stored DOM
+    // node: highlighter re-renders replace the article's innerHTML, so any
+    // captured element reference would be detached.
+    const range = rangeFromOffsets(container, start, end);
+    if (!range) return;
+    const anchor = buildAnchor(container, range);
+    if (!anchor) return;
+    setTouchScope({ ...touchScope, index: clamped });
+    setTouchHighlight({ start: anchor.startOffset, end: anchor.endOffset });
+    setPending(anchor);
+  }, [touchScope]);
+
+  const stepTouchSentence = useCallback((delta: number) => {
+    if (!touchScope) return;
+    if (touchScope.index < 0) {
+      applyTouchSentence(delta > 0 ? 0 : touchScope.sentences.length - 1);
+      return;
+    }
+    applyTouchSentence(touchScope.index + delta);
+  }, [touchScope, applyTouchSentence]);
+
   const handleArticleClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
     const element = (event.target as HTMLElement).closest("mark[data-mark-id]") as HTMLElement | null;
-    if (!element) return;
-    const id = Number(element.getAttribute("data-mark-id"));
-    const mark = marks.find((item) => item.id === id) || historical.find((item) => item.id === id);
-    if (mark) openMarkSheet(mark);
-  }, [marks, historical, openMarkSheet]);
+    if (element) {
+      const id = Number(element.getAttribute("data-mark-id"));
+      const mark = marks.find((item) => item.id === id) || historical.find((item) => item.id === id);
+      if (mark) openMarkSheet(mark);
+      return;
+    }
+    if (!isTouch || !canReview) return;
+    const container = containerRef.current;
+    if (!container) return;
+    const target = event.target as HTMLElement;
+    if (target.closest("a")) event.preventDefault();
+    if (target.closest("img, picture, svg, video, audio, canvas")) return;
+    const figure = target.closest("figure");
+    if (figure && !(figure.textContent || "").trim()) return;
+    const block = findTouchBlock(container, target);
+    if (!block) return;
+    selectTouchBlock(block);
+  }, [isTouch, canReview, marks, historical, openMarkSheet, selectTouchBlock]);
 
   async function saveNewMark(markKind: MarkKind) {
     if (!pending) return;
@@ -415,6 +660,8 @@ export function ArticleReviewer({
       setMarks((current) => [...current, data.mark as ReviewMark]);
       setSheet(null);
       setPending(null);
+      setTouchScope(null);
+      setTouchHighlight(null);
       setComment("");
       clearSelection();
       showToast("已保存划词，记得在底部提交本轮审稿");
@@ -511,7 +758,7 @@ export function ArticleReviewer({
   const historicalMarks = useMemo(() => historical.filter((mark) => mark.round !== round), [historical, round]);
 
   return (
-    <div className="fixed inset-0 overflow-y-auto bg-[var(--canvas)] text-[var(--ink)]" style={{ WebkitOverflowScrolling: "touch" }}>
+    <div ref={scrollRef} className="fixed inset-0 overflow-y-auto bg-[var(--canvas)] text-[var(--ink)]" style={{ WebkitOverflowScrolling: "touch" }}>
       <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-[var(--paper)]" style={{ userSelect: "none" }}>
         <div className="mx-auto flex max-w-[420px] items-center gap-2 px-3 pb-1 pt-2">
           <a href={backHref} className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-base font-bold text-[var(--muted)]" aria-label="返回">←</a>
@@ -525,13 +772,14 @@ export function ArticleReviewer({
         <div className="mx-auto flex max-w-[420px] flex-wrap items-center gap-2 px-3 pb-2">
           <button
             type="button"
+            data-testid="marks-list-button"
             onClick={() => setSheet({ kind: "list" })}
             className="min-h-[36px] rounded-full border border-[var(--line)] bg-[var(--paper)] px-3 text-xs font-bold text-[var(--ink)]"
           >
             划线 ({marks.length})
           </button>
           {canReview ? (
-            <span className="text-[11px] text-[var(--faint)]">长按选中正文即可标记</span>
+            <span className="text-[11px] text-[var(--faint)]">{isTouch ? "点一下段落即可标记" : "选中正文即可标记"}</span>
           ) : (
             <a href={`/login?next=${encodeURIComponent("/" + (target.type === "article" ? `articles/${target.id}` : `review/${target.id}`))}`} className="min-h-[36px] rounded-full bg-[var(--green-soft)] px-3 text-xs font-bold leading-[36px] text-[var(--green)]">
               登录后审稿
@@ -546,9 +794,12 @@ export function ArticleReviewer({
         <div
           ref={containerRef}
           onClick={handleArticleClick}
+          onContextMenu={isTouch ? (event) => event.preventDefault() : undefined}
           className="my-3 w-full max-w-[420px] rounded-xl bg-[var(--paper)] p-4 shadow-sm"
-          style={{ userSelect: "text", WebkitUserSelect: "text" }}
-          dangerouslySetInnerHTML={{ __html: html }}
+          style={isTouch
+            ? { userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }
+            : { userSelect: "text", WebkitUserSelect: "text" }}
+          dangerouslySetInnerHTML={articleHtml}
         />
         {!html ? (
           <div className="rounded-xl border border-dashed border-[var(--line)] p-6 text-center text-sm text-[var(--muted)]">
@@ -559,15 +810,49 @@ export function ArticleReviewer({
 
       {pending && !sheet ? (
         <div
+          data-testid="mark-action-bar"
           className="fixed inset-x-0 z-40 border-t border-[var(--line)] bg-[var(--paper)] px-3 pt-2 shadow-[0_-6px_20px_rgba(0,0,0,0.08)]"
           style={{ bottom: 0, paddingBottom: "calc(10px + env(safe-area-inset-bottom))", userSelect: "none" }}
         >
           <div className="mx-auto max-w-[420px]">
-            <p className="mb-2 line-clamp-2 text-[12px] text-[var(--muted)]">「{pending.exact}」</p>
+            {isTouch && touchScope && touchScope.sentences.length > 1 ? (
+              <div className="mb-2 flex items-center gap-2">
+                <button
+                  type="button"
+                  data-testid="mark-sentence-prev"
+                  aria-label="上一句"
+                  onClick={() => stepTouchSentence(-1)}
+                  className="min-h-[44px] min-w-[44px] rounded-xl border border-[var(--line)] text-lg font-bold text-[var(--muted)]"
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  data-testid="mark-sentence-whole"
+                  onClick={() => applyTouchSentence(-1)}
+                  className={`min-h-[44px] rounded-xl px-3 text-xs font-bold ${touchScope.index < 0 ? "bg-[var(--canvas)] text-[var(--ink)]" : "border border-[var(--line)] text-[var(--muted)]"}`}
+                >
+                  整段
+                </button>
+                <span data-testid="mark-sentence-label" className="flex-1 text-center text-xs font-bold text-[var(--muted)]">
+                  {touchScope.index < 0 ? "整段" : `第 ${touchScope.index + 1}/${touchScope.sentences.length} 句`}
+                </span>
+                <button
+                  type="button"
+                  data-testid="mark-sentence-next"
+                  aria-label="下一句"
+                  onClick={() => stepTouchSentence(1)}
+                  className="min-h-[44px] min-w-[44px] rounded-xl border border-[var(--line)] text-lg font-bold text-[var(--muted)]"
+                >
+                  ›
+                </button>
+              </div>
+            ) : null}
+            <p data-testid="mark-pending-text" className="mb-2 line-clamp-2 text-[12px] text-[var(--muted)]">「{pending.exact}」</p>
             <div className="flex gap-2">
-              <button type="button" onClick={() => { setComment(""); setSheet({ kind: "new", markKind: "good" }); }} className="min-h-[44px] flex-1 rounded-xl bg-emerald-50 text-sm font-bold text-emerald-700">👍 写得好</button>
-              <button type="button" onClick={() => { setComment(""); setSheet({ kind: "new", markKind: "change" }); }} className="min-h-[44px] flex-1 rounded-xl bg-amber-50 text-sm font-bold text-amber-700">✏️ 要改</button>
-              <button type="button" onClick={() => { setPending(null); clearSelection(); }} className="min-h-[44px] rounded-xl border border-[var(--line)] px-4 text-sm font-bold text-[var(--muted)]">取消</button>
+              <button type="button" data-testid="mark-good" onClick={() => { setComment(""); setSheet({ kind: "new", markKind: "good" }); }} className="min-h-[44px] flex-1 rounded-xl bg-emerald-50 text-sm font-bold text-emerald-700">👍 写得好</button>
+              <button type="button" data-testid="mark-change" onClick={() => { setComment(""); setSheet({ kind: "new", markKind: "change" }); }} className="min-h-[44px] flex-1 rounded-xl bg-amber-50 text-sm font-bold text-amber-700">✏️ 要改</button>
+              <button type="button" data-testid="mark-cancel" onClick={clearPending} className="min-h-[44px] rounded-xl border border-[var(--line)] px-4 text-sm font-bold text-[var(--muted)]">取消</button>
             </div>
           </div>
         </div>
@@ -628,6 +913,7 @@ export function ArticleReviewer({
           <p className="mb-2 line-clamp-4 rounded-lg bg-[var(--canvas)] p-2 text-[13px] text-[var(--muted)]">{pending.exact}</p>
           <textarea
             autoFocus
+            data-testid="mark-comment"
             value={comment}
             onChange={(event) => setComment(event.target.value)}
             rows={3}
@@ -637,7 +923,7 @@ export function ArticleReviewer({
           />
           <div className="mt-3 flex gap-2">
             <button type="button" onClick={() => setSheet(null)} className="min-h-[44px] flex-1 rounded-xl border border-[var(--line)] text-sm font-bold text-[var(--muted)]">取消</button>
-            <button type="button" onClick={() => saveNewMark(sheet.markKind)} disabled={busy} className="min-h-[44px] flex-1 rounded-xl bg-[var(--green)] text-sm font-bold text-white disabled:opacity-50">保存</button>
+            <button type="button" data-testid="mark-save" onClick={() => saveNewMark(sheet.markKind)} disabled={busy} className="min-h-[44px] flex-1 rounded-xl bg-[var(--green)] text-sm font-bold text-white disabled:opacity-50">保存</button>
           </div>
         </Sheet>
       ) : null}

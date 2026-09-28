@@ -6,6 +6,7 @@ import { collectXArticlePages } from "../lib/x-pagination.ts";
 import { normalizeXPublishedAt } from "../lib/x-date.ts";
 import { inferSourceCategory, isSourceCategory } from "../lib/source-category.ts";
 import { matchesHostPattern, secureRedirectResponse, upgradeForwardedRequest, upgradeForwardedRequestWithFlag } from "../lib/trusted-proxy.ts";
+import { splitSentences } from "../lib/sentences.ts";
 import { PayloadTooLargeError, discardBody, isValidIsoWeek, publicBaseUrl, readBodyWithLimit, shanghaiIso } from "../lib/weekly.ts";
 
 test("converts entity-escaped feed HTML before rendering Markdown", () => {
@@ -13,6 +14,39 @@ test("converts entity-escaped feed HTML before rendering Markdown", () => {
   assert.match(markdown, /!\[封面\]\(https:\/\/cdn\.example\.com\/cover\.jpg\)/);
   assert.match(markdown, /\*\*最新文字\*\*/);
   assert.doesNotMatch(markdown, /<img|<p>|&lt;/);
+});
+
+test("splits sentences for the touch reviewer with offsets into the original text", () => {
+  assert.deepEqual(splitSentences(""), []);
+  assert.deepEqual(splitSentences("   \n  "), []);
+  assert.deepEqual(splitSentences("一句话没有标点"), [{ text: "一句话没有标点", start: 0, end: 7 }]);
+
+  assert.deepEqual(splitSentences("今天很好。明天更好！"), [
+    { text: "今天很好。", start: 0, end: 5 },
+    { text: "明天更好！", start: 5, end: 10 },
+  ]);
+
+  assert.deepEqual(splitSentences('He said "Go!" then left.'), [
+    { text: 'He said "Go!"', start: 0, end: 13 },
+    { text: "then left.", start: 14, end: 24 },
+  ]);
+
+  assert.deepEqual(splitSentences("甲；乙。丙"), [
+    { text: "甲；乙。", start: 0, end: 4 },
+    { text: "丙", start: 4, end: 5 },
+  ]);
+
+  assert.deepEqual(splitSentences("真的吗？」好"), [
+    { text: "真的吗？」", start: 0, end: 5 },
+    { text: "好", start: 5, end: 6 },
+  ]);
+
+  assert.deepEqual(splitSentences("什么?! 好。"), [
+    { text: "什么?!", start: 0, end: 4 },
+    { text: "好。", start: 5, end: 7 },
+  ]);
+
+  assert.deepEqual(splitSentences("  \n。 "), [{ text: "。", start: 3, end: 4 }]);
 });
 
 test("keeps heart-knot exploration versioned and direction confirmation explicit", async () => {
@@ -740,6 +774,26 @@ test("ships the phone-first article reviewer with range marks and verdict action
 
   assert.match(reviewer, /"use client"/);
   assert.match(reviewer, /selectionchange/);
+  assert.match(reviewer, /pointer: coarse/);
+  assert.match(reviewer, /ontouchstart/);
+  assert.match(reviewer, /maxTouchPoints/);
+  assert.match(reviewer, /userSelect: "none"/);
+  assert.match(reviewer, /WebkitTouchCallout/);
+  assert.match(reviewer, /splitSentences/);
+  assert.match(reviewer, /data-testid="mark-action-bar"/);
+  assert.match(reviewer, /data-testid="mark-good"/);
+  assert.match(reviewer, /data-testid="mark-change"/);
+  assert.match(reviewer, /data-testid="mark-cancel"/);
+  assert.match(reviewer, /data-testid="mark-sentence-prev"/);
+  assert.match(reviewer, /data-testid="mark-sentence-next"/);
+  assert.match(reviewer, /data-testid="mark-sentence-whole"/);
+  assert.match(reviewer, /data-testid="mark-sentence-label"/);
+  assert.match(reviewer, /data-testid="mark-pending-text"/);
+  assert.match(reviewer, /data-testid="mark-comment"/);
+  assert.match(reviewer, /data-testid="mark-save"/);
+  assert.match(reviewer, /data-testid="marks-list-button"/);
+  assert.match(reviewer, /点一下段落即可标记/);
+  assert.match(reviewer, /选中正文即可标记/);
   assert.match(reviewer, /prefix/);
   assert.match(reviewer, /suffix/);
   assert.match(reviewer, /exact/);
@@ -748,6 +802,17 @@ test("ships the phone-first article reviewer with range marks and verdict action
   assert.match(reviewer, /\/api\/review\//);
   assert.match(reviewer, /dangerouslySetInnerHTML/);
   assert.match(reviewer, /env\(safe-area-inset-bottom\)/);
+  // Highlights are injected by mutating the rendered article, so the touch
+  // scope must keep container text offsets (not a detached DOM node) and the
+  // dangerouslySetInnerHTML object must stay referentially stable across
+  // re-renders or React resets the article and wipes every <mark>.
+  assert.match(reviewer, /const articleHtml = useMemo\(\(\) => \(\{ __html: html \}\), \[html\]\)/);
+  assert.match(reviewer, /dangerouslySetInnerHTML=\{articleHtml\}/);
+  assert.match(reviewer, /blockStart/);
+  assert.match(reviewer, /blockEnd/);
+  assert.match(reviewer, /rangeFromOffsets\(container, start, end\)/);
+  assert.doesNotMatch(reviewer, /touchScope\.block\b/);
+  assert.doesNotMatch(reviewer, /rangeFromOffsets\(touchScope\.block/);
 
   assert.match(articlePage, /redirect\(`\/login\?next=\/articles\//);
   assert.match(articlePage, /getArticle/);
