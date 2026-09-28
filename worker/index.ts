@@ -3,6 +3,8 @@ import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } fr
 import handler from "vinext/server/app-router-entry";
 import { processPendingItems, promotePendingXArticles, syncDueSources } from "../lib/store";
 import { handleWeeklyRequest } from "../lib/weekly-serve";
+import { getSessionUser } from "../lib/auth";
+import { isPublicPath, loginRedirectResponse } from "../lib/login-gate";
 import { secureRedirectResponse, upgradeForwardedRequestWithFlag } from "../lib/trusted-proxy";
 
 interface Env {
@@ -49,6 +51,11 @@ const worker = {
           return result.response();
         },
       }, allowedWidths));
+    }
+
+    if (!isPublicPath(url.pathname)) {
+      const user = await getSessionUser(env, request);
+      if (!user) return secure(loginRedirectResponse(url));
     }
 
     if (url.pathname.startsWith("/weekly/")) {

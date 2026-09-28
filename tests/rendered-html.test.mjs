@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { htmlToMarkdown } from "../lib/article.ts";
+import { isPublicPath, loginRedirectLocation, loginRedirectResponse } from "../lib/login-gate.ts";
+import { HIDDEN_FROM_NAV, activeTabKey, primaryNavItems, sectionForPath, sectionTabs } from "../lib/site-nav.ts";
 import { collectXArticlePages } from "../lib/x-pagination.ts";
 import { normalizeXPublishedAt } from "../lib/x-date.ts";
 import { inferSourceCategory, isSourceCategory } from "../lib/source-category.ts";
@@ -1190,4 +1192,122 @@ test("gates the admin-only career page and keeps raw result fields out of the da
       assert.equal(key in result, false, `non-public result ${result.id} must not expose ${key}`);
     }
   }
+});
+
+test("classifies public paths for the site-wide login gate", () => {
+  for (const pathname of [
+    "/login",
+    "/login/",
+    "/login/reset",
+    "/api",
+    "/api/",
+    "/api/feed",
+    "/_vinext/image",
+    "/assets/app.css",
+    "/cli/topics",
+    "/favicon.svg",
+    "/favicon.ico",
+    "/og-community.png",
+    "/og-community.svg",
+    "/robots.txt",
+    "/file.svg",
+    "/globe.svg",
+    "/window.svg",
+  ]) {
+    assert.equal(isPublicPath(pathname), true, `${pathname} should be public`);
+  }
+
+  for (const pathname of [
+    "/",
+    "/discover",
+    "/topics",
+    "/articles",
+    "/articles/hello",
+    "/review/1",
+    "/strategy",
+    "/annotations",
+    "/leaderboard",
+    "/profile",
+    "/weekly",
+    "/weekly/2026-W39/",
+    "/career",
+    "/loginx",
+    "/apix",
+  ]) {
+    assert.equal(isPublicPath(pathname), false, `${pathname} should require login`);
+  }
+});
+
+test("builds no-store login redirects that preserve path and query", () => {
+  assert.equal(loginRedirectLocation(new URL("https://studio.example/career")), "/login?next=/career");
+  assert.equal(
+    loginRedirectLocation(new URL("https://studio.example/discover?item=3&x=1")),
+    "/login?next=/discover%3Fitem%3D3%26x%3D1",
+  );
+  assert.equal(loginRedirectLocation("/weekly/2026-W39/"), "/login?next=/weekly/2026-W39/");
+
+  const response = loginRedirectResponse(new URL("https://studio.example/career"));
+  assert.equal(response.status, 307);
+  assert.equal(response.headers.get("location"), "/login?next=/career");
+  assert.equal(response.headers.get("cache-control"), "no-store");
+});
+
+test("runs the login gate in the worker before serving weekly reports", async () => {
+  const worker = await readFile(new URL("../worker/index.ts", import.meta.url), "utf8");
+  assert.match(worker, /isPublicPath\(url\.pathname\)/);
+  assert.match(worker, /loginRedirectResponse\(url\)/);
+  const gate = worker.indexOf("isPublicPath(url.pathname)");
+  const weekly = worker.indexOf("handleWeeklyRequest(request");
+  assert.ok(gate >= 0 && weekly >= 0 && gate < weekly, "the login gate must run before handleWeeklyRequest");
+});
+
+test("configures primary navigation by role", () => {
+  const admin = primaryNavItems("admin");
+  assert.deepEqual(admin.map((item) => item.label), ["今天", "内容", "成长"]);
+  assert.deepEqual(admin.map((item) => item.href), ["/", "/discover", "/career"]);
+
+  for (const role of ["user", null, undefined]) {
+    const items = primaryNavItems(role);
+    assert.deepEqual(items.map((item) => item.label), ["今天", "内容"]);
+    assert.equal(JSON.stringify(items).includes("成长"), false);
+  }
+
+  for (const items of [primaryNavItems("admin"), primaryNavItems("user")]) {
+    const serialized = JSON.stringify(items);
+    assert.equal(serialized.includes("批注广场"), false);
+    assert.equal(serialized.includes("排行榜"), false);
+  }
+});
+
+test("configures section tabs by section and role", () => {
+  assert.deepEqual(sectionTabs("content", "user").map((item) => item.label), ["阅读", "选题", "文章", "策略"]);
+  assert.deepEqual(sectionTabs("content", "admin").map((item) => item.href), ["/discover", "/topics", "/articles", "/strategy"]);
+  assert.deepEqual(sectionTabs("growth", "admin").map((item) => item.label), ["周报", "职业"]);
+  assert.deepEqual(sectionTabs("growth", "user"), []);
+  assert.deepEqual(sectionTabs("growth", null), []);
+  assert.deepEqual(sectionTabs("today", "admin"), []);
+});
+
+test("maps paths to navigation sections and active tabs", () => {
+  assert.equal(sectionForPath("/"), "today");
+  for (const pathname of ["/discover", "/topics", "/articles", "/articles/hello", "/review/1", "/strategy", "/annotations", "/leaderboard"]) {
+    assert.equal(sectionForPath(pathname), "content", `${pathname} should be content`);
+  }
+  for (const pathname of ["/weekly", "/weekly/2026-W39/", "/career"]) {
+    assert.equal(sectionForPath(pathname), "growth", `${pathname} should be growth`);
+  }
+  for (const pathname of ["/profile", "/login"]) {
+    assert.equal(sectionForPath(pathname), null, `${pathname} should have no section`);
+  }
+
+  assert.equal(activeTabKey("/discover"), "reading");
+  assert.equal(activeTabKey("/topics"), "topics");
+  assert.equal(activeTabKey("/articles/hello"), "articles");
+  assert.equal(activeTabKey("/review/1"), "articles");
+  assert.equal(activeTabKey("/strategy"), "strategy");
+  assert.equal(activeTabKey("/weekly/2026-W39/"), "weekly");
+  assert.equal(activeTabKey("/career"), "career");
+  assert.equal(activeTabKey("/profile"), null);
+
+  assert.deepEqual(HIDDEN_FROM_NAV, ["/annotations", "/leaderboard"]);
 });
