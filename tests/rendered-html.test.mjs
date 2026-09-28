@@ -5,7 +5,7 @@ import test from "node:test";
 import { htmlToMarkdown } from "../lib/article.ts";
 import { isPublicPath, loginRedirectLocation, loginRedirectResponse } from "../lib/login-gate.ts";
 import { HIDDEN_FROM_NAV, activeTabKey, primaryNavItems, sectionForPath, sectionTabs } from "../lib/site-nav.ts";
-import { digestReason, isPendingArticle, isPendingTopicDraft, isoWeekOf, missingLine, shanghaiDate } from "../lib/today-core.ts";
+import { dateLabel, digestReason, isPendingArticle, isPendingTopicDraft, isoWeekOf, missingLine, shanghaiDate } from "../lib/today-core.ts";
 import { collectXArticlePages } from "../lib/x-pagination.ts";
 import { normalizeXPublishedAt } from "../lib/x-date.ts";
 import { inferSourceCategory, isSourceCategory } from "../lib/source-category.ts";
@@ -1379,6 +1379,8 @@ test("builds the admin-only today page from real in-app signals and keeps /readi
   assert.equal(isoWeekOf("2027-01-01"), "2026-W53");
   assert.equal(isoWeekOf("2024-12-30"), "2025-W01");
   assert.equal(digestReason("2026-09-28"), "daily-ai-digest:2026-09-28");
+  assert.equal(dateLabel("2026-09-28"), "9 月 28 日 · 周一");
+  assert.equal(dateLabel("2026-10-04"), "10 月 4 日 · 周日");
   assert.equal(isPendingTopicDraft({ draftMarkdown: "正文", reviewStatus: null }), true);
   assert.equal(isPendingTopicDraft({ draftMarkdown: "正文", reviewStatus: "" }), true);
   assert.equal(isPendingTopicDraft({ draftMarkdown: "正文", reviewStatus: "pending" }), true);
@@ -1415,8 +1417,13 @@ test("builds the admin-only today page from real in-app signals and keeps /readi
   }
   assert.match(todayPage, /isAdmin && data\.missing/);
   assert.match(todayPage, /isAdmin && data\.weekly/);
-  assert.doesNotMatch(todayPage, /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u);
-  assert.doesNotMatch(todayPage, /rounded-2xl/);
+  assert.match(todayPage, /→/);
+  assert.match(todayPage, /dateLabel\(/);
+  assert.match(todayPage, /tabular-nums/);
+  const emojiPattern = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}]/u;
+  assert.doesNotMatch("→", emojiPattern);
+  assert.doesNotMatch(todayPage, emojiPattern);
+  assert.doesNotMatch(todayPage, /rounded-/);
   assert.doesNotMatch(todayPage, /shadow/);
   assert.doesNotMatch(todayPage, /gradient/);
 
@@ -1430,6 +1437,7 @@ test("builds the admin-only today page from real in-app signals and keeps /readi
   assert.match(readingPage, /initialView="today"/);
   assert.match(deskApp, /next === "today" \? "\/reading"/);
   assert.match(deskApp, /onClick=\{\(\) => navigate\("today"\)\}/);
+  assert.doesNotMatch(deskApp, /data\.user!/);
   assert.equal(sectionForPath("/reading"), "content");
   assert.equal(activeTabKey("/reading"), "reading");
   assert.match(siteNav, /hasPrefix\(pathname, "\/reading"\)/);

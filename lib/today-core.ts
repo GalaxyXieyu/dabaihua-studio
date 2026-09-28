@@ -13,6 +13,15 @@ export function shanghaiDate(date: Date = new Date()): string {
   }).format(date);
 }
 
+/** Human label like `9 月 28 日 · 周一` for a `YYYY-MM-DD` date string. */
+export function dateLabel(dateStr: string): string {
+  const date = new Date(`${dateStr}T00:00:00Z`);
+  const month = date.getUTCMonth() + 1;
+  const day = date.getUTCDate();
+  const weekday = "日一二三四五六"[date.getUTCDay()];
+  return `${month} 月 ${day} 日 · 周${weekday}`;
+}
+
 /**
  * ISO-8601 week (`YYYY-Www`) for a `YYYY-MM-DD` date string. Weeks start on
  * Monday and week 1 is the week containing the first Thursday of the year, so
