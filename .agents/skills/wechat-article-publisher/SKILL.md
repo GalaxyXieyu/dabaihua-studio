@@ -7,6 +7,10 @@ description: 以 Markdown 为唯一工作正文，统一处理微信公众号文
 
 使用一个入口完成原稿到公众号 HTML 的生产。任何非 Markdown 输入必须先转成 Markdown；DOCX 只作为输入，不生成或回写中间 DOCX。
 
+## ⛔ 硬规则：不加来源、不加参考资料（Yu 定，2026-09-28）
+
+完整规则见 `content/_config/author-voice.md` 顶部。排版时不添加「参考资料」「延伸阅读」「来源」区块、脚注、原文链接或图片来源小字；图片说明不写「来源：…」。原稿里若带这些内容，不在排版阶段处理，停下并打回 writer / `wechat-draft-editor`。
+
 ## 模式路由
 
 - “只改标点”“爱格标点”：使用 `punctuation`。

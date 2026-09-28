@@ -17,6 +17,7 @@ dabaihua-studio 是心结驱动的个人阅读、研究和内容发现工作台�
 - `content/ghz/`、`content/bilibili/`、`content/xhs/` 只保存对应渠道的发布快照、上传记录或专属资产，并链接回源项目；不得重新分叉主稿。
 - 动态内容策略以 `topics strategy` 为准，离线时使用 `topics strategy --cached`；项目内结构规格见 `content/_config/platform-specs.json`，作者声音基线见 `content/_config/author-voice.md`。
 - 生产路由：新选题先用 `positioning`；主稿用 `writer`；结构级去 AI 味用 `wechat-draft-editor`；公众号排版用 `gzh-design-skill`；发布前用 `qa`；多平台文本衍生用 `derive`，单独的小红书正文用 `xhs`；普通配图与封面用 `visual`，成套社交卡和公众号封面对用 `guizang-social-card-skill`。
+- 公众号/知乎等对外文章执行 `content/_config/author-voice.md` 顶部硬规则：正文无来源索引、不写「X 说过」、案例代入 Yu 自己的场景、参考文章只当方向（晴儿的 `daily-topics` 素材不受影响）。
 - 不得凭空添加作者经历、情绪、数据或观点；真人感来自已验证的材料和用户确认的作者声音，而不是口头禅、自嘲或强制疑问句。
 - 公众号图片上传与文章发布是外部写操作，只有在用户明确确认后才使用项目级 `wenyan-mcp`。
 
