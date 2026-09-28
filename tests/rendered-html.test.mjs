@@ -5,6 +5,7 @@ import test from "node:test";
 import { htmlToMarkdown } from "../lib/article.ts";
 import { isPublicPath, loginRedirectLocation, loginRedirectResponse } from "../lib/login-gate.ts";
 import { HIDDEN_FROM_NAV, activeTabKey, primaryNavItems, sectionForPath, sectionTabs } from "../lib/site-nav.ts";
+import { digestReason, isPendingArticle, isPendingTopicDraft, isoWeekOf, missingLine, shanghaiDate } from "../lib/today-core.ts";
 import { collectXArticlePages } from "../lib/x-pagination.ts";
 import { normalizeXPublishedAt } from "../lib/x-date.ts";
 import { inferSourceCategory, isSourceCategory } from "../lib/source-category.ts";
@@ -82,7 +83,7 @@ test("keeps heart-knot exploration versioned and direction confirmation explicit
 
 test("keeps leaderboard fallback avatars centered independently from nickname styles", async () => {
   const [page, styles] = await Promise.all([
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/_components/DeskApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
 
@@ -94,7 +95,7 @@ test("keeps leaderboard fallback avatars centered independently from nickname st
 
 test("ships public passage annotations, one-level replies, plaza feeds, personal history, and immersive discovery reading", async () => {
   const [page, styles, store, schema, route, migration, plazaPage] = await Promise.all([
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/_components/DeskApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../lib/store.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
@@ -134,7 +135,7 @@ test("ships public passage annotations, one-level replies, plaza feeds, personal
 
 test("ships real owner and visitor profiles, profile interactions, notifications, and underline-only annotations", async () => {
   const [page, styles, store, schema, migration, profileRoute, notificationRoute] = await Promise.all([
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/_components/DeskApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../lib/store.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
@@ -175,7 +176,7 @@ test("ships real owner and visitor profiles, profile interactions, notifications
 
 test("keeps the reading workspace adjustable and annotation interactions recoverable", async () => {
   const [page, styles] = await Promise.all([
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/_components/DeskApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
 
@@ -203,7 +204,7 @@ test("keeps the reading workspace adjustable and annotation interactions recover
 
 test("keeps source controls and profile sections on consistent visual grids", async () => {
   const [page, styles] = await Promise.all([
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/_components/DeskApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
 
@@ -231,7 +232,7 @@ test("keeps source controls and profile sections on consistent visual grids", as
 
 test("keeps lightweight routes off the reading-data path and progressively renders discovery", async () => {
   const [page, styles, store, auth, dashboardRoute, worker] = await Promise.all([
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/_components/DeskApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../lib/store.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/auth.ts", import.meta.url), "utf8"),
@@ -268,7 +269,7 @@ test("keeps lightweight routes off the reading-data path and progressively rende
 
 test("background reading heartbeats never mark an article read or replace the active article", async () => {
   const [page, store] = await Promise.all([
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/_components/DeskApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/store.ts", import.meta.url), "utf8"),
   ]);
   const clientHeartbeat = page.match(/useEffect\(\(\) => \{\n    if \(!heartbeatItemId[\s\S]*?\n  \}, \[[^\]]+\]\);/)?.[0] || "";
@@ -336,7 +337,7 @@ test("ships secure accounts, personal state, source follows, contributors, and d
     readFile(new URL("../drizzle/0005_pretty_justice.sql", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0006_yummy_norrin_radd.sql", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0008_complete_proemial_gods.sql", import.meta.url), "utf8"),
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/_components/DeskApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../app/api/profile/avatar/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/sources/route.ts", import.meta.url), "utf8"),
@@ -454,7 +455,7 @@ test("ships secure accounts, personal state, source follows, contributors, and d
 
 test("defines the Dabaihua Studio shell", async () => {
   const [page, layout, discoverPage, brand] = await Promise.all([
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/_components/DeskApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/discover/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/brand.ts", import.meta.url), "utf8"),
@@ -479,7 +480,7 @@ test("defines the Dabaihua Studio shell", async () => {
 
 test("ships unified subscriptions, daily sync, translation, reading, and idea workflows", async () => {
   const [page, store, feed, xReader, worker, packageJson, aiRoute, ideaRoute, sourceRoute, sourceAvatarRoute, itemRoute, importQueueRoute, viteConfig] = await Promise.all([
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/_components/DeskApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/store.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/feed.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/x.ts", import.meta.url), "utf8"),
@@ -950,7 +951,7 @@ test("gates registration behind DABAIHUA_ALLOW_REGISTER and an optional invite c
   const [auth, route, page] = await Promise.all([
     readFile(new URL("../lib/auth.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/auth/route.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/_components/DeskApp.tsx", import.meta.url), "utf8"),
   ]);
 
   assert.match(auth, /DABAIHUA_ALLOW_REGISTER/);
@@ -1153,7 +1154,7 @@ test("serves weekly reports under login with a tight CSP", async () => {
 
 test("links the admin-only growth workspace from the main navigation", async () => {
   const [page, siteNav, css] = await Promise.all([
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/_components/DeskApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/_components/SiteNav.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
@@ -1309,7 +1310,7 @@ test("configures section tabs by section and role", () => {
 
 test("maps paths to navigation sections and active tabs", () => {
   assert.equal(sectionForPath("/"), "today");
-  for (const pathname of ["/discover", "/topics", "/articles", "/articles/hello", "/review/1", "/strategy", "/annotations", "/leaderboard"]) {
+  for (const pathname of ["/reading", "/discover", "/topics", "/articles", "/articles/hello", "/review/1", "/strategy", "/annotations", "/leaderboard"]) {
     assert.equal(sectionForPath(pathname), "content", `${pathname} should be content`);
   }
   for (const pathname of ["/weekly", "/weekly/2026-W39/", "/career"]) {
@@ -1319,6 +1320,7 @@ test("maps paths to navigation sections and active tabs", () => {
     assert.equal(sectionForPath(pathname), null, `${pathname} should have no section`);
   }
 
+  assert.equal(activeTabKey("/reading"), "reading");
   assert.equal(activeTabKey("/discover"), "reading");
   assert.equal(activeTabKey("/topics"), "topics");
   assert.equal(activeTabKey("/articles/hello"), "articles");
@@ -1366,4 +1368,69 @@ test("mounts the shared site app bar on every content and growth subpage", async
     assert.match(page, /getSessionUser/);
     assert.match(page, /redirect\("\/login\?next=/);
   }
+});
+
+test("builds the admin-only today page from real in-app signals and keeps /reading reachable", async () => {
+  // Pure helpers (node type-stripping imports the module directly).
+  assert.equal(shanghaiDate(new Date("2026-09-27T17:30:00Z")), "2026-09-28");
+  assert.equal(shanghaiDate(new Date("2026-09-27T15:59:00Z")), "2026-09-27");
+  assert.equal(isoWeekOf("2026-09-28"), "2026-W40");
+  assert.equal(isoWeekOf("2026-01-01"), "2026-W01");
+  assert.equal(isoWeekOf("2027-01-01"), "2026-W53");
+  assert.equal(isoWeekOf("2024-12-30"), "2025-W01");
+  assert.equal(digestReason("2026-09-28"), "daily-ai-digest:2026-09-28");
+  assert.equal(isPendingTopicDraft({ draftMarkdown: "正文", reviewStatus: null }), true);
+  assert.equal(isPendingTopicDraft({ draftMarkdown: "正文", reviewStatus: "" }), true);
+  assert.equal(isPendingTopicDraft({ draftMarkdown: "正文", reviewStatus: "pending" }), true);
+  assert.equal(isPendingTopicDraft({ draftMarkdown: "   ", reviewStatus: "pending" }), false);
+  assert.equal(isPendingTopicDraft({ draftMarkdown: "正文", reviewStatus: "approved" }), false);
+  assert.equal(isPendingArticle(null), true);
+  assert.equal(isPendingArticle(""), true);
+  assert.equal(isPendingArticle("draft"), true);
+  assert.equal(isPendingArticle("approved"), false);
+  assert.equal(isPendingArticle("published"), false);
+  assert.equal(isPendingArticle("changes-requested"), false);
+  assert.equal(missingLine({ display_title: "有标题", skills: [], metric: "GMV", unit: "元" }), "有标题：缺「GMV」，单位 元");
+  assert.equal(missingLine({ display_title: null, skills: ["Agent", "RAG"], metric: "覆盖率", unit: "%" }), "未公开标题的成果（技能：Agent、RAG）：缺「覆盖率」，单位 %");
+  assert.equal(missingLine({ display_title: null, skills: [], metric: "时长", unit: "分钟" }), "未公开标题的成果：缺「时长」，单位 分钟");
+
+  const [todayPage, todayLib, readingPage, deskApp, siteNav] = await Promise.all([
+    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/today.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/reading/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/_components/DeskApp.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/site-nav.ts", import.meta.url), "utf8"),
+  ]);
+
+  // Server component with a plain, decoration-free list of today's five rows.
+  assert.doesNotMatch(todayPage, /"use client"/);
+  assert.match(todayPage, /<SiteAppBar/);
+  assert.match(todayPage, /getTodayData\(/);
+  assert.match(todayPage, /redirect\("\/login\?next=\/"\)/);
+  for (const row of ["待审稿件", "待挑选题", "每日 AI 简报", "缺数字", "本周周报"]) {
+    assert.match(todayPage, new RegExp(row));
+  }
+  for (const empty of ["没有待审稿件", "没有待挑选题", "没有 AI 简报", "没有缺数字的成果", "还没有周报"]) {
+    assert.match(todayPage, new RegExp(empty));
+  }
+  assert.match(todayPage, /isAdmin && data\.missing/);
+  assert.match(todayPage, /isAdmin && data\.weekly/);
+  assert.doesNotMatch(todayPage, /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u);
+  assert.doesNotMatch(todayPage, /rounded-2xl/);
+  assert.doesNotMatch(todayPage, /shadow/);
+  assert.doesNotMatch(todayPage, /gradient/);
+
+  // The data layer reads the real tables and the bundled career data.
+  assert.match(todayLib, /daily-ai-digest:/);
+  assert.match(todayLib, /review_status/);
+  assert.match(todayLib, /content\/career\/career\.json/);
+  assert.match(todayLib, /listWeeklyReports/);
+
+  // The old home page (today's reading) now lives at /reading.
+  assert.match(readingPage, /initialView="today"/);
+  assert.match(deskApp, /next === "today" \? "\/reading"/);
+  assert.match(deskApp, /onClick=\{\(\) => navigate\("today"\)\}/);
+  assert.equal(sectionForPath("/reading"), "content");
+  assert.equal(activeTabKey("/reading"), "reading");
+  assert.match(siteNav, /hasPrefix\(pathname, "\/reading"\)/);
 });

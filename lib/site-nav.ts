@@ -46,6 +46,7 @@ export function sectionTabs(section: NavSection, role: string | null | undefined
 export function sectionForPath(pathname: string): NavSection | null {
   if (pathname === "/") return "today";
   if (
+    hasPrefix(pathname, "/reading") ||
     hasPrefix(pathname, "/discover") ||
     hasPrefix(pathname, "/topics") ||
     hasPrefix(pathname, "/articles") ||
@@ -61,7 +62,7 @@ export function sectionForPath(pathname: string): NavSection | null {
 }
 
 export function activeTabKey(pathname: string): string | null {
-  if (hasPrefix(pathname, "/discover")) return "reading";
+  if (hasPrefix(pathname, "/reading") || hasPrefix(pathname, "/discover")) return "reading";
   if (hasPrefix(pathname, "/topics")) return "topics";
   if (hasPrefix(pathname, "/articles") || hasPrefix(pathname, "/review")) return "articles";
   if (hasPrefix(pathname, "/strategy")) return "strategy";
