@@ -31,6 +31,7 @@ import {
   Password,
   PaperPlaneTilt,
   PencilSimple,
+  Plant,
   Plus,
   SignIn,
   SignOut,
@@ -1638,13 +1639,14 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
         <span className="brand-mark"><Waves size={19} weight="bold" aria-hidden="true" /></span>
         <span><strong>{BRAND_NAME}</strong><small>{BRAND_TAGLINE}</small></span>
       </button>
-      <nav aria-label="主导航">
+      <nav aria-label="主导航" className={data.user?.role === "admin" ? "has-growth" : undefined}>
         <button className={view === "today" ? "active" : ""} aria-current={view === "today" ? "page" : undefined} onClick={() => navigate("today")}><BookOpenText size={16} weight="duotone" />今日阅读</button>
         <button className={view === "discover" ? "active" : ""} aria-current={view === "discover" ? "page" : undefined} onClick={() => navigate("discover")}><MagnifyingGlass size={16} />发现来源</button>
         <button className={view === "annotations" ? "active" : ""} aria-current={view === "annotations" ? "page" : undefined} onClick={() => navigate("annotations")}><ChatText size={16} weight="duotone" />批注广场</button>
         <button className={view === "leaderboard" ? "active" : ""} aria-current={view === "leaderboard" ? "page" : undefined} onClick={() => navigate("leaderboard")}><Trophy size={16} />排行榜</button>
         <a className="nav-link" href="/topics"><ClipboardText size={16} weight="duotone" />选题</a>
         <a className="nav-link" href="/strategy"><Gear size={16} weight="duotone" />策略</a>
+        {data.user?.role === "admin" && <a className="nav-link" href="/career"><Plant size={16} weight="duotone" />成长</a>}
       </nav>
       {data.user
         ? <div className="global-user-wrap">

@@ -1147,3 +1147,13 @@ test("serves weekly reports under login with a tight CSP", async () => {
   assert.match(drizzleSchema, /export const weeklyUploadLog/);
   assert.match(journal, /0015_weekly_reports/);
 });
+
+test("links the admin-only growth workspace from the main navigation", async () => {
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const css = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(page, /href="\/career"/);
+  assert.match(page, /data\.user\?\.role === "admin" && <a className="nav-link" href="\/career">/);
+  assert.match(page, /^\s*Plant,$/m);
+  assert.match(page, /className=\{data\.user\?\.role === "admin" \? "has-growth" : undefined\}/);
+  assert.match(css, /\.global-appbar nav\.has-growth \{ grid-template-columns:repeat\(7, minmax\(0, 1fr\)\); \}/);
+});
