@@ -1,8 +1,11 @@
-/* eslint-disable @next/next/no-html-link-for-pages */
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { env } from "cloudflare:workers";
 import { StrategyEditor } from "./_components/StrategyEditor";
 import { VersionHistory } from "./_components/VersionHistory";
-import { BRAND_NAME } from "../../lib/brand";
+import { SiteAppBar } from "../_components/SiteAppBar";
+import { getSessionUser } from "../../lib/auth";
+import { requestOrigin } from "../../lib/request-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -45,10 +48,18 @@ async function fetchVersions(origin: string, cookie: string | null): Promise<Ver
 
 export default async function StrategyPage() {
   const requestHeaders = await headers();
-  const host = requestHeaders.get("x-forwarded-host") || requestHeaders.get("host") || "localhost:3000";
-  const protocol = requestHeaders.get("x-forwarded-proto") || (host.startsWith("localhost") ? "http" : "https");
-  const origin = `${protocol}://${host}`;
+  const origin = requestOrigin(requestHeaders);
   const cookie = requestHeaders.get("cookie");
+  const user = await getSessionUser(
+    env,
+    new Request(`${origin}/strategy`, {
+      headers: {
+        cookie: cookie || "",
+        authorization: requestHeaders.get("authorization") || "",
+      },
+    }),
+  );
+  if (!user) redirect("/login?next=/strategy");
 
   const [strategy, versions] = await Promise.all([
     fetchStrategy(origin, cookie),
@@ -57,19 +68,8 @@ export default async function StrategyPage() {
 
   return (
     <div className="min-h-screen bg-[var(--canvas)] text-[var(--ink)]">
-      <header className="page-header sticky top-0 z-20 border-b border-[var(--line)] bg-[var(--paper)]">
-        <div className="page-header-inner">
-          <a href="/" className="page-header-brand" aria-label={`返回${BRAND_NAME}首页`}>
-            <span className="brand-mark">🌊</span>
-            <span className="page-header-brand-name">{BRAND_NAME}</span>
-          </a>
-          <h1 className="page-header-title">⚙️ 策略配置</h1>
-          <nav className="page-header-nav" aria-label="页面导航">
-            <a href="/topics">📋 选题</a>
-            <a href="/">返回首页</a>
-          </nav>
-        </div>
-      </header>
+      <SiteAppBar role={user.role} pathname="/strategy" />
+      <h1 className="px-4 pt-4 text-lg font-bold sm:px-6">⚙️ 策略配置</h1>
 
       <main className="flex flex-col gap-4 p-4 sm:p-6 lg:flex-row">
         <div className="min-w-0 flex-1">

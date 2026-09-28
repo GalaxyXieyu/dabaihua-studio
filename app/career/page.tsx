@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { env } from "cloudflare:workers";
 import { getSessionUser } from "../../lib/auth";
 import { requestOrigin } from "../../lib/request-origin";
+import { SiteAppBar } from "../_components/SiteAppBar";
 import careerJson from "../../content/career/career.json";
 import {
   formatShanghai,
@@ -136,26 +137,10 @@ export default async function CareerPage() {
 
   return (
     <div className="fixed inset-0 overflow-y-auto bg-[var(--canvas)] text-[var(--ink)]">
-      <header className="sticky top-0 z-20 border-b border-[var(--line)] bg-[var(--paper)]">
+      <SiteAppBar role={user.role} pathname="/career" />
+      <header className="border-b border-[var(--line)] bg-[var(--paper)]">
         <div className="mx-auto flex max-w-[720px] items-center justify-between gap-3 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <a href="/topics" className="inline-flex min-h-[44px] items-center text-sm font-bold text-[var(--muted)] hover:text-[var(--accent)]">
-              ← 选题看板
-            </a>
-            <h1 className="text-base font-bold">成长</h1>
-            <nav className="flex items-center gap-3 text-sm">
-              <a href="/weekly" className="inline-flex min-h-[44px] items-center text-[var(--muted)] hover:text-[var(--ink)]">
-                周报
-              </a>
-              <a
-                href="/career"
-                aria-current="page"
-                className="inline-flex min-h-[44px] items-center border-b-2 border-[var(--accent)] font-bold text-[var(--accent)]"
-              >
-                职业
-              </a>
-            </nav>
-          </div>
+          <h1 className="text-base font-bold">成长 · 职业</h1>
           <span className="shrink-0 text-xs text-[var(--faint)]">数据截至 {formatShanghai(header.data_as_of)}（北京时间）</span>
         </div>
       </header>

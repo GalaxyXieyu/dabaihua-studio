@@ -1,8 +1,10 @@
-/* eslint-disable @next/next/no-html-link-for-pages */
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { env } from "cloudflare:workers";
 import { Board } from "./_components/Board";
+import { SiteAppBar } from "../_components/SiteAppBar";
+import { getSessionUser } from "../../lib/auth";
 import { requestOrigin } from "../../lib/request-origin";
-import { BRAND_NAME } from "../../lib/brand";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +70,16 @@ export default async function TopicsPage() {
   const requestHeaders = await headers();
   const origin = requestOrigin(requestHeaders);
   const cookie = requestHeaders.get("cookie");
+  const user = await getSessionUser(
+    env,
+    new Request(`${origin}/topics`, {
+      headers: {
+        cookie: cookie || "",
+        authorization: requestHeaders.get("authorization") || "",
+      },
+    }),
+  );
+  if (!user) redirect("/login?next=/topics");
 
   const [topics, series] = await Promise.all([
     fetchTopics(origin, cookie),
@@ -76,22 +88,9 @@ export default async function TopicsPage() {
 
   return (
     <div className="min-h-screen bg-[var(--canvas)] text-[var(--ink)]">
-      <header className="page-header sticky top-0 z-20 border-b border-[var(--line)] bg-[var(--paper)]">
-        <div className="page-header-inner">
-          <a href="/" className="page-header-brand" aria-label={`返回${BRAND_NAME}首页`}>
-            <span className="brand-mark">🌊</span>
-            <span className="page-header-brand-name">{BRAND_NAME}</span>
-          </a>
-          <h1 className="page-header-title">📋 选题看板</h1>
-          <nav className="page-header-nav" aria-label="页面导航">
-            <a href="/articles">📰 文章</a>
-            <a href="/weekly">📅 周报</a>
-            <a href="/strategy">⚙️ 策略</a>
-            <a href="/">返回首页</a>
-          </nav>
-        </div>
-      </header>
+      <SiteAppBar role={user.role} pathname="/topics" />
       <main className="p-4 sm:p-6">
+        <h1 className="mb-3 text-lg font-bold">📋 选题看板</h1>
         <Board initialTopics={topics} initialSeries={series} />
       </main>
     </div>

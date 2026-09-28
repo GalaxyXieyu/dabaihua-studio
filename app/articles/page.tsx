@@ -3,6 +3,7 @@ import { env } from "cloudflare:workers";
 import { getSessionUser } from "../../lib/auth";
 import { listArticles } from "../../lib/article-review";
 import { requestOrigin } from "../../lib/request-origin";
+import { SiteAppBar } from "../_components/SiteAppBar";
 import { statusLabelFor } from "../_components/article-status";
 
 export const dynamic = "force-dynamic";
@@ -39,20 +40,11 @@ export default async function ArticlesPage() {
 
   return (
     <div className="fixed inset-0 overflow-y-auto bg-[var(--canvas)] text-[var(--ink)]">
-      <header className="sticky top-0 z-20 border-b border-[var(--line)] bg-[var(--paper)]">
+      <SiteAppBar role={user?.role} pathname="/articles" />
+      <header className="border-b border-[var(--line)] bg-[var(--paper)]">
         <div className="mx-auto flex max-w-[720px] items-center justify-between gap-3 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <a href="/topics" className="inline-flex min-h-[44px] items-center text-sm font-bold text-[var(--muted)] hover:text-[var(--green)]">← 选题看板</a>
-            <h1 className="text-base font-bold">📰 文章</h1>
-          </div>
-          {user ? (
-            <div className="flex shrink-0 items-center gap-3">
-              <a href="/weekly" className="inline-flex min-h-[44px] items-center text-xs font-bold text-[var(--muted)] hover:text-[var(--green)]">📅 周报</a>
-              <span className="text-xs text-[var(--faint)]">共 {articles.length} 篇</span>
-            </div>
-          ) : (
-            <a href="/login?next=/articles" className="inline-flex min-h-[44px] items-center rounded-lg bg-[var(--green-soft)] px-3 text-xs font-bold text-[var(--green)]">登录后查看全部</a>
-          )}
+          <h1 className="text-base font-bold">📰 文章</h1>
+          <span className="shrink-0 text-xs text-[var(--faint)]">共 {articles.length} 篇</span>
         </div>
       </header>
 

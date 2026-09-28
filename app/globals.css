@@ -54,6 +54,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible 
 .skip-link:focus { transform:translateY(0); }
 
 .global-appbar { position:relative; z-index:var(--z-appbar); grid-column:1 / -1; grid-row:1; min-height:var(--appbar-height); padding:0 28px; display:grid; grid-template-columns:minmax(190px,1fr) auto minmax(190px,1fr); align-items:center; overflow:visible; background:var(--paper); border-bottom:1px solid var(--line); }
+.site-appbar { position:sticky; top:0; }
 .global-brand { width:max-content; min-height:48px; padding:0; display:flex; align-items:center; gap:10px; color:var(--ink); text-align:left; background:transparent; border:0; border-radius:var(--r-sm); }
 .global-brand > span:last-child strong,.global-brand > span:last-child small { display:block; }
 .global-brand strong { font-size:13px; }.global-brand small { margin-top:2px; color:var(--muted); font-size:10px; font-weight:650; }
@@ -793,6 +794,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible 
   .global-brand { min-width:44px; }
 
   .today-scroll, .article-list, .reader-pane, .full-view { padding-bottom:calc(78px + env(safe-area-inset-bottom)) !important; }
+  /* 独立子页的顶栏在手机上把主导航固定到底部，页面最后内容要留出空间。 */
+  .site-appbar ~ main, .site-appbar ~ * main { padding-bottom:calc(78px + env(safe-area-inset-bottom)) !important; }
   .view-today .today-view, .view-discover .article-pane { padding-bottom:0; }
 
   /* 表单与触控目标：避免 iOS 聚焦缩放 */

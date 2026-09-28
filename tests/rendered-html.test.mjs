@@ -836,7 +836,7 @@ test("ships the phone-first article reviewer that adapts to desktop and range ma
 
   assert.match(reviewPage, /ArticleReviewer/);
   assert.match(reviewPage, /redirect\(/);
-  assert.match(topicsPage, /\/articles/);
+  assert.match(topicsPage, /SiteAppBar/);
 });
 
 test("matches trusted proxy host patterns with exact names and leading wildcards", () => {
@@ -1317,4 +1317,40 @@ test("maps paths to navigation sections and active tabs", () => {
   assert.equal(activeTabKey("/profile"), null);
 
   assert.deepEqual(HIDDEN_FROM_NAV, ["/annotations", "/leaderboard"]);
+});
+
+test("mounts the shared site app bar on every content and growth subpage", async () => {
+  const [appBar, topics, strategy, articles, weekly, career, styles] = await Promise.all([
+    readFile(new URL("../app/_components/SiteAppBar.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/topics/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/strategy/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/articles/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/weekly/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/career/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(appBar, /sectionForPath\(/);
+  assert.match(appBar, /activeTabKey\(/);
+  assert.match(styles, /\.site-appbar/);
+
+  const pages = [
+    [topics, "/topics"],
+    [strategy, "/strategy"],
+    [articles, "/articles"],
+    [weekly, "/weekly"],
+    [career, "/career"],
+  ];
+  for (const [page, pathname] of pages) {
+    assert.match(page, /<SiteAppBar/);
+    assert.match(page, new RegExp(`pathname="${pathname}"`));
+    assert.doesNotMatch(page, /← 选题看板/);
+  }
+
+  // topics and strategy had no session lookup before; both must add the same
+  // login defence as the other subpages.
+  for (const page of [topics, strategy]) {
+    assert.match(page, /getSessionUser/);
+    assert.match(page, /redirect\("\/login\?next=/);
+  }
 });

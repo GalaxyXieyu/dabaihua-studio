@@ -4,7 +4,7 @@ import { env } from "cloudflare:workers";
 import { getSessionUser } from "../../lib/auth";
 import { requestOrigin } from "../../lib/request-origin";
 import { listWeeklyReports } from "../../lib/weekly";
-import { BRAND_NAME } from "../../lib/brand";
+import { SiteAppBar } from "../_components/SiteAppBar";
 
 export const dynamic = "force-dynamic";
 export const viewport = { width: "device-width", initialScale: 1 };
@@ -55,12 +55,10 @@ export default async function WeeklyPage() {
 
   return (
     <div className="fixed inset-0 overflow-y-auto bg-[var(--canvas)] text-[var(--ink)]">
-      <header className="sticky top-0 z-20 border-b border-[var(--line)] bg-[var(--paper)]">
+      <SiteAppBar role={user.role} pathname="/weekly" />
+      <header className="border-b border-[var(--line)] bg-[var(--paper)]">
         <div className="mx-auto flex max-w-[720px] items-center justify-between gap-3 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <a href="/topics" aria-label={`返回${BRAND_NAME}选题看板`} className="inline-flex min-h-[44px] items-center text-sm font-bold text-[var(--muted)] hover:text-[var(--green)]">← 选题看板</a>
-            <h1 className="min-w-0 truncate text-base font-bold">📅 周报</h1>
-          </div>
+          <h1 className="min-w-0 truncate text-base font-bold">📅 周报</h1>
           <span className="shrink-0 text-xs text-[var(--faint)]">共 {reports.length} 期</span>
         </div>
       </header>
