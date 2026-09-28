@@ -1,0 +1,451 @@
+/* 方向 A：杂志风 / editorial daily briefing。
+   所有选择器都挂在根类名 .td-a 下，不会污染其他页面。 */
+
+.td-a {
+  --a-paper: #F5F0E6;
+  --a-ink: #1B1915;
+  --a-ink-2: #4A453C;
+  --a-ink-3: #8A8274;
+  --a-rule: #D8CFBE;
+  --a-accent: #9A3412;
+  --a-serif: "Noto Serif SC Variable", "Songti SC", "STSong", "Source Han Serif SC", serif;
+  --a-sans: "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Source Han Sans SC", "Microsoft YaHei", sans-serif;
+  --a-latin: "Newsreader Variable", Georgia, "Times New Roman", serif;
+
+  min-height: 100dvh;
+  background: var(--a-paper);
+  color: var(--a-ink);
+  font-family: var(--a-sans);
+  font-size: 15px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 整页纸色，html / body 背后也不露白灰。 */
+html:has(.td-a),
+body:has(.td-a) {
+  background: #F5F0E6;
+}
+
+.td-a ::selection {
+  background: #E9DCC3;
+  color: var(--a-ink);
+}
+
+.td-a a:focus-visible {
+  outline: 2px solid var(--a-accent);
+  outline-offset: 3px;
+}
+
+/* ── 顶栏 ─────────────────────────────────────────────── */
+.td-a-topbar {
+  height: 52px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 24px;
+  padding: 0 28px;
+  border-bottom: 1px solid var(--a-rule);
+}
+
+.td-a-brand {
+  justify-self: start;
+  color: var(--a-ink);
+  font-family: var(--a-serif);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.td-a-nav {
+  justify-self: center;
+  display: flex;
+  align-items: center;
+  gap: 26px;
+}
+
+.td-a-nav-link {
+  display: inline-flex;
+  align-items: center;
+  height: 52px;
+  color: var(--a-ink-3);
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  transition: color 150ms ease;
+}
+
+.td-a-nav-link:hover {
+  color: var(--a-ink);
+}
+
+.td-a-nav-link.is-current {
+  color: var(--a-ink);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--a-ink);
+  text-underline-offset: 6px;
+}
+
+.td-a-account {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--a-ink-2);
+}
+
+.td-a-avatar {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--a-rule);
+  border-radius: 50%;
+  background: var(--a-paper);
+  color: var(--a-ink-2);
+  font-family: var(--a-serif);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.td-a-account-name {
+  font-family: var(--a-sans);
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  color: var(--a-ink-2);
+}
+
+/* ── 刊头 ─────────────────────────────────────────────── */
+.td-a-masthead-wrap,
+.td-a-briefing,
+.td-a-footer {
+  max-width: 880px;
+  margin: 0 auto;
+  padding-left: 48px;
+  padding-right: 48px;
+}
+
+/* 刊头区上方留白；下方 8px 与第一条目的 1px 细线拉开。 */
+.td-a-masthead-wrap {
+  padding-top: 48px;
+  padding-bottom: 8px;
+}
+
+/* 报纸双线：3px 墨线 + 2px 间隔 + 1px 墨线 */
+.td-a-double-rule {
+  position: relative;
+  border-top: 3px solid var(--a-ink);
+}
+
+.td-a-double-rule::after {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 5px;
+  border-top: 1px solid var(--a-ink);
+  content: "";
+}
+
+.td-a-masthead {
+  padding: 18px 0 22px;
+  text-align: center;
+}
+
+.td-a-kicker {
+  display: block;
+  font-family: "Newsreader Variable", var(--a-serif);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  color: var(--a-ink-2);
+}
+
+.td-a-wordmark {
+  margin: 10px 0 8px;
+  font-family: var(--a-serif);
+  font-size: clamp(56px, 8vw, 96px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.td-a-subtitle {
+  margin: 0;
+  font-family: var(--a-serif);
+  font-size: 16px;
+  color: var(--a-ink-2);
+}
+
+/* ── 五个栏目 ─────────────────────────────────────────── */
+.td-a-row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) auto;
+  grid-template-areas: "label body figure";
+  gap: 32px;
+  align-items: start;
+  padding: 26px 0 30px;
+  border-top: 1px solid var(--a-rule);
+}
+
+.td-a-col-label {
+  grid-area: label;
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+}
+
+.td-a-label {
+  font-family: var(--a-serif);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.td-a-roman {
+  flex: 0 0 22px;
+  font-family: var(--a-latin);
+  font-style: italic;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--a-ink-3);
+}
+
+.td-a-col-body {
+  grid-area: body;
+  min-width: 0;
+}
+
+.td-a-col-figure {
+  grid-area: figure;
+  justify-self: end;
+  padding-top: 6px;
+  text-align: right;
+}
+
+.td-a-lede {
+  margin: 0 0 10px;
+  font-family: var(--a-serif);
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+/* 头条：待审稿件那一行的主句。 */
+.td-a-lede.is-headline {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.td-a-titles {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.td-a-title-item {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.td-a-seq {
+  flex: 0 0 auto;
+  font-family: var(--a-latin);
+  font-size: 12px;
+  color: var(--a-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.td-a-title-link {
+  min-width: 0;
+  font-size: 15px;
+  color: var(--a-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--a-rule);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 5px;
+  transition: color 150ms ease, text-decoration-color 150ms ease;
+}
+
+.td-a-title-link:hover {
+  color: var(--a-accent);
+  text-decoration-color: var(--a-accent);
+}
+
+.td-a-note {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: var(--a-ink-2);
+}
+
+.td-a-empty {
+  margin: 0;
+  font-family: var(--a-serif);
+  font-size: 15px;
+  color: var(--a-ink-3);
+}
+
+.td-a-missing {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 14px;
+  color: var(--a-ink-2);
+}
+
+.td-a-missing li {
+  padding-left: 1.1em;
+  text-indent: -1.1em;
+}
+
+.td-a-action {
+  display: inline-block;
+  margin-top: 16px;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  color: var(--a-ink);
+  transition: transform 180ms ease, color 150ms ease;
+}
+
+.td-a-action:hover {
+  transform: translateX(3px);
+  color: var(--a-accent);
+}
+
+.td-a-action:focus-visible {
+  outline: 2px solid var(--a-accent);
+  outline-offset: 3px;
+}
+
+.td-a-index {
+  display: block;
+  font-family: var(--a-latin);
+  font-size: 64px;
+  font-weight: 400;
+  line-height: 0.9;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-optical-sizing: auto;
+}
+
+.td-a-index.is-zero {
+  color: var(--a-ink-3);
+}
+
+.td-a-unit {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: var(--a-ink-2);
+}
+
+.td-a-unit-note {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--a-accent);
+}
+
+/* ── 页脚 ─────────────────────────────────────────────── */
+.td-a-footer {
+  margin-top: 18px;
+  padding-bottom: 64px;
+}
+
+.td-a-footer-rule {
+  border-top: 1px solid var(--a-ink);
+}
+
+.td-a-footer-text {
+  margin: 16px 0 0;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--a-ink-3);
+}
+
+/* ── 手机 ─────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .td-a-topbar {
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+    padding: 0 20px;
+  }
+
+  .td-a-brand {
+    font-size: 15px;
+  }
+
+  .td-a-nav {
+    justify-self: end;
+    gap: 18px;
+  }
+
+  .td-a-nav-link {
+    height: 44px;
+    padding: 0 2px;
+  }
+
+  .td-a-account {
+    display: none;
+  }
+
+  .td-a-masthead-wrap,
+  .td-a-briefing,
+  .td-a-footer {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .td-a-masthead-wrap {
+    padding-top: 28px;
+  }
+
+  .td-a-masthead {
+    padding: 14px 0 18px;
+  }
+
+  .td-a-kicker {
+    letter-spacing: 0.08em;
+    line-height: 1.75;
+  }
+
+  .td-a-wordmark {
+    margin: 8px 0 6px;
+    font-size: 56px;
+  }
+
+  .td-a-subtitle {
+    font-size: 15px;
+  }
+
+  .td-a-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "label figure"
+      "body figure";
+    row-gap: 10px;
+    column-gap: 16px;
+    padding: 22px 0 26px;
+  }
+
+  .td-a-col-figure {
+    align-self: start;
+  }
+
+  .td-a-index {
+    font-size: 44px;
+  }
+
+  .td-a-footer {
+    padding-bottom: 48px;
+  }
+}

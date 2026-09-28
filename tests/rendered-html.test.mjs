@@ -1406,7 +1406,7 @@ test("builds the admin-only today page from real in-app signals and keeps /readi
 
   // Server component with a plain, decoration-free list of today's five rows.
   assert.doesNotMatch(todayPage, /"use client"/);
-  assert.match(todayPage, /<SiteAppBar/);
+  assert.match(todayPage, /<TodayHeader/);
   assert.match(todayPage, /getTodayData\(/);
   assert.match(todayPage, /redirect\("\/login\?next=\/"\)/);
   for (const row of ["待审稿件", "待挑选题", "每日 AI 简报", "缺数字", "本周周报"]) {
