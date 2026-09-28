@@ -1333,6 +1333,7 @@ test("mounts the shared site app bar on every content and growth subpage", async
   assert.match(appBar, /sectionForPath\(/);
   assert.match(appBar, /activeTabKey\(/);
   assert.match(styles, /\.site-appbar/);
+  assert.match(styles, /\.site-appbar \{ --appbar-height:68px;/);
 
   const pages = [
     [topics, "/topics"],
