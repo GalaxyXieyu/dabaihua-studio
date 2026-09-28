@@ -84,6 +84,7 @@ export type CareerGapItem = {
   jd_count: number;
   jd_total: number;
   result_count: number;
+  result_with_outcome_numbers: number;
   result_with_numbers: number;
   status: GapStatus;
 };
@@ -104,6 +105,12 @@ export type CareerReachableSummary = {
   sentence: string;
 };
 
+export type CareerGapMetricClass = {
+  name: string;
+  class: "process" | "result";
+  has_value: boolean;
+};
+
 export type CareerGap = {
   basis: string;
   basis_note: string | null;
@@ -111,6 +118,7 @@ export type CareerGap = {
   sample_size: number;
   small_sample: boolean;
   items: CareerGapItem[];
+  metric_classes?: CareerGapMetricClass[];
   top_gap: string | null;
   suggestion: string | null;
   reachable: CareerReachableSummary;

@@ -10,6 +10,7 @@ import {
   missingTitle,
   tierLabel,
   type CareerData,
+  type CareerGapMetricClass,
   type CareerJob,
   type CareerMissingItem,
 } from "../../lib/career";
@@ -100,6 +101,9 @@ export default async function CareerPage() {
   const targetJobs = jobs.filter((job) => job.group === "target");
   const reachableJobs = jobs.filter((job) => job.group === "reachable");
   const gapReport = sources.gap_report;
+  const metricClasses = gap.metric_classes ?? [];
+  const metricNames = (items: CareerGapMetricClass[]) =>
+    items.length > 0 ? items.map((item) => `${item.name}${item.has_value ? "·有值" : ""}`).join("、") : "暂无";
 
   return (
     <div className="fixed inset-0 overflow-y-auto bg-[var(--canvas)] text-[var(--ink)]">
@@ -166,7 +170,7 @@ export default async function CareerPage() {
                       {item.jd_count}/{item.jd_total}
                     </td>
                     <td className="py-2 pr-3">
-                      {item.result_count} 条，{item.result_with_numbers} 条有数字
+                      {item.result_count} 条，其中 {item.result_with_outcome_numbers ?? 0} 条有结果数字
                     </td>
                     <td className={`py-2 ${statusClass(item.status)}`}>{item.status}</td>
                   </tr>
@@ -175,7 +179,7 @@ export default async function CareerPage() {
             </table>
           </div>
           <p className="mt-3 text-sm leading-relaxed">
-            <span className="text-[var(--accent)]">最该补的：</span>
+            {!gap.top_gap?.startsWith("最该补") && <span className="text-[var(--accent)]">最该补的：</span>}
             {gap.top_gap ? (
               <span className="text-[var(--accent)]">{gap.top_gap}</span>
             ) : (
@@ -183,14 +187,27 @@ export default async function CareerPage() {
             )}
           </p>
           <p className="text-sm leading-relaxed">
-            <span className="text-[var(--muted)]">建议：</span>
+            {!gap.suggestion?.startsWith("建议") && <span className="text-[var(--muted)]">建议：</span>}
             {gap.suggestion ? <span>{gap.suggestion}</span> : <span className="text-[var(--faint)]">待补充</span>}
           </p>
           <p className="mt-2 text-sm leading-relaxed">
             {gap.reachable.sentence}
             {gap.reachable.small_sample ? "（样本少）" : ""}
           </p>
-          <p className={`mt-2 ${subtleClass}`}>JD 统计按关键词匹配，一条 JD 一项最多计一次；成果库条目按有效条目计。</p>
+          <p className={`mt-2 ${subtleClass}`}>
+            JD 统计按关键词匹配，一条 JD 一项最多计一次；成果库条目按有效条目计。有证据只认有值的结果类指标，提交数、测试数、行数、版本、文档这类算过程数字。
+          </p>
+          {metricClasses.length > 0 ? (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-sm font-bold">指标怎么归类（{metricClasses.length} 个）</summary>
+              <p className="mt-1 text-xs leading-relaxed">
+                结果：{metricNames(metricClasses.filter((item) => item.class === "result"))}。
+              </p>
+              <p className="text-xs leading-relaxed">
+                过程：{metricNames(metricClasses.filter((item) => item.class === "process"))}。
+              </p>
+            </details>
+          ) : null}
         </section>
 
         <section className={sectionClass}>
