@@ -1,0 +1,252 @@
+/* 方向 A：杂志风 职业页。所有选择器都挂在根类名 .career-a 下。 */
+
+.career-a {
+  min-height: 100dvh;
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.career-a ::selection {
+  background: #E9DCC3;
+  color: var(--ink);
+}
+
+.career-a a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.career-a-masthead-wrap,
+.career-a-main {
+  max-width: 820px;
+  margin: 0 auto;
+  padding-left: 48px;
+  padding-right: 48px;
+}
+
+.career-a-masthead-wrap {
+  padding-top: 40px;
+}
+
+/* 报纸双线：3px 墨线 + 2px 间隔 + 1px 墨线 */
+.career-a-double-rule {
+  position: relative;
+  border-top: 3px solid var(--ink);
+}
+
+.career-a-double-rule::after {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 5px;
+  border-top: 1px solid var(--ink);
+  content: "";
+}
+
+.career-a-masthead {
+  padding: 18px 0 20px;
+}
+
+.career-a-kicker {
+  display: block;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+.career-a-title {
+  margin: 8px 0 6px;
+  font-family: var(--font-serif);
+  font-size: clamp(30px, 5vw, 42px);
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.career-a-asof {
+  margin: 0;
+  font-family: var(--font-latin);
+  font-size: 14px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.career-a-main {
+  padding-bottom: 64px;
+}
+
+.career-a-lede {
+  margin: 18px 0 0;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.career-a-note {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.career-a-subtle {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--faint);
+}
+
+/* ── 分区 ────────────────────────────────────────────── */
+.career-a-section {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
+
+.career-a-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.career-a-roman {
+  flex: 0 0 22px;
+  width: 22px;
+  font-family: var(--font-latin);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--faint);
+}
+
+.career-a-heading-note {
+  margin-left: 8px;
+  font-family: var(--font-latin);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--faint);
+}
+
+/* ── 表格 ────────────────────────────────────────────── */
+.career-a-table-wrap {
+  margin-top: 14px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.career-a-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.career-a-table th {
+  padding: 8px 12px 8px 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+.career-a-table td {
+  padding: 10px 12px 10px 0;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.career-a-table th:last-child,
+.career-a-table td:last-child {
+  padding-right: 0;
+}
+
+.career-a-table .career-a-num {
+  text-align: right;
+  font-family: var(--font-latin);
+  font-variant-numeric: tabular-nums lining-nums;
+  white-space: nowrap;
+}
+
+.career-a-status {
+  color: var(--muted);
+}
+
+.career-a-status.is-accent {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.career-a-status.is-ink {
+  color: var(--ink);
+}
+
+/* ── 强调段落：墨色 + 左侧 --accent 竖线 ─────────────── */
+.career-a-quote {
+  margin: 14px 0 0;
+  padding: 2px 0 2px 14px;
+  border-left: 2px solid var(--accent);
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--ink);
+}
+
+.career-a-quote-label {
+  color: var(--muted);
+}
+
+.career-a-muted {
+  color: var(--faint);
+}
+
+/* ── 链接 ────────────────────────────────────────────── */
+.career-a-link {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+  text-underline-offset: 5px;
+  transition: color 150ms ease, text-decoration-color 150ms ease;
+}
+
+.career-a-link:hover {
+  color: var(--accent);
+  text-decoration-color: var(--accent);
+}
+
+/* ── 页脚 ────────────────────────────────────────────── */
+.career-a-footer {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+/* ── 手机 ────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .career-a-masthead-wrap,
+  .career-a-main {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .career-a-masthead-wrap {
+    padding-top: 28px;
+  }
+
+  .career-a-title {
+    font-size: 30px;
+  }
+
+  .career-a-main {
+    padding-bottom: calc(78px + env(safe-area-inset-bottom));
+  }
+
+  .career-a-heading {
+    font-size: 17px;
+  }
+}

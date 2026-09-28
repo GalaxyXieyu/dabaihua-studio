@@ -1,0 +1,537 @@
+/* 方向 A：杂志风 / 策略。所有选择器都挂在 .strat-page 下。 */
+
+.strat-page {
+  min-height: 100dvh;
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+.strat-main {
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 28px 20px 64px;
+}
+
+@media (min-width: 640px) {
+  .strat-main { padding: 40px 32px 80px; }
+}
+
+/* ── 页面刊头 ─────────────────────────────────────────── */
+.strat-kicker {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  letter-spacing: 0.12em;
+}
+
+.strat-title {
+  margin: 8px 0 0;
+  font-family: var(--font-serif);
+  font-size: clamp(30px, 4vw, 42px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+}
+
+.strat-subtitle {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.strat-num {
+  font-family: var(--font-latin);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.strat-double-rule {
+  position: relative;
+  margin-top: 18px;
+  border-top: 3px solid var(--ink);
+}
+
+.strat-double-rule::after {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 5px;
+  border-top: 1px solid var(--ink);
+  content: "";
+}
+
+.strat-layout {
+  margin-top: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+@media (min-width: 1024px) {
+  .strat-layout { flex-direction: row; gap: 48px; align-items: flex-start; }
+  .strat-editor { flex: 1; min-width: 0; }
+  .strat-aside { flex: 0 0 280px; width: 280px; }
+}
+
+.strat-editor { min-width: 0; }
+
+.strat-failed {
+  padding: 32px 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+/* ── Tab ──────────────────────────────────────────────── */
+.strat-tabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.strat-tab {
+  min-height: 40px;
+  padding: 0;
+  color: var(--faint);
+  background: transparent;
+  border: 0;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.strat-tab:hover { color: var(--ink); }
+
+.strat-tab.active {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--ink);
+  text-underline-offset: 6px;
+}
+
+/* ── 版本信息行 ───────────────────────────────────────── */
+.strat-version-bar {
+  margin-top: 20px;
+  padding-bottom: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.strat-version-bar .strat-num {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.strat-version-note {
+  min-width: 0;
+  color: var(--faint);
+  font-size: 13px;
+}
+
+.strat-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  font-size: 14px;
+  outline: none;
+}
+
+.strat-input:focus { border-color: var(--ink); }
+
+.strat-version-bar .strat-input {
+  margin-left: auto;
+}
+
+@media (min-width: 640px) {
+  .strat-version-bar .strat-input { width: 260px; }
+}
+
+.strat-message {
+  margin-top: 14px;
+  font-size: 14px;
+}
+
+.strat-message.err { color: var(--danger); }
+.strat-message.ok { color: var(--muted); }
+
+/* ── 分区 ─────────────────────────────────────────────── */
+.strat-sections {
+  margin-top: 8px;
+}
+
+.strat-section {
+  padding: 26px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.strat-section:last-child { border-bottom: 0; }
+
+.strat-section-head {
+  margin-bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.strat-section-title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.strat-metric {
+  margin-bottom: 14px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.strat-positioning {
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .strat-positioning { width: 260px; flex: 0 0 260px; }
+}
+
+.strat-row-index {
+  flex: 0 0 18px;
+  color: var(--faint);
+  font-size: 13px;
+}
+
+.strat-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.strat-row {
+  padding: 10px 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.strat-row-label {
+  flex: 0 0 auto;
+  min-width: 84px;
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.strat-inline-input {
+  min-width: 0;
+  flex: 1 1 200px;
+  padding: 6px 8px;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-xs);
+  font-size: 14px;
+  outline: none;
+}
+
+.strat-inline-input:hover { border-color: var(--line); }
+.strat-inline-input:focus { border-color: var(--ink); }
+
+.strat-status {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.strat-status.conditional { color: var(--accent); border-color: var(--accent); }
+.strat-status.forbidden { color: var(--danger); border-color: var(--line-strong); }
+
+.strat-tags {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.strat-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  font-size: 12px;
+}
+
+.strat-tag button {
+  padding: 0;
+  color: var(--faint);
+  background: transparent;
+  border: 0;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.strat-tag button:hover { color: var(--danger); }
+
+/* ── 按钮 ─────────────────────────────────────────────── */
+.strat-actions-end {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.strat-btn-primary,
+.strat-btn-secondary {
+  min-height: 38px;
+  padding: 0 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-xs);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  transition: background 150ms, color 150ms, border-color 150ms;
+}
+
+.strat-btn-primary {
+  color: var(--canvas);
+  background: var(--ink);
+  border: 1px solid var(--ink);
+}
+
+.strat-btn-primary:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); }
+
+.strat-btn-secondary {
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+}
+
+.strat-btn-secondary:hover:not(:disabled) { border-color: var(--ink); }
+
+.strat-btn-text {
+  min-height: 36px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  font-size: 13px;
+  letter-spacing: 0.06em;
+}
+
+.strat-btn-text:hover { color: var(--accent); }
+
+.strat-btn-text.danger { color: var(--danger); }
+
+/* ── 复盘 ─────────────────────────────────────────────── */
+.strat-retro {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.strat-retro:last-child { border-bottom: 0; }
+
+.strat-retro-head {
+  margin-bottom: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.strat-retro-meta {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.strat-retro-date {
+  font-family: var(--font-latin);
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--faint);
+  font-size: 13px;
+}
+
+.strat-retro-title {
+  color: var(--ink);
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.strat-retro-version {
+  font-family: var(--font-latin);
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--faint);
+  font-size: 13px;
+}
+
+.strat-retro-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.strat-retro-body .label {
+  margin-right: 6px;
+  color: var(--faint);
+}
+
+.strat-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 640px) {
+  .strat-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.strat-textarea {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px 12px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  font-size: 14px;
+  line-height: 1.7;
+  outline: none;
+  resize: vertical;
+}
+
+.strat-textarea:focus { border-color: var(--ink); }
+
+.strat-form-actions {
+  margin-top: 14px;
+  display: flex;
+  gap: 10px;
+}
+
+.strat-new-retro {
+  padding: 20px 0 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.strat-new-retro-title {
+  margin-bottom: 12px;
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* ── 版本历史 ─────────────────────────────────────────── */
+.strat-history { width: 100%; }
+
+.strat-history h2 {
+  margin: 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--ink);
+  font-family: var(--font-serif);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.strat-history-list {
+  max-height: calc(100dvh - 220px);
+  overflow-y: auto;
+}
+
+.strat-history-empty {
+  padding: 24px 0;
+  color: var(--faint);
+  font-size: 13px;
+}
+
+.strat-history-item {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.strat-history-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.strat-history-version {
+  font-family: var(--font-latin);
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--ink);
+  font-size: 17px;
+}
+
+.strat-history-active {
+  color: var(--accent);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+.strat-history-note {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.strat-history-date {
+  margin: 2px 0 0;
+  font-family: var(--font-latin);
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+/* ── Toast ────────────────────────────────────────────── */
+.strat-toast {
+  position: fixed;
+  right: 24px;
+  top: 76px;
+  z-index: 50;
+  padding: 10px 16px;
+  color: var(--canvas);
+  background: var(--ink);
+  border: 1px solid var(--ink);
+  border-radius: var(--r-xs);
+  box-shadow: var(--shadow-2);
+  font-size: 13px;
+}
+
+.strat-toast.err { background: var(--danger); border-color: var(--danger); }
+
+/* ── 手机：触控目标 ───────────────────────────────────── */
+@media (max-width: 640px) {
+  .strat-tab,
+  .strat-btn-primary,
+  .strat-btn-secondary,
+  .strat-btn-text { min-height: 44px; }
+  .strat-input,
+  .strat-textarea { min-height: 44px; }
+  .strat-inline-input { min-height: 44px; }
+  .strat-status { min-height: 44px; padding-inline: 14px; }
+}

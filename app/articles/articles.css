@@ -1,0 +1,193 @@
+/* 杂志风文章目录（/articles）。所有选择器挂在根类名 .art-a 下。 */
+
+.art-a-header {
+  padding: 40px 20px 0;
+}
+
+.art-a-head-inner {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.art-a-kicker {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+.art-a-title {
+  margin: 10px 0 0;
+  font-family: var(--font-serif);
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--ink);
+}
+
+.art-a-sub {
+  margin: 8px 0 0;
+  font-size: 15px;
+  color: var(--muted);
+}
+
+.art-a-double-rule {
+  position: relative;
+  margin-top: 18px;
+  border-top: 3px solid var(--ink);
+}
+
+.art-a-double-rule::after {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 5px;
+  border-top: 1px solid var(--ink);
+  content: "";
+}
+
+.art-a-list {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 20px 64px;
+}
+
+.art-a-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.art-a-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  grid-template-areas:
+    "seq body"
+    ". meta";
+  column-gap: 12px;
+  row-gap: 4px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.art-a-row:hover .art-a-row-title {
+  color: var(--accent);
+}
+
+.art-a-seq {
+  grid-area: seq;
+  font-family: var(--font-latin);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-size: 13px;
+  color: var(--faint);
+}
+
+.art-a-row-body {
+  grid-area: body;
+  min-width: 0;
+}
+
+.art-a-row-title {
+  display: block;
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--ink);
+  transition: color 150ms ease;
+}
+
+.art-a-row-topic {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.art-a-row-meta {
+  grid-area: meta;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.art-a-status.is-attention {
+  color: var(--accent);
+}
+
+.art-a-num,
+.art-a-date {
+  font-family: var(--font-latin);
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.art-a-sep {
+  color: var(--line-strong);
+}
+
+.art-a-empty {
+  padding: 48px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.art-a-empty-title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.art-a-empty-text {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+
+.art-a-empty-text code {
+  padding: 1px 6px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.art-a-empty-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+@media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+  .art-a-header {
+    padding: 56px 24px 0;
+  }
+
+  .art-a-list {
+    padding: 0 24px 96px;
+  }
+
+  .art-a-title {
+    font-size: 40px;
+  }
+
+  .art-a-row {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    grid-template-areas: "seq body meta";
+    column-gap: 20px;
+    row-gap: 0;
+    align-items: baseline;
+    padding: 16px 0;
+  }
+
+  .art-a-row-meta {
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+  }
+}

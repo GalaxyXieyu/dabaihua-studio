@@ -46,6 +46,7 @@ export default async function ArticleDetailPage({ params }: { params: Promise<{ 
         canReview={false}
         currentUserId={null}
         backHref="/articles"
+        updatedAt={article.updatedAt}
       />
     );
   }
@@ -67,6 +68,7 @@ export default async function ArticleDetailPage({ params }: { params: Promise<{ 
       canReview
       currentUserId={user.id}
       backHref="/articles"
+      updatedAt={article.updatedAt}
       extraHeader={
         <ArticleHeaderActions slug={slug} initialPublic={article.isPublic} latestRound={latestRound} />
       }

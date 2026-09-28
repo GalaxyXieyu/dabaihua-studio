@@ -5,6 +5,7 @@ import { getSessionUser } from "../../lib/auth";
 import { requestOrigin } from "../../lib/request-origin";
 import { listWeeklyReports } from "../../lib/weekly";
 import { SiteAppBar } from "../_components/SiteAppBar";
+import "./weekly.css";
 
 export const dynamic = "force-dynamic";
 export const viewport = { width: "device-width", initialScale: 1 };
@@ -37,6 +38,11 @@ function formatShanghai(value: string) {
   return `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())} ${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}`;
 }
 
+/** `2026-W39` → `39`，用于列表左侧的大号周序号。 */
+function weekNumber(iso: string): string {
+  return String(Number(iso.slice(iso.indexOf("-W") + 2)));
+}
+
 export default async function WeeklyPage() {
   const requestHeaders = await headers();
   const user = await getSessionUser(
@@ -54,43 +60,61 @@ export default async function WeeklyPage() {
   const reports = await listWeeklyReports(env);
 
   return (
-    <div className="fixed inset-0 overflow-y-auto bg-[var(--canvas)] text-[var(--ink)]">
+    <div className="weekly-a">
       <SiteAppBar user={user} pathname="/weekly" />
-      <header className="border-b border-[var(--line)] bg-[var(--paper)]">
-        <div className="mx-auto flex max-w-[720px] items-center justify-between gap-3 px-4 py-3">
-          <h1 className="min-w-0 truncate text-base font-bold">📅 周报</h1>
-          <span className="shrink-0 text-xs text-[var(--faint)]">共 {reports.length} 期</span>
-        </div>
-      </header>
 
-      <main className="mx-auto max-w-[720px] px-4 py-4">
+      <div className="weekly-a-masthead-wrap">
+        <div className="weekly-a-double-rule" />
+        <header className="weekly-a-masthead">
+          <span className="weekly-a-kicker">成长 · 周报</span>
+          <h1 className="weekly-a-title">周报</h1>
+          <p className="weekly-a-subtitle">
+            共 <span className="weekly-a-count">{reports.length}</span> 期已发布
+          </p>
+        </header>
+        <div className="weekly-a-double-rule" />
+      </div>
+
+      <main className="weekly-a-list-wrap">
         {reports.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[var(--line)] bg-[var(--paper)] p-8 text-center">
-            <div className="mb-2 text-2xl">📭</div>
-            <h2 className="mb-1 text-base font-bold">还没有发布的周报</h2>
-            <p className="break-words text-sm text-[var(--muted)]">
-              运行 <code className="rounded bg-[var(--canvas)] px-1.5 py-0.5">topics daily publish weekly.html --week 2026-W39</code> 发布一期。
+          <div className="weekly-a-empty">
+            <h2>还没有发布的周报</h2>
+            <p>
+              运行 <code>topics daily publish weekly.html --week 2026-W39</code> 发布一期。
             </p>
           </div>
         ) : (
-          <ul className="space-y-3">
+          <ul className="weekly-a-list">
             {reports.map((report) => {
               const range = isoWeekRange(report.week);
               return (
-                <li key={report.week}>
-                  <a
-                    href={`/weekly/${report.week}/`}
-                    className="block rounded-xl border border-[var(--line)] bg-[var(--paper)] p-4 shadow-sm transition hover:border-[var(--green)] hover:shadow-md"
-                  >
-                    <div className="mb-1.5 flex flex-wrap items-center gap-2 text-[11px] text-[var(--faint)]">
-                      <span className="rounded-full bg-[var(--green-soft)] px-2 py-0.5 font-bold text-[var(--green)]">{report.week}</span>
-                      <span>{formatMonthDay(range.monday)}–{formatMonthDay(range.sunday)}</span>
-                      <span className="rounded-full bg-[var(--canvas)] px-2 py-0.5 font-bold text-[var(--muted)]">{formatSize(report.bytes)}</span>
-                    </div>
-                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-                      <span className="text-xs text-[var(--muted)]">更新于 {formatShanghai(report.updatedAt)}（北京时间）</span>
-                      {report.nickname ? <span className="text-xs text-[var(--faint)]">by {report.nickname}</span> : null}
-                    </div>
+                <li key={report.week} className="weekly-a-item">
+                  <a href={`/weekly/${report.week}/`} className="weekly-a-link">
+                    <span className="weekly-a-weekno" aria-hidden="true">
+                      <span className="weekly-a-w">W</span>
+                      <span className="weekly-a-num tabular-nums">{weekNumber(report.week)}</span>
+                    </span>
+                    <span className="weekly-a-body">
+                      <span className="weekly-a-code">{report.week}</span>
+                      <span className="weekly-a-meta">
+                        <span>
+                          {formatMonthDay(range.monday)}–{formatMonthDay(range.sunday)}
+                        </span>
+                        <span className="weekly-a-dot">·</span>
+                        <span>更新于 {formatShanghai(report.updatedAt)}</span>
+                        <span className="weekly-a-dot">·</span>
+                        <span>{formatSize(report.bytes)}</span>
+                        {report.nickname ? (
+                          <>
+                            <span className="weekly-a-dot">·</span>
+                            <span className="weekly-a-by">by {report.nickname}</span>
+                          </>
+                        ) : null}
+                      </span>
+                    </span>
+                    <span className="weekly-a-open">
+                      打开<span className="weekly-a-arrow"> →</span>
+                    </span>
                   </a>
                 </li>
               );

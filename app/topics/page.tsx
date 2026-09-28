@@ -5,6 +5,7 @@ import { Board } from "./_components/Board";
 import { SiteAppBar } from "../_components/SiteAppBar";
 import { getSessionUser } from "../../lib/auth";
 import { requestOrigin } from "../../lib/request-origin";
+import "./topics.css";
 
 export const dynamic = "force-dynamic";
 
@@ -87,10 +88,15 @@ export default async function TopicsPage() {
   ]);
 
   return (
-    <div className="min-h-screen bg-[var(--canvas)] text-[var(--ink)]">
+    <div className="tp-page">
       <SiteAppBar user={user} pathname="/topics" />
-      <main className="p-4 sm:p-6">
-        <h1 className="mb-3 text-lg font-bold">📋 选题看板</h1>
+      <main className="tp-main">
+        <header>
+          <p className="tp-kicker">内容 · 选题</p>
+          <h1 className="tp-title">选题看板</h1>
+          <p className="tp-subtitle">共 <span className="tp-num">{topics.length}</span> 个选题</p>
+          <div className="tp-double-rule" />
+        </header>
         <Board initialTopics={topics} initialSeries={series} />
       </main>
     </div>

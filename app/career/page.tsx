@@ -14,20 +14,19 @@ import {
   type CareerJob,
   type CareerMissingItem,
 } from "../../lib/career";
+import "./career.css";
 
 export const dynamic = "force-dynamic";
 export const viewport = { width: "device-width", initialScale: 1 };
 export const metadata = { title: "职业 · 成长", robots: { index: false, follow: false } };
 
-const sectionClass = "mt-6 border-t border-[var(--line)] pt-5";
-const headingClass = "text-base font-bold";
-const noteClass = "text-xs leading-relaxed text-[var(--muted)]";
-const subtleClass = "text-xs leading-relaxed text-[var(--faint)]";
+const noteClass = "career-a-note";
+const subtleClass = "career-a-subtle";
 
 function statusClass(status: string) {
-  if (status === "没有") return "font-bold text-[var(--accent)]";
-  if (status === "有事没数字") return "text-[var(--ink)]";
-  return "text-[var(--muted)]";
+  if (status === "没有") return "is-accent";
+  if (status === "有事没数字") return "is-ink";
+  return "";
 }
 
 function stripTrailingPeriod(value: string): string {
@@ -81,7 +80,7 @@ function JobRow({ job }: { job: CareerJob }) {
       <p className={noteClass}>{meta}</p>
       {job.link ? (
         <p className="text-xs leading-relaxed">
-          <a href={job.link} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">
+          <a href={job.link} target="_blank" rel="noopener noreferrer" className="career-a-link">
             招聘页
           </a>
         </p>
@@ -116,15 +115,18 @@ export default async function CareerPage() {
 
   if (!data) {
     return (
-      <div className="fixed inset-0 overflow-y-auto bg-[var(--canvas)] text-[var(--ink)]">
+      <div className="career-a">
         <SiteAppBar user={user} pathname="/career" />
-        <header className="border-b border-[var(--line)] bg-[var(--paper)]">
-          <div className="mx-auto flex max-w-[720px] items-center justify-between gap-3 px-4 py-3">
-            <h1 className="text-base font-bold">成长 · 职业</h1>
-          </div>
-        </header>
-        <main className="mx-auto max-w-[720px] px-4 py-4 pb-16">
-          <p className="text-sm text-[var(--muted)]">还没有数据</p>
+        <div className="career-a-masthead-wrap">
+          <div className="career-a-double-rule" />
+          <header className="career-a-masthead">
+            <span className="career-a-kicker">成长 · 职业</span>
+            <h1 className="career-a-title">职业</h1>
+          </header>
+          <div className="career-a-double-rule" />
+        </div>
+        <main className="career-a-main">
+          <p className="career-a-lede">还没有数据</p>
         </main>
       </div>
     );
@@ -151,23 +153,30 @@ export default async function CareerPage() {
     metricTableConflicts.length > 0;
 
   return (
-    <div className="fixed inset-0 overflow-y-auto bg-[var(--canvas)] text-[var(--ink)]">
+    <div className="career-a">
       <SiteAppBar user={user} pathname="/career" />
-      <header className="border-b border-[var(--line)] bg-[var(--paper)]">
-        <div className="mx-auto flex max-w-[720px] items-center justify-between gap-3 px-4 py-3">
-          <h1 className="text-base font-bold">成长 · 职业</h1>
-          <span className="shrink-0 text-xs text-[var(--faint)]">数据截至 {formatShanghai(header.data_as_of)}（北京时间）</span>
-        </div>
-      </header>
 
-      <main className="mx-auto max-w-[720px] px-4 py-4 pb-16">
-        <p className="text-sm leading-relaxed">{headerSummary(header)}</p>
+      <div className="career-a-masthead-wrap">
+        <div className="career-a-double-rule" />
+        <header className="career-a-masthead">
+          <span className="career-a-kicker">成长 · 职业</span>
+          <h1 className="career-a-title">职业</h1>
+          <p className="career-a-asof">数据截至 {formatShanghai(header.data_as_of)}（北京时间）</p>
+        </header>
+        <div className="career-a-double-rule" />
+      </div>
+
+      <main className="career-a-main">
+        <p className="career-a-lede">{headerSummary(header)}</p>
         {header.partial_note ? <p className={subtleClass}>{header.partial_note}</p> : null}
 
-        <section className={sectionClass}>
-          <h2 className={headingClass}>
-            这期变了什么
-            {changes.period_label ? <span className={`ml-2 ${subtleClass}`}>{changes.period_label}</span> : null}
+        <section className="career-a-section">
+          <h2 className="career-a-heading">
+            <span className="career-a-roman" aria-hidden="true">I</span>
+            <span>
+              这期变了什么
+              {changes.period_label ? <span className="career-a-heading-note">{changes.period_label}</span> : null}
+            </span>
           </h2>
           <div className="mt-2 space-y-1">
             {changes.sentences.map((sentence, index) => (
@@ -178,43 +187,46 @@ export default async function CareerPage() {
           </div>
         </section>
 
-        <section className={sectionClass}>
-          <h2 className={headingClass}>差距：目标岗位要的证据，你有几条</h2>
+        <section className="career-a-section">
+          <h2 className="career-a-heading">
+            <span className="career-a-roman" aria-hidden="true">II</span>
+            <span>差距：目标岗位要的证据，你有几条</span>
+          </h2>
           {gap.basis_note ? <p className={`mt-2 ${noteClass}`}>{gap.basis_note}</p> : null}
-          <div className="mt-3 overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="career-a-table-wrap">
+            <table className="career-a-table">
               <thead>
-                <tr className="border-b border-[var(--line)] text-left">
-                  <th className="py-2 pr-3 font-bold">证据项</th>
-                  <th className="py-2 pr-3 font-bold">JD 要求（出现/样本）</th>
-                  <th className="py-2 pr-3 font-bold">成果库条目</th>
-                  <th className="py-2 font-bold">状态</th>
+                <tr>
+                  <th>证据项</th>
+                  <th className="career-a-num">JD 要求（出现/样本）</th>
+                  <th>成果库条目</th>
+                  <th>状态</th>
                 </tr>
               </thead>
               <tbody>
                 {gap.items.map((item) => (
-                  <tr key={item.key} className="border-b border-[var(--line)] align-top">
-                    <td className="py-2 pr-3">{item.label}</td>
-                    <td className="py-2 pr-3 tabular-nums">
+                  <tr key={item.key}>
+                    <td>{item.label}</td>
+                    <td className="career-a-num tabular-nums">
                       {item.jd_count}/{item.jd_total}
                     </td>
-                    <td className="py-2 pr-3">
+                    <td>
                       {item.result_count} 条，其中 {item.result_with_outcome_numbers ?? 0} 条有结果数字
                     </td>
-                    <td className={`py-2 ${statusClass(item.status)}`}>{item.status}</td>
+                    <td className={`career-a-status ${statusClass(item.status)}`}>{item.status}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <p className="mt-3 text-sm leading-relaxed">
-            {!gap.top_gap?.startsWith("最该补") && <span className="text-[var(--accent)]">最该补的：</span>}
+          <blockquote className="career-a-quote">
+            {!gap.top_gap?.startsWith("最该补") && <span className="career-a-quote-label">最该补的：</span>}
             {gap.top_gap ? (
-              <span className="text-[var(--accent)]">{gap.top_gap}</span>
+              <span>{gap.top_gap}</span>
             ) : (
-              <span className="text-[var(--faint)]">待补充</span>
+              <span className="career-a-muted">待补充</span>
             )}
-          </p>
+          </blockquote>
           <p className="text-sm leading-relaxed">
             {!gap.suggestion?.startsWith("建议") && <span className="text-[var(--muted)]">建议：</span>}
             {gap.suggestion ? <span>{gap.suggestion}</span> : <span className="text-[var(--faint)]">待补充</span>}
@@ -251,8 +263,11 @@ export default async function CareerPage() {
           ) : null}
         </section>
 
-        <section className={sectionClass}>
-          <h2 className={headingClass}>缺数字清单</h2>
+        <section className="career-a-section">
+          <h2 className="career-a-heading">
+            <span className="career-a-roman" aria-hidden="true">III</span>
+            <span>缺数字清单</span>
+          </h2>
           <p className={`mt-1 ${noteClass}`}>共 {missing.total} 条，只有这里需要你动手。</p>
           {missing.total === 0 ? (
             <p className="mt-2 text-sm leading-relaxed">暂无缺数字的条目。</p>
@@ -277,8 +292,11 @@ export default async function CareerPage() {
           )}
         </section>
 
-        <section className={sectionClass}>
-          <h2 className={headingClass}>明细</h2>
+        <section className="career-a-section">
+          <h2 className="career-a-heading">
+            <span className="career-a-roman" aria-hidden="true">IV</span>
+            <span>明细</span>
+          </h2>
 
           <details className="mt-3">
             <summary className="cursor-pointer text-sm font-bold">岗位明细（{jobs.length} 条）</summary>
@@ -334,7 +352,7 @@ export default async function CareerPage() {
             <div className="mt-2">
               {gapReport.url ? (
                 <p className="text-sm leading-relaxed">
-                  <a href={gapReport.url} target="_blank" rel="noopener noreferrer" className="text-[var(--accent)] hover:underline">
+                  <a href={gapReport.url} target="_blank" rel="noopener noreferrer" className="career-a-link">
                     查看完整差距报告
                   </a>
                 </p>
@@ -354,7 +372,7 @@ export default async function CareerPage() {
           </details>
         </section>
 
-        <footer className="mt-8 border-t border-[var(--line)] pt-4">
+        <footer className="career-a-footer">
           <p className={subtleClass}>
             数据生成于 {formatShanghai(data.generated_at)}。来源：{sources.jobs_file}、{sources.results_file}。
           </p>

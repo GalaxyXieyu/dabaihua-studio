@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { splitSentences, type SentenceSpan } from "../../lib/sentences";
 import { htmlSourceLabel } from "./article-status";
+import "./article-reviewer.css";
 
 export type ReviewTargetType = "article" | "topic";
 export type MarkKind = "good" | "change";
@@ -55,6 +56,8 @@ export type ArticleReviewerProps = {
   canReview: boolean;
   currentUserId: number | null;
   backHref: string;
+  backLabel?: string;
+  updatedAt?: string | null;
   extraHeader?: ReactNode;
 };
 
@@ -83,9 +86,9 @@ type Sheet =
   | { kind: "approve" }
   | null;
 
-const MARK_STYLE_GOOD = "background:rgba(16,185,129,.22);border-bottom:2px solid #10b981;";
-const MARK_STYLE_CHANGE = "background:rgba(245,158,11,.28);border-bottom:2px solid #ef4444;";
-const MARK_STYLE_PENDING = "background:rgba(59,130,246,.25);border-bottom:2px dashed #3b82f6;color:inherit;border-radius:2px;";
+const MARK_STYLE_GOOD = "background:var(--accent-soft);";
+const MARK_STYLE_CHANGE = "background:var(--accent-soft);";
+const MARK_STYLE_PENDING = "background:var(--accent-wash);border-bottom:2px dashed var(--accent);color:inherit;border-radius:2px;";
 
 const TOUCH_BLOCK_SELECTOR = "p, li, h1, h2, h3, h4, h5, h6, blockquote, figcaption, pre, td, th";
 const INLINE_DISPLAY = /^(inline|contents|ruby)/;
@@ -236,8 +239,11 @@ function resolveRange(textContent: string, mark: ReviewMark): { start: number; e
 function markStyle(mark: ReviewMark, currentRound: number) {
   const base = mark.type === "good" ? MARK_STYLE_GOOD : MARK_STYLE_CHANGE;
   const historical = mark.round !== currentRound;
-  const extra = historical ? "opacity:.6;border-bottom-style:dashed;" : "cursor:pointer;";
-  return `${base}color:inherit;border-radius:2px;${extra}`;
+  const underline = historical
+    ? "1px dashed var(--line-strong)"
+    : (mark.type === "change" ? "2px solid var(--accent)" : "1px solid var(--accent)");
+  const extra = historical ? "opacity:.55;" : "cursor:pointer;";
+  return `${base}color:inherit;border-radius:2px;border-bottom:${underline};${extra}`;
 }
 
 function unwrapHighlights(container: HTMLElement) {
@@ -318,21 +324,21 @@ function Sheet({
 }) {
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end bg-black/35"
+      className="ar-a-sheet-backdrop"
       onClick={onClose}
       style={{ userSelect: "none" }}
     >
       <div
-        className="max-h-[82dvh] w-full overflow-y-auto rounded-t-2xl bg-[var(--paper)] p-4 text-[var(--ink)] shadow-2xl desk:mx-auto desk:mb-8 desk:w-[560px] desk:rounded-2xl"
+        className="ar-a-sheet"
         onClick={(event) => event.stopPropagation()}
-        style={{ paddingBottom: "calc(16px + env(safe-area-inset-bottom))", userSelect: "text" }}
+        style={{ userSelect: "text" }}
       >
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <h2 className="text-base font-bold">{title}</h2>
+        <div className="ar-a-sheet-head">
+          <h2 className="ar-a-sheet-title">{title}</h2>
           <button
             type="button"
             onClick={onClose}
-            className="min-h-[44px] rounded-lg px-3 text-sm font-bold text-[var(--muted)]"
+            className="ar-a-sheet-close"
           >
             关闭
           </button>
@@ -357,17 +363,17 @@ function MarkRow({
     <button
       type="button"
       onClick={() => onOpen(mark)}
-      className="w-full rounded-lg border border-[var(--line)] bg-[var(--canvas)] p-2.5 text-left"
+      className="ar-a-mark-row"
     >
-      <div className="mb-1 flex items-center gap-2 text-[11px] text-[var(--muted)]">
-        <span className={`rounded-full px-1.5 py-0.5 font-bold ${mark.type === "good" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-          {mark.type === "good" ? "👍 写得好" : "✏️ 要改"}
+      <div className="ar-a-mark-head">
+        <span className="ar-a-mark-kind" data-kind={mark.type}>
+          {mark.type === "good" ? "写得好" : "要改"}
         </span>
-        {historical ? <span className="rounded-full bg-[var(--canvas)] px-1.5 py-0.5 font-bold text-[var(--muted)]">第 {mark.round} 轮</span> : null}
-        <span className="ml-auto">{formatTime(mark.createdAt)}</span>
+        {historical ? <span className="ar-a-mark-round">第 {mark.round} 轮</span> : null}
+        <span className="ar-a-mark-time">{formatTime(mark.createdAt)}</span>
       </div>
-      <p className="line-clamp-3 text-[13px] leading-snug text-[var(--ink)]">{mark.quote}</p>
-      {mark.comment ? <p className="mt-1 border-l-2 border-[var(--line)] pl-2 text-[12px] text-[var(--muted)]">{mark.comment}</p> : null}
+      <p className="ar-a-mark-quote line-clamp-3">{mark.quote}</p>
+      {mark.comment ? <p className="ar-a-mark-comment">{mark.comment}</p> : null}
     </button>
   );
 }
@@ -384,6 +390,8 @@ export function ArticleReviewer({
   canReview,
   currentUserId,
   backHref,
+  backLabel = "文章",
+  updatedAt,
   extraHeader,
 }: ArticleReviewerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -504,7 +512,7 @@ export function ArticleReviewer({
     }
     if (flashId !== null) {
       const element = container.querySelector(`mark[data-mark-id="${flashId}"]`) as HTMLElement | null;
-      if (element) element.style.outline = "3px solid var(--green)";
+      if (element) element.style.outline = "3px solid var(--accent)";
     }
     setUnlocated((current) => {
       if (current.size === unresolved.size && [...unresolved].every((id) => current.has(id))) return current;
@@ -759,72 +767,139 @@ export function ArticleReviewer({
   const markReadOnly = activeMark ? activeMark.round !== round || activeMark.userId !== currentUserId : true;
   const historicalMarks = useMemo(() => historical.filter((mark) => mark.round !== round), [historical, round]);
 
-  return (
-    <div ref={scrollRef} className="fixed inset-0 overflow-y-auto bg-[var(--canvas)] text-[var(--ink)]" style={{ WebkitOverflowScrolling: "touch" }}>
-      <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-[var(--paper)]" style={{ userSelect: "none" }}>
-        <div className="mx-auto flex max-w-[420px] items-center gap-2 px-3 pb-1 pt-2 desk:max-w-[760px]">
-          <a href={backHref} className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-lg text-base font-bold text-[var(--muted)]" aria-label="返回">←</a>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-bold leading-tight desk:text-base">{title || "未命名"}</div>
-            <div className="truncate text-[11px] text-[var(--faint)]">排版：{htmlSourceLabel(htmlSource)}</div>
+  const marksListContent = (
+    <>
+      {rounds.length > 0 ? (
+        <label className="ar-a-history-toggle">
+          <input type="checkbox" checked={showHistory} onChange={toggleHistory} className="h-4 w-4" />
+          显示历史轮次划词
+          {historyLoading ? <span className="text-[11px] text-[var(--faint)]">读取中…</span> : null}
+        </label>
+      ) : null}
+      {marks.length === 0 ? (
+        <p className="text-[13px] text-[var(--muted)]">本轮还没有划词。</p>
+      ) : (
+        <>
+          {changeCount > 0 ? (
+            <section className="ar-a-group">
+              <h3 className="ar-a-group-title" data-kind="change">要改（{changeCount}）</h3>
+              <div>
+                {marks.filter((mark) => mark.type === "change").map((mark) => (
+                  <MarkRow key={mark.id} mark={mark} currentRound={round} onOpen={(item) => { setSheet(null); scrollToMark(item.id); }} />
+                ))}
+              </div>
+            </section>
+          ) : null}
+          {goodCount > 0 ? (
+            <section className="ar-a-group">
+              <h3 className="ar-a-group-title" data-kind="good">写得好（{goodCount}）</h3>
+              <div>
+                {marks.filter((mark) => mark.type === "good").map((mark) => (
+                  <MarkRow key={mark.id} mark={mark} currentRound={round} onOpen={(item) => { setSheet(null); scrollToMark(item.id); }} />
+                ))}
+              </div>
+            </section>
+          ) : null}
+        </>
+      )}
+      {showHistory && historicalMarks.length > 0 ? (
+        <section className="ar-a-group">
+          <h3 className="ar-a-group-title">历史轮次（{historicalMarks.length}）</h3>
+          <div>
+            {historicalMarks.map((mark) => (
+              <MarkRow key={`h-${mark.id}`} mark={mark} currentRound={round} onOpen={(item) => { setSheet(null); scrollToMark(item.id); }} />
+            ))}
           </div>
-          <span className="shrink-0 rounded-full bg-[var(--green-soft)] px-2 py-1 text-[11px] font-bold text-[var(--green)]">第 {round} 轮</span>
-          <span className="shrink-0 rounded-full bg-[var(--canvas)] px-2 py-1 text-[11px] font-bold text-[var(--muted)]">{statusLabel}</span>
-        </div>
-        <div className="mx-auto flex max-w-[420px] flex-wrap items-center gap-2 px-3 pb-2 desk:max-w-[760px]">
-          <button
-            type="button"
-            data-testid="marks-list-button"
-            onClick={() => setSheet({ kind: "list" })}
-            className="min-h-[36px] rounded-full border border-[var(--line)] bg-[var(--paper)] px-3 text-xs font-bold text-[var(--ink)]"
-          >
-            划线 ({marks.length})
-          </button>
-          {canReview ? (
-            <span className="text-[11px] text-[var(--faint)]">{isTouch ? "点一下段落即可标记" : "选中正文即可标记"}</span>
-          ) : (
-            <a href={`/login?next=${encodeURIComponent("/" + (target.type === "article" ? `articles/${target.id}` : `review/${target.id}`))}`} className="min-h-[36px] rounded-full bg-[var(--green-soft)] px-3 text-xs font-bold leading-[36px] text-[var(--green)]">
-              登录后审稿
-            </a>
-          )}
-          {extraHeader}
-        </div>
-      </header>
+        </section>
+      ) : null}
+      {unlocated.size > 0 ? (
+        <p className="mt-3 text-[11px] text-[var(--faint)]">有 {unlocated.size} 条划词在当前版本中未能定位（内容可能已改动）。</p>
+      ) : null}
+    </>
+  );
 
-      <div className="mx-auto w-full max-w-[420px] px-3 desk:max-w-[760px]" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 112px)" }}>
-        {error ? <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-[var(--danger)]">{error}</p> : null}
-        <div
-          ref={containerRef}
-          onClick={handleArticleClick}
-          onContextMenu={isTouch ? (event) => event.preventDefault() : undefined}
-          className="my-3 w-full max-w-[420px] rounded-xl bg-[var(--paper)] p-4 shadow-sm desk:max-w-[760px] desk:px-12 desk:py-10"
-          style={isTouch
-            ? { userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }
-            : { userSelect: "text", WebkitUserSelect: "text" }}
-          dangerouslySetInnerHTML={articleHtml}
-        />
-        {!html ? (
-          <div className="rounded-xl border border-dashed border-[var(--line)] p-6 text-center text-sm text-[var(--muted)]">
-            这篇内容还没有可审稿的正文。
+  return (
+    <div ref={scrollRef} className="ar-a fixed inset-0 overflow-y-auto bg-[var(--canvas)] text-[var(--ink)]" style={{ WebkitOverflowScrolling: "touch" }}>
+      <div className="ar-a-wrap">
+        <header className="ar-a-header" style={{ userSelect: "none" }}>
+          <div className="ar-a-head-inner">
+            <div className="ar-a-back-row">
+              <a href={backHref} className="ar-a-back" aria-label="返回">← {backLabel}</a>
+              {extraHeader}
+            </div>
+            <h1 className="ar-a-title">{title || "未命名"}</h1>
+            <p className="ar-a-meta">
+              <span>{statusLabel}</span>
+              <span className="ar-a-sep">·</span>
+              <span>第 <span className="ar-a-num">{round}</span> 轮</span>
+              <span className="ar-a-sep">·</span>
+              <span>{updatedAt ? formatTime(updatedAt) : `排版：${htmlSourceLabel(htmlSource)}`}</span>
+            </p>
+            <div className="ar-a-toolbar">
+              <button
+                type="button"
+                data-testid="marks-list-button"
+                onClick={() => setSheet({ kind: "list" })}
+                className="ar-a-btn"
+              >
+                标注 ({marks.length})
+              </button>
+              {canReview ? (
+                <span className="ar-a-hint">{isTouch ? "点一下段落即可标记" : "选中正文即可标记"}</span>
+              ) : (
+                <a href={`/login?next=${encodeURIComponent("/" + (target.type === "article" ? `articles/${target.id}` : `review/${target.id}`))}`} className="ar-a-login-link">
+                  登录后审稿
+                </a>
+              )}
+            </div>
+            <div className="ar-a-double-rule" />
           </div>
-        ) : null}
+        </header>
+
+        <div className="ar-a-content" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 112px)" }}>
+          {error ? <p className="ar-a-error">{error}</p> : null}
+          <div className="ar-a-layout">
+            <main className="ar-a-main">
+              <div
+                ref={containerRef}
+                onClick={handleArticleClick}
+                onContextMenu={isTouch ? (event) => event.preventDefault() : undefined}
+                className="ar-a-body desk:max-w-[760px] desk:px-12 desk:py-10"
+                style={isTouch
+                  ? { userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }
+                  : { userSelect: "text", WebkitUserSelect: "text" }}
+                dangerouslySetInnerHTML={articleHtml}
+              />
+              {!html ? (
+                <div className="ar-a-empty">这篇内容还没有可审稿的正文。</div>
+              ) : null}
+            </main>
+            <aside className="ar-a-side" aria-label="审稿标注">
+              <div className="ar-a-side-head">
+                <h2 className="ar-a-side-title">本轮标注</h2>
+                <span className="ar-a-side-count">{marks.length}</span>
+              </div>
+              {marksListContent}
+            </aside>
+          </div>
+        </div>
       </div>
 
       {pending && !sheet ? (
         <div
           data-testid="mark-action-bar"
-          className="fixed inset-x-0 z-40 border-t border-[var(--line)] bg-[var(--paper)] px-3 pt-2 shadow-[0_-6px_20px_rgba(0,0,0,0.08)]"
-          style={{ bottom: 0, paddingBottom: "calc(10px + env(safe-area-inset-bottom))", userSelect: "none" }}
+          className="ar-a-actionbar"
+          style={{ userSelect: "none" }}
         >
-          <div className="mx-auto max-w-[420px] desk:max-w-[760px]">
+          <div className="ar-a-actionbar-inner">
             {isTouch && touchScope && touchScope.sentences.length > 1 ? (
-              <div className="mb-2 flex items-center gap-2">
+              <div className="ar-a-sentence">
                 <button
                   type="button"
                   data-testid="mark-sentence-prev"
                   aria-label="上一句"
                   onClick={() => stepTouchSentence(-1)}
-                  className="min-h-[44px] min-w-[44px] rounded-xl border border-[var(--line)] text-lg font-bold text-[var(--muted)]"
+                  className="ar-a-btn ar-a-btn-square"
                 >
                   ‹
                 </button>
@@ -832,11 +907,11 @@ export function ArticleReviewer({
                   type="button"
                   data-testid="mark-sentence-whole"
                   onClick={() => applyTouchSentence(-1)}
-                  className={`min-h-[44px] rounded-xl px-3 text-xs font-bold ${touchScope.index < 0 ? "bg-[var(--canvas)] text-[var(--ink)]" : "border border-[var(--line)] text-[var(--muted)]"}`}
+                  className={`ar-a-btn ${touchScope.index < 0 ? "ar-a-btn-primary" : ""}`}
                 >
                   整段
                 </button>
-                <span data-testid="mark-sentence-label" className="flex-1 text-center text-xs font-bold text-[var(--muted)]">
+                <span data-testid="mark-sentence-label" className="ar-a-sentence-label">
                   {touchScope.index < 0 ? "整段" : `第 ${touchScope.index + 1}/${touchScope.sentences.length} 句`}
                 </span>
                 <button
@@ -844,33 +919,30 @@ export function ArticleReviewer({
                   data-testid="mark-sentence-next"
                   aria-label="下一句"
                   onClick={() => stepTouchSentence(1)}
-                  className="min-h-[44px] min-w-[44px] rounded-xl border border-[var(--line)] text-lg font-bold text-[var(--muted)]"
+                  className="ar-a-btn ar-a-btn-square"
                 >
                   ›
                 </button>
               </div>
             ) : null}
-            <p data-testid="mark-pending-text" className="mb-2 line-clamp-2 text-[12px] text-[var(--muted)]">「{pending.exact}」</p>
-            <div className="flex gap-2">
-              <button type="button" data-testid="mark-good" onClick={() => { setComment(""); setSheet({ kind: "new", markKind: "good" }); }} className="min-h-[44px] flex-1 rounded-xl bg-emerald-50 text-sm font-bold text-emerald-700 desk:min-h-[36px]">👍 写得好</button>
-              <button type="button" data-testid="mark-change" onClick={() => { setComment(""); setSheet({ kind: "new", markKind: "change" }); }} className="min-h-[44px] flex-1 rounded-xl bg-amber-50 text-sm font-bold text-amber-700 desk:min-h-[36px]">✏️ 要改</button>
-              <button type="button" data-testid="mark-cancel" onClick={clearPending} className="min-h-[44px] rounded-xl border border-[var(--line)] px-4 text-sm font-bold text-[var(--muted)] desk:min-h-[36px]">取消</button>
+            <p data-testid="mark-pending-text" className="ar-a-pending-text line-clamp-2">「{pending.exact}」</p>
+            <div className="ar-a-btn-row" style={{ marginTop: 0 }}>
+              <button type="button" data-testid="mark-good" onClick={() => { setComment(""); setSheet({ kind: "new", markKind: "good" }); }} className="ar-a-btn ar-a-btn-block">写得好</button>
+              <button type="button" data-testid="mark-change" onClick={() => { setComment(""); setSheet({ kind: "new", markKind: "change" }); }} className="ar-a-btn ar-a-btn-block">要改</button>
+              <button type="button" data-testid="mark-cancel" onClick={clearPending} className="ar-a-btn">取消</button>
             </div>
           </div>
         </div>
       ) : null}
 
       {canReview && !pending && !sheet ? (
-        <div
-          className="fixed inset-x-0 z-40 border-t border-[var(--line)] bg-[var(--paper)] px-3 pt-3 shadow-[0_-6px_20px_rgba(0,0,0,0.08)]"
-          style={{ bottom: 0, paddingBottom: "calc(10px + env(safe-area-inset-bottom))", userSelect: "none" }}
-        >
-          <div className="mx-auto flex max-w-[420px] gap-2 desk:max-w-[760px]">
+        <div className="ar-a-actionbar" style={{ userSelect: "none" }}>
+          <div className="ar-a-actionbar-inner flex gap-2">
             <button
               type="button"
               onClick={() => { setVerdictComment(""); setSheet({ kind: "comments" }); }}
               disabled={busy || marks.length === 0}
-              className="min-h-[44px] flex-1 rounded-xl border border-[var(--line)] text-sm font-bold text-[var(--muted)] disabled:opacity-40 desk:min-h-[36px]"
+              className="ar-a-btn ar-a-btn-block"
             >
               提交批注{marks.length ? ` (${marks.length})` : ""}
             </button>
@@ -878,41 +950,41 @@ export function ArticleReviewer({
               type="button"
               onClick={() => { setVerdictComment(""); setSheet({ kind: "reject" }); }}
               disabled={busy}
-              className="min-h-[44px] flex-1 rounded-xl border border-[var(--danger)] text-sm font-bold text-[var(--danger)] disabled:opacity-40 desk:min-h-[36px]"
+              className="ar-a-btn ar-a-btn-danger ar-a-btn-block"
             >
-              ↩️ 打回
+              要求修改
             </button>
             <button
               type="button"
               onClick={() => { setVerdictComment(""); setSheet({ kind: "approve" }); }}
               disabled={busy}
-              className="min-h-[44px] flex-1 rounded-xl bg-[var(--green)] text-sm font-bold text-white disabled:opacity-40 desk:min-h-[36px]"
+              className="ar-a-btn ar-a-btn-primary ar-a-btn-block"
             >
-              ✅ 通过
+              通过
             </button>
           </div>
         </div>
       ) : null}
 
       {sheet?.kind === "new" && pending ? (
-        <Sheet title={pending ? "标记选中的文字" : "标记"} onClose={() => setSheet(null)}>
-          <div className="mb-3 flex gap-2">
+        <Sheet title="标记选中的文字" onClose={() => setSheet(null)}>
+          <div className="ar-a-btn-row" style={{ marginTop: 0 }}>
             <button
               type="button"
               onClick={() => setSheet({ kind: "new", markKind: "good" })}
-              className={`min-h-[44px] flex-1 rounded-xl text-sm font-bold ${sheet.markKind === "good" ? "bg-emerald-100 text-emerald-800" : "bg-[var(--canvas)] text-[var(--muted)]"}`}
+              className={`ar-a-btn ar-a-btn-block ${sheet.markKind === "good" ? "ar-a-btn-primary" : ""}`}
             >
-              👍 写得好
+              写得好
             </button>
             <button
               type="button"
               onClick={() => setSheet({ kind: "new", markKind: "change" })}
-              className={`min-h-[44px] flex-1 rounded-xl text-sm font-bold ${sheet.markKind === "change" ? "bg-amber-100 text-amber-800" : "bg-[var(--canvas)] text-[var(--muted)]"}`}
+              className={`ar-a-btn ar-a-btn-block ${sheet.markKind === "change" ? "ar-a-btn-primary" : ""}`}
             >
-              ✏️ 要改
+              要改
             </button>
           </div>
-          <p className="mb-2 line-clamp-4 rounded-lg bg-[var(--canvas)] p-2 text-[13px] text-[var(--muted)]">{pending.exact}</p>
+          <p className="ar-a-quote mt-3">{pending.exact}</p>
           <textarea
             autoFocus
             data-testid="mark-comment"
@@ -921,26 +993,26 @@ export function ArticleReviewer({
             rows={3}
             maxLength={2000}
             placeholder={sheet.markKind === "good" ? "可选：说说好在哪里" : "哪里要改？怎么改？"}
-            className="w-full resize-y rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-[14px] outline-none focus:border-[var(--green)]"
+            className="ar-a-textarea"
           />
-          <div className="mt-3 flex gap-2">
-            <button type="button" onClick={() => setSheet(null)} className="min-h-[44px] flex-1 rounded-xl border border-[var(--line)] text-sm font-bold text-[var(--muted)]">取消</button>
-            <button type="button" data-testid="mark-save" onClick={() => saveNewMark(sheet.markKind)} disabled={busy} className="min-h-[44px] flex-1 rounded-xl bg-[var(--green)] text-sm font-bold text-white disabled:opacity-50">保存</button>
+          <div className="ar-a-btn-row">
+            <button type="button" onClick={() => setSheet(null)} className="ar-a-btn ar-a-btn-block">取消</button>
+            <button type="button" data-testid="mark-save" onClick={() => saveNewMark(sheet.markKind)} disabled={busy} className="ar-a-btn ar-a-btn-primary ar-a-btn-block">保存</button>
           </div>
         </Sheet>
       ) : null}
 
       {sheet?.kind === "mark" && activeMark ? (
         <Sheet title="划词详情" onClose={() => setSheet(null)}>
-          <div className="mb-2 flex items-center gap-2 text-[11px] text-[var(--muted)]">
-            <span className={`rounded-full px-2 py-0.5 font-bold ${activeMark.type === "good" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-              {activeMark.type === "good" ? "👍 写得好" : "✏️ 要改"}
+          <div className="ar-a-mark-head mb-2">
+            <span className="ar-a-mark-kind" data-kind={activeMark.type}>
+              {activeMark.type === "good" ? "写得好" : "要改"}
             </span>
             <span>第 {activeMark.round} 轮</span>
             <span>{activeMark.nickname || "匿名"}</span>
-            <span className="ml-auto">{formatTime(activeMark.createdAt)}</span>
+            <span className="ar-a-mark-time">{formatTime(activeMark.createdAt)}</span>
           </div>
-          <p className="mb-3 rounded-lg bg-[var(--canvas)] p-2 text-[13px] text-[var(--ink)]">{activeMark.quote}</p>
+          <p className="ar-a-quote">{activeMark.quote}</p>
           <textarea
             value={comment}
             onChange={(event) => setComment(event.target.value)}
@@ -948,19 +1020,19 @@ export function ArticleReviewer({
             maxLength={2000}
             readOnly={markReadOnly}
             placeholder="补充批注…"
-            className="w-full resize-y rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-[14px] outline-none focus:border-[var(--green)] read-only:opacity-60"
+            className="ar-a-textarea read-only:opacity-60"
           />
           {markReadOnly ? (
             <p className="mt-2 text-xs text-[var(--faint)]">他人或历史轮次的划词只能查看。</p>
           ) : (
             <>
-              <div className="mt-3 flex gap-2">
-                <button type="button" onClick={() => patchMark(activeMark.id, { kind: "good" })} disabled={busy || activeMark.type === "good"} className="min-h-[44px] flex-1 rounded-xl bg-emerald-50 text-sm font-bold text-emerald-700 disabled:opacity-40">👍 写得好</button>
-                <button type="button" onClick={() => patchMark(activeMark.id, { kind: "change" })} disabled={busy || activeMark.type === "change"} className="min-h-[44px] flex-1 rounded-xl bg-amber-50 text-sm font-bold text-amber-700 disabled:opacity-40">✏️ 要改</button>
+              <div className="ar-a-btn-row">
+                <button type="button" onClick={() => patchMark(activeMark.id, { kind: "good" })} disabled={busy || activeMark.type === "good"} className="ar-a-btn ar-a-btn-block">写得好</button>
+                <button type="button" onClick={() => patchMark(activeMark.id, { kind: "change" })} disabled={busy || activeMark.type === "change"} className="ar-a-btn ar-a-btn-block">要改</button>
               </div>
-              <div className="mt-2 flex gap-2">
-                <button type="button" onClick={() => removeMark(activeMark.id)} disabled={busy} className="min-h-[44px] rounded-xl border border-[var(--danger)] px-4 text-sm font-bold text-[var(--danger)] disabled:opacity-50">删除</button>
-                <button type="button" onClick={() => patchMark(activeMark.id, { comment })} disabled={busy} className="min-h-[44px] flex-1 rounded-xl bg-[var(--green)] text-sm font-bold text-white disabled:opacity-50">保存批注</button>
+              <div className="ar-a-btn-row">
+                <button type="button" onClick={() => removeMark(activeMark.id)} disabled={busy} className="ar-a-btn ar-a-btn-danger">删除</button>
+                <button type="button" onClick={() => patchMark(activeMark.id, { comment })} disabled={busy} className="ar-a-btn ar-a-btn-primary ar-a-btn-block">保存批注</button>
               </div>
             </>
           )}
@@ -968,53 +1040,8 @@ export function ArticleReviewer({
       ) : null}
 
       {sheet?.kind === "list" ? (
-        <Sheet title={`本轮划词 (${marks.length})`} onClose={() => setSheet(null)}>
-          {rounds.length > 0 ? (
-            <label className="mb-3 flex items-center gap-2 text-[13px] text-[var(--muted)]">
-              <input type="checkbox" checked={showHistory} onChange={toggleHistory} className="h-4 w-4" />
-              显示历史轮次划词
-              {historyLoading ? <span className="text-[11px] text-[var(--faint)]">读取中…</span> : null}
-            </label>
-          ) : null}
-          {marks.length === 0 ? (
-            <p className="rounded-lg border border-dashed border-[var(--line)] p-4 text-center text-sm text-[var(--muted)]">本轮还没有划词。</p>
-          ) : (
-            <div className="space-y-3">
-              {changeCount > 0 ? (
-                <section>
-                  <h3 className="mb-1.5 text-[12px] font-bold text-amber-700">要改（{changeCount}）</h3>
-                  <div className="space-y-2">
-                    {marks.filter((mark) => mark.type === "change").map((mark) => (
-                      <MarkRow key={mark.id} mark={mark} currentRound={round} onOpen={(item) => { setSheet(null); scrollToMark(item.id); }} />
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-              {goodCount > 0 ? (
-                <section>
-                  <h3 className="mb-1.5 text-[12px] font-bold text-emerald-700">写得好（{goodCount}）</h3>
-                  <div className="space-y-2">
-                    {marks.filter((mark) => mark.type === "good").map((mark) => (
-                      <MarkRow key={mark.id} mark={mark} currentRound={round} onOpen={(item) => { setSheet(null); scrollToMark(item.id); }} />
-                    ))}
-                  </div>
-                </section>
-              ) : null}
-            </div>
-          )}
-          {showHistory && historicalMarks.length > 0 ? (
-            <section className="mt-4">
-              <h3 className="mb-1.5 text-[12px] font-bold text-[var(--muted)]">历史轮次（{historicalMarks.length}）</h3>
-              <div className="space-y-2">
-                {historicalMarks.map((mark) => (
-                  <MarkRow key={`h-${mark.id}`} mark={mark} currentRound={round} onOpen={(item) => { setSheet(null); scrollToMark(item.id); }} />
-                ))}
-              </div>
-            </section>
-          ) : null}
-          {unlocated.size > 0 ? (
-            <p className="mt-3 text-[11px] text-[var(--faint)]">有 {unlocated.size} 条划词在当前版本中未能定位（内容可能已改动）。</p>
-          ) : null}
+        <Sheet title={`本轮标注 (${marks.length})`} onClose={() => setSheet(null)}>
+          {marksListContent}
         </Sheet>
       ) : null}
 
@@ -1028,18 +1055,18 @@ export function ArticleReviewer({
             rows={4}
             maxLength={2000}
             placeholder="可选：给作者的整体说明"
-            className="w-full resize-y rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-[14px] outline-none focus:border-[var(--green)]"
+            className="ar-a-textarea"
           />
-          <button type="button" onClick={() => submitVerdict("comments", verdictComment)} disabled={busy} className="mt-3 min-h-[44px] w-full rounded-xl bg-[var(--green)] text-sm font-bold text-white disabled:opacity-50">提交批注</button>
+          <button type="button" onClick={() => submitVerdict("comments", verdictComment)} disabled={busy} className="ar-a-btn ar-a-btn-primary ar-a-btn-block mt-3">提交批注</button>
         </Sheet>
       ) : null}
 
       {sheet?.kind === "reject" ? (
-        <Sheet title="打回这一稿" onClose={() => setSheet(null)}>
+        <Sheet title="要求修改这一稿" onClose={() => setSheet(null)}>
           {changeCount > 0 ? (
-            <p className="mb-2 text-[12px] text-emerald-700">已有 {changeCount} 条「要改」划词，意见可留空。</p>
+            <p className="mb-2 text-[12px] text-[var(--accent)]">已有 {changeCount} 条「要改」划词，意见可留空。</p>
           ) : (
-            <p className="mb-2 text-[12px] text-[var(--danger)]">没有「要改」划词时，必须写明打回意见。</p>
+            <p className="mb-2 text-[12px] text-[var(--danger)]">没有「要改」划词时，必须写明修改意见。</p>
           )}
           <textarea
             autoFocus
@@ -1048,15 +1075,15 @@ export function ArticleReviewer({
             rows={4}
             maxLength={2000}
             placeholder="说明需要修改的地方…"
-            className="w-full resize-y rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-[14px] outline-none focus:border-[var(--green)]"
+            className="ar-a-textarea"
           />
           <button
             type="button"
             onClick={() => submitVerdict("changes_requested", verdictComment)}
             disabled={busy || (!verdictComment.trim() && changeCount === 0)}
-            className="mt-3 min-h-[44px] w-full rounded-xl bg-[var(--danger)] text-sm font-bold text-white disabled:opacity-50"
+            className="ar-a-btn ar-a-btn-danger ar-a-btn-block mt-3"
           >
-            确认打回
+            确认要求修改
           </button>
         </Sheet>
       ) : null}
@@ -1071,15 +1098,15 @@ export function ArticleReviewer({
             rows={2}
             maxLength={2000}
             placeholder="可选：留一句通过备注"
-            className="w-full resize-y rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 py-2 text-[14px] outline-none focus:border-[var(--green)]"
+            className="ar-a-textarea"
           />
-          <button type="button" onClick={() => submitVerdict("approved", verdictComment)} disabled={busy} className="mt-3 min-h-[44px] w-full rounded-xl bg-[var(--green)] text-sm font-bold text-white disabled:opacity-50">确认通过</button>
+          <button type="button" onClick={() => submitVerdict("approved", verdictComment)} disabled={busy} className="ar-a-btn ar-a-btn-primary ar-a-btn-block mt-3">确认通过</button>
         </Sheet>
       ) : null}
 
       {toast ? (
-        <div className="fixed inset-x-0 bottom-24 z-50 flex justify-center px-4" style={{ userSelect: "none", pointerEvents: "none" }}>
-          <div className="max-w-[420px] rounded-xl bg-[var(--ink)] px-4 py-2.5 text-center text-[13px] font-bold text-[var(--paper)] shadow-lg">{toast}</div>
+        <div className="ar-a-toast" style={{ userSelect: "none" }}>
+          <span>{toast}</span>
         </div>
       ) : null}
     </div>

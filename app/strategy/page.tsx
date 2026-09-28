@@ -6,6 +6,7 @@ import { VersionHistory } from "./_components/VersionHistory";
 import { SiteAppBar } from "../_components/SiteAppBar";
 import { getSessionUser } from "../../lib/auth";
 import { requestOrigin } from "../../lib/request-origin";
+import "./strategy.css";
 
 export const dynamic = "force-dynamic";
 
@@ -67,24 +68,35 @@ export default async function StrategyPage() {
   ]);
 
   return (
-    <div className="min-h-screen bg-[var(--canvas)] text-[var(--ink)]">
+    <div className="strat-page">
       <SiteAppBar user={user} pathname="/strategy" />
-      <h1 className="px-4 pt-4 text-lg font-bold sm:px-6">⚙️ 策略配置</h1>
-
-      <main className="flex flex-col gap-4 p-4 sm:p-6 lg:flex-row">
-        <div className="min-w-0 flex-1">
-          {strategy ? (
-            <StrategyEditor
-              initialVersion={strategy.version}
-              initialNote={strategy.note}
-              initialData={strategy.data}
-            />
-          ) : (
-            <div className="flex h-40 items-center justify-center rounded-2xl border border-dashed border-[var(--line)] text-[var(--muted)]">策略加载失败，请检查登录状态</div>
+      <main className="strat-main">
+        <header>
+          <p className="strat-kicker">内容 · 策略</p>
+          <h1 className="strat-title">策略</h1>
+          {strategy && (
+            <p className="strat-subtitle">
+              当前版本 v<span className="strat-num">{strategy.version}</span>
+            </p>
           )}
-        </div>
-        <div className="w-full min-w-0 lg:w-72 lg:shrink-0">
-          <VersionHistory versions={versions} />
+          <div className="strat-double-rule" />
+        </header>
+
+        <div className="strat-layout">
+          <div className="strat-editor">
+            {strategy ? (
+              <StrategyEditor
+                initialVersion={strategy.version}
+                initialNote={strategy.note}
+                initialData={strategy.data}
+              />
+            ) : (
+              <div className="strat-failed">策略加载失败，请检查登录状态</div>
+            )}
+          </div>
+          <aside className="strat-aside">
+            <VersionHistory versions={versions} />
+          </aside>
         </div>
       </main>
     </div>

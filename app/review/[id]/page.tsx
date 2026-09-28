@@ -38,14 +38,17 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
 
   if (!topic.draftMarkdown || !String(topic.draftMarkdown).trim()) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[var(--canvas)] px-6 text-center text-[var(--ink)]">
+      <div className="flex min-h-screen items-center justify-center bg-[var(--canvas)] px-5 text-[var(--ink)]">
         <div className="max-w-[420px] desk:max-w-[760px]">
-          <div className="mb-2 text-2xl">📝</div>
-          <h1 className="mb-2 text-lg font-bold">这个选题还没有草稿</h1>
-          <p className="text-sm text-[var(--muted)]">
-            先运行 <code className="rounded bg-[var(--paper)] px-1.5 py-0.5">npm run draft -- {id}</code> 生成草稿，再回来审稿。
+          <p className="text-[13px] tracking-[.12em] text-[var(--muted)]">内容 · 审稿</p>
+          <h1 className="mt-3 font-[family-name:var(--font-serif)] text-2xl font-bold">这个选题还没有草稿</h1>
+          <div className="relative mt-4 border-t-[3px] border-[var(--ink)]">
+            <span className="absolute inset-x-0 top-[5px] border-t border-[var(--ink)]" />
+          </div>
+          <p className="mt-4 text-sm text-[var(--muted)]">
+            先运行 <code className="bg-[var(--paper)] px-1.5 py-0.5">npm run draft -- {id}</code> 生成草稿，再回来审稿。
           </p>
-          <a href="/topics" className="mt-4 inline-block rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 py-1.5 text-sm font-bold text-[var(--muted)]">返回选题看板</a>
+          <a href="/topics" className="mt-5 inline-block text-[13px] tracking-[.06em] text-[var(--ink)] underline decoration-[var(--line)] underline-offset-4">← 返回选题看板</a>
         </div>
       </div>
     );
@@ -70,13 +73,15 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
       canReview
       currentUserId={user.id}
       backHref="/topics"
+      backLabel="选题"
+      updatedAt={topic.updatedAt ? String(topic.updatedAt) : null}
       extraHeader={
         articleRow?.slug ? (
           <a
             href={`/articles/${articleRow.slug}`}
-            className="min-h-[36px] rounded-full bg-[var(--green-soft)] px-3 text-xs font-bold leading-[36px] text-[var(--green)]"
+            className="text-[13px] tracking-[.04em] text-[var(--muted)] transition-colors hover:text-[var(--accent)]"
           >
-            查看文章
+            查看文章 →
           </a>
         ) : null
       }

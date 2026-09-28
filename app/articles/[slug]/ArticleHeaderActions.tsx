@@ -37,21 +37,21 @@ export function ArticleHeaderActions({
   }
 
   return (
-    <span className="flex items-center gap-2">
+    <span className="flex items-center gap-3">
       <button
         type="button"
         onClick={togglePublic}
         disabled={busy}
-        className={`min-h-[36px] rounded-full px-3 text-xs font-bold disabled:opacity-50 ${isPublic ? "bg-emerald-50 text-emerald-700" : "bg-[var(--canvas)] text-[var(--muted)]"}`}
+        className="inline-flex min-h-[44px] items-center text-[13px] tracking-[.04em] text-[var(--muted)] transition-colors hover:text-[var(--accent)] disabled:opacity-50"
       >
-        {isPublic ? "🌐 公开" : "🔒 私有"}
+        {isPublic ? "公开" : "私有"}
       </button>
       {latestRound ? (
         <a
           href={`/api/review/article/${slug}/feedback?round=latest`}
           target="_blank"
           rel="noopener noreferrer"
-          className="min-h-[36px] rounded-full border border-[var(--line)] px-3 text-xs font-bold leading-[36px] text-[var(--muted)]"
+          className="inline-flex min-h-[44px] items-center text-[13px] tracking-[.04em] text-[var(--muted)] transition-colors hover:text-[var(--accent)]"
         >
           反馈 JSON
         </a>

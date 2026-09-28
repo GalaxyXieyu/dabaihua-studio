@@ -38,10 +38,10 @@ export type SeriesSummary = {
 };
 
 const COLUMNS = [
-  { key: "candidate", label: "📥 候选", accent: "border-t-blue-400", empty: "等待 AI 评估产出候选选题" },
-  { key: "approved", label: "✅ 入选", accent: "border-t-green-400", empty: "从候选中挑选优质选题" },
-  { key: "scheduled", label: "📅 排期中", accent: "border-t-amber-400", empty: "设置排期后出现在这里" },
-  { key: "published", label: "🚀 已发布", accent: "border-t-purple-400", empty: "发布回填后归档在这里" },
+  { key: "candidate", roman: "I", label: "候选", empty: "等待 AI 评估产出候选选题" },
+  { key: "approved", roman: "II", label: "入选", empty: "从候选中挑选优质选题" },
+  { key: "scheduled", roman: "III", label: "排期中", empty: "设置排期后出现在这里" },
+  { key: "published", roman: "IV", label: "已发布", empty: "发布回填后归档在这里" },
 ] as const;
 
 const PLATFORM_FILTERS = ["全部", "公众号", "小红书", "X", "B站"] as const;
@@ -147,47 +147,43 @@ export function Board({ initialTopics, initialSeries }: { initialTopics: Topic[]
 
   return (
     <div>
-      {/* 顶部工具栏 */}
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+      {/* 筛选行 */}
+      <div className="tp-filters">
         <select
           value={platformFilter}
           onChange={(e) => setPlatformFilter(e.target.value)}
-          className="w-full rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 py-2.5 text-sm text-[var(--muted)] outline-none sm:w-auto sm:py-1.5"
+          className="tp-select"
+          aria-label="按平台筛选"
         >
           {PLATFORM_FILTERS.map((p) => <option key={p} value={p}>{p === "全部" ? "全部平台" : p}</option>)}
         </select>
         <select
           value={seriesFilter}
           onChange={(e) => setSeriesFilter(e.target.value)}
-          className="w-full rounded-lg border border-[var(--line)] bg-[var(--paper)] px-3 py-2.5 text-sm text-[var(--muted)] outline-none sm:w-auto sm:py-1.5"
+          className="tp-select"
+          aria-label="按系列筛选"
         >
           <option value="全部">全部系列</option>
           {initialSeries.map((s) => <option key={s.series} value={s.series}>{s.series}</option>)}
         </select>
-        <div className="text-sm text-[var(--faint)] sm:ml-auto">
-          共 {filtered.length} 个选题
-        </div>
       </div>
 
       {/* 看板列：窄屏横向滑动，宽屏网格 */}
-      <div className={`board-columns flex snap-x snap-mandatory gap-4 overflow-x-auto pb-2 sm:grid sm:snap-none sm:overflow-visible sm:pb-0 ${showPublished ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>
+      <div className={`tp-board ${showPublished ? "is-four" : ""}`}>
         {visibleColumns.map((col) => {
           const items = byStatus(col.key);
           return (
-            <div key={col.key} className="flex w-[85vw] max-w-[340px] shrink-0 snap-start flex-col sm:w-auto sm:max-w-none sm:shrink">
-              {/* 列标题 */}
-              <div className={`mb-3 flex items-center justify-between rounded-t-xl border-t-4 ${col.accent} bg-[var(--paper)] px-4 py-2.5`}>
-                <span className="text-sm font-bold text-[var(--ink)]">{col.label}</span>
-                <span className="rounded-full bg-[var(--canvas)] px-2 py-0.5 text-xs font-bold text-[var(--muted)]">{items.length}</span>
+            <div key={col.key} className="tp-col">
+              {/* 列头 */}
+              <div className="tp-col-head">
+                <span className="tp-col-roman">{col.roman}</span>
+                <span className="tp-col-name">{col.label}</span>
+                <span className="tp-col-count tp-num">{items.length}</span>
               </div>
-              {/* 列内容 */}
-              <div className="board-column-body flex-1 space-y-2 overflow-y-auto pb-4">
+              {/* 列条目 */}
+              <div>
                 {items.length === 0 ? (
-                  <div className="flex h-32 items-center justify-center rounded-xl border-2 border-dashed border-[var(--line)] text-center">
-                    <div>
-                      <div className="text-sm text-[var(--faint)]">{col.empty}</div>
-                    </div>
-                  </div>
+                  <p className="tp-empty">{col.empty}</p>
                 ) : (
                   items.map((t) => (
                     <TopicCard key={t.id} topic={t} onClick={() => setSelected(t)} />
@@ -200,18 +196,19 @@ export function Board({ initialTopics, initialSeries }: { initialTopics: Topic[]
       </div>
 
       {/* 已发布折叠按钮 */}
-      <div className="mt-2 flex justify-center">
+      <div className="tp-fold">
         <button
           onClick={() => setShowPublished(!showPublished)}
-          className="rounded-full border border-[var(--line)] px-4 py-2 text-sm text-[var(--muted)] hover:bg-[var(--canvas)]"
+          aria-expanded={showPublished}
         >
-          {showPublished ? "收起已发布 ▲" : `展开已发布 (${byStatus("published").length}) ▼`}
+          {showPublished ? "收起已发布" : `展开已发布（${byStatus("published").length}）`}
         </button>
       </div>
 
       {/* 编辑抽屉 */}
       {selected && (
         <TopicDrawer
+          key={selected.id}
           topic={selected}
           saving={saving}
           onClose={() => setSelected(null)}
