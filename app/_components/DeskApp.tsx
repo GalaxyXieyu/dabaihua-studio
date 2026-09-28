@@ -30,7 +30,6 @@ import {
   PaperPlaneTilt,
   PencilSimple,
   Plus,
-  SignIn,
   SignOut,
   Trophy,
   Quotes,
@@ -608,15 +607,6 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
   const [avatarFeedback, setAvatarFeedback] = useState<{ kind: "working" | "success" | "error"; message: string } | null>(null);
   const [activeImportId, setActiveImportId] = useState<number | null>(null);
   const [view, setView] = useState<DeskView>(initialView);
-  const [authOpen, setAuthOpen] = useState(false);
-  const [authMode, setAuthMode] = useState<"login" | "register">("login");
-  const [authError, setAuthError] = useState("");
-  const [registrationSuccess, setRegistrationSuccess] = useState<SessionUser | null>(null);
-  const [authAccount, setAuthAccount] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
-  const [authConfirm, setAuthConfirm] = useState("");
-  const [authNickname, setAuthNickname] = useState("");
-  const [authInviteCode, setAuthInviteCode] = useState("");
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [apiTokens, setApiTokens] = useState<Array<{ id: number; name: string; createdAt: string; lastUsedAt: string | null }>>([]);
   const [newTokenName, setNewTokenName] = useState("");
@@ -731,18 +721,12 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
 
   function openAddSource() {
     setSourcePanePreference(false);
-    if (!data.user) {
-      openAuth("register");
-      setNotice("注册或登录后即可收录新来源");
-      return;
-    }
+    if (!data.user) { goToLogin(); return; }
     setAddOpen(true);
   }
 
-  function openAuth(mode: "login" | "register") {
-    setAuthMode(mode);
-    setAuthError("");
-    setAuthOpen(true);
+  function goToLogin() {
+    window.location.href = "/login?next=" + encodeURIComponent(window.location.pathname + window.location.search).replace(/%2F/gi, "/");
   }
 
   function navigate(next: DeskView) {
@@ -1212,29 +1196,6 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
     return () => { active = false; window.clearInterval(timer); };
   }, [heartbeatItemId, sessionUserId, view]);
 
-  async function submitAuth(event: FormEvent) {
-    event.preventDefault();
-    const mode = authMode;
-    setBusy("auth"); setNotice(""); setAuthError("");
-    try {
-      const result = await post<{ user: SessionUser }>("/api/auth", mode === "login"
-        ? { action: "login", account: authAccount, password: authPassword }
-        : { action: "register", account: authAccount, password: authPassword, confirmPassword: authConfirm, nickname: authNickname, inviteCode: authInviteCode });
-      setData((current) => ({ ...current, user: result.user }));
-      setProfileNickname(result.user.nickname); setProfileBio(result.user.bio);
-      setAuthOpen(false); setAuthPassword(""); setAuthConfirm(""); setAuthNickname(""); setAuthInviteCode("");
-      await refresh().catch(() => undefined);
-      if (mode === "register") {
-        navigate("discover");
-        setRegistrationSuccess(result.user);
-      } else {
-        navigate("today");
-        setNotice(`欢迎回来，${result.user.nickname}`);
-      }
-    } catch (error) { setAuthError(error instanceof Error ? error.message : mode === "register" ? "注册失败，请稍后再试" : "登录失败，请稍后再试"); }
-    finally { setBusy(""); }
-  }
-
   async function loadApiTokens() {
     try {
       const res = await jsonRequest<{ tokens: typeof apiTokens }>("/api/tokens", { cache: "no-store" });
@@ -1343,8 +1304,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
     setAnnotationPanelOpen(true);
     setActiveAnnotationId(null);
     if (!data.user) {
-      openAuth("login");
-      setNotice("登录后即可发布公开批注");
+      goToLogin();
     }
   }
 
@@ -1371,7 +1331,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
   }
 
   async function replyToAnnotation(annotationId: number, replyToUserId: number, body: string) {
-    if (!detailItemId || !data.user) { openAuth("login"); return; }
+    if (!detailItemId || !data.user) { goToLogin(); return; }
     setBusy(`reply-${annotationId}`);
     try {
       const result = await post<{ reply: AnnotationReply }>("/api/annotations", { action: "reply", annotationId, replyToUserId, body });
@@ -1383,7 +1343,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
 
   async function toggleProfileLike() {
     if (!profileData) return;
-    if (!data.user) { openAuth("login"); setNotice("登录后即可给主页点赞"); return; }
+    if (!data.user) { goToLogin(); return; }
     setBusy("profile-like");
     try {
       const result = await post<{ liked: boolean; count: number }>("/api/profile", { action: "like", userId: profileData.user.id });
@@ -1396,7 +1356,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
   async function submitProfileMessage(event: FormEvent) {
     event.preventDefault();
     if (!profileData || !profileMessageBody.trim()) return;
-    if (!data.user) { openAuth("login"); setNotice("登录后即可留言"); return; }
+    if (!data.user) { goToLogin(); return; }
     setBusy("profile-message");
     try {
       const result = await post<{ message: ProfileMessage }>("/api/profile", { action: "message", userId: profileData.user.id, body: profileMessageBody });
@@ -1543,7 +1503,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
 
   async function toggleFollowing(source: Source) {
     if (!data.user) {
-      openAuth("login"); setNotice("登录后才能关注来源");
+      goToLogin();
       return;
     }
     const following = !Boolean(source.isFollowed);
@@ -1566,7 +1526,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
   async function toggleSaved() {
     if (!selectedItem) return;
     if (!data.user) {
-      openAuth("login"); setNotice("登录后才能收藏文章");
+      goToLogin();
       return;
     }
     setBusy("save");
@@ -1581,7 +1541,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
   async function markSelectedRead() {
     if (!selectedItem || view !== "discover" || Boolean(selectedItem.isRead)) return;
     if (!data.user) {
-      openAuth("login"); setNotice("登录后才能标记已读");
+      goToLogin();
       return;
     }
     setBusy("read");
@@ -1612,7 +1572,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
 
   function startTodayReading() {
     if (!data.user) {
-      openAuth("login");
+      goToLogin();
       return;
     }
     const firstUnread = todayItems.find((item) => !Boolean(item.isRead));
@@ -1661,7 +1621,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
           <button className={`global-user ${view === "profile" && profileData?.isOwner ? "active" : ""} ${unreadNotificationCount ? "has-unread" : ""}`} aria-expanded={userMenuOpen} onClick={() => { setUserMenuOpen((open) => !open); setNotificationOpen(false); }}><Avatar user={data.user} size="small" /><span>{data.user.nickname}</span><CaretDown size={11} weight="bold" aria-hidden="true" /></button>
           {userMenuOpen && <div className="user-menu global-user-menu" role="menu"><button role="menuitem" onClick={() => openProfile(data.user!.id)}><User size={15} />个人主页</button><button role="menuitem" onClick={() => { navigate("settings"); setUserMenuOpen(false); }}><Key size={15} />API 密钥</button><button role="menuitem" onClick={() => { setPasswordOpen(true); setUserMenuOpen(false); }}><Password size={15} />修改密码</button><button role="menuitem" disabled={busy === "logout"} onClick={logout}><SignOut size={15} />退出登录</button></div>}
         </div>
-        : <button className="global-login" onClick={() => openAuth("login")}><SignIn size={16} />登录</button>}
+        : null}
     </header>}
 
     {view === "discover" && !immersiveDiscoverReading && mobileSourcePaneOpen && <button className="mobile-source-drawer-backdrop" type="button" aria-label="关闭来源列表" onClick={() => setMobileSourcePaneOpen(false)} />}
@@ -1678,7 +1638,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
         <span className="source-avatar">源</span><span className="source-copy"><strong>全部来源</strong><small>浏览大家的贡献</small></span><em>{data.sources.length}</em>
       </button>
       <div className="source-add">
-        <button className="add-source-button" type="button" aria-label={data.user ? "收录新来源" : "登录后收录新来源"} title={data.user ? "收录新来源" : "登录后收录新来源"} onClick={openAddSource}><Plus size={17} weight="bold" /><span>收录新来源</span></button>
+        <button className="add-source-button" type="button" aria-label="收录新来源" title="收录新来源" onClick={openAddSource}><Plus size={17} weight="bold" /><span>收录新来源</span></button>
       </div>
       <div className="source-section-title">
         <span>来源分类</span>
@@ -1707,7 +1667,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
             </div>
           </div>}
         </div>)}
-        {!loading && filteredSources.length === 0 && <p className="source-empty">{data.sources.length === 0 ? "还没有来源，登录后收录一个经常看的作者或网站。" : `${activeCategory}分类还没有来源。`}</p>}
+        {!loading && filteredSources.length === 0 && <p className="source-empty">{data.sources.length === 0 ? "还没有来源，收录一个经常看的作者或网站。" : `${activeCategory}分类还没有来源。`}</p>}
       </nav>
       {activeImport && <div className={`import-status ${activeImport.status === "completed" ? "done" : "working"}`} role="status" aria-live="polite">
         <div className="import-status-head"><span>{activeImport.status === "completed" ? <Check size={14} weight="bold" aria-hidden="true" /> : <CircleNotch size={15} weight="bold" aria-hidden="true" />}</span><div><strong>{importStatusCopy(activeImport).title}</strong><small>{importStatusCopy(activeImport).detail}</small></div>{activeImport.status === "completed" && <button aria-label="关闭导入状态" onClick={() => setActiveImportId(null)}><X size={13} aria-hidden="true" /></button>}</div>
@@ -1720,14 +1680,6 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
     {view === "today" && <section className="today-view" id="today-content" aria-label="今日阅读">
       <div className="today-scroll">
         {loading && <div className="today-loading" role="status"><i /><i /><i /><span>正在整理今天的更新</span></div>}
-
-        {!loading && !data.user && <div className="today-state today-auth-state">
-          <span className="today-state-mark"><BookOpenText size={28} weight="duotone" /></span>
-          <small>{todayHeading()}</small>
-          <h1>登录后，开始你的今日阅读</h1>
-          <p>你关注的作者更新后，会在这里排成一条可以读完的内容流。</p>
-          <div className="today-state-actions"><button className="today-primary" onClick={() => openAuth("login")}>登录并开始</button><button onClick={() => navigate("discover")}>先看看有哪些来源</button></div>
-        </div>}
 
         {!loading && data.user && followedSourceIds.size === 0 && <div className="today-state today-onboarding-state">
           <span className="today-state-mark"><Plus size={26} weight="duotone" /></span>
@@ -1783,7 +1735,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
                 <div><small>{todayNextItem ? "下一篇" : "今天的最后一篇"}</small><strong>{todayNextItem ? todayNextItem.translatedTitle || todayNextItem.title : "读完这篇，今天就完成了"}</strong>{todayNextItem && <span>{todayNextItem.sourceName}</span>}</div>
                 <div><button disabled={busy === "today-later" || busy === "today-next"} onClick={() => advanceToday(true)}>稍后看</button><button className="today-primary" disabled={busy === "today-later" || busy === "today-next"} onClick={() => advanceToday(false)}>{busy === "today-next" ? "正在进入" : todayNextItem ? "下一篇" : "完成今日阅读"}<CaretRight size={16} weight="bold" /></button></div>
               </footer>
-            </article>{showAnnotationSidebar && <AnnotationSidebar annotations={itemAnnotations} loading={annotationsLoading} draft={sidebarDraft} user={data.user} activeAnnotationId={activeAnnotationId} busy={busy} onCollapse={() => setAnnotationPanelOpen(false)} onCancelDraft={cancelAnnotationDraft} onCreate={createCurrentAnnotation} onFocus={focusAnnotation} onReply={replyToAnnotation} onRequireLogin={() => openAuth("login")} onOpenProfile={openProfile} />}</div>}
+            </article>{showAnnotationSidebar && <AnnotationSidebar annotations={itemAnnotations} loading={annotationsLoading} draft={sidebarDraft} user={data.user} activeAnnotationId={activeAnnotationId} busy={busy} onCollapse={() => setAnnotationPanelOpen(false)} onCancelDraft={cancelAnnotationDraft} onCreate={createCurrentAnnotation} onFocus={focusAnnotation} onReply={replyToAnnotation} onRequireLogin={() => goToLogin()} onOpenProfile={openProfile} />}</div>}
         </div>}
 
         {!loading && data.user && todaySessionStarted && !selectedItem && todayItems.length > 0 && <div className="today-state today-complete-state reading-complete">
@@ -1811,7 +1763,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
           }
         }}>
           {loading && <div className="list-loading"><i /><i /><i /></div>}
-          {!loading && visibleItems.length === 0 && <div className="list-empty"><strong>{query.trim() ? "没有找到匹配文章" : articleStatus === "unread" ? "未读已经清空" : "还没有已读文章"}</strong><p>{query.trim() ? "换个关键词试试。" : !data.user ? "登录后会保存你的已读状态。" : articleStatus === "unread" ? "新文章同步后会出现在这里。" : "在文章中点击「标记已读」后，文章会出现在这里。"}</p></div>}
+          {!loading && visibleItems.length === 0 && <div className="list-empty"><strong>{query.trim() ? "没有找到匹配文章" : articleStatus === "unread" ? "未读已经清空" : "还没有已读文章"}</strong><p>{query.trim() ? "换个关键词试试。" : articleStatus === "unread" ? "新文章同步后会出现在这里。" : "在文章中点击「标记已读」后，文章会出现在这里。"}</p></div>}
           {renderedItems.map((item) => <button className={`article-row ${effectiveItemId === item.id ? "active" : ""} ${item.isRead ? "read" : ""}`} key={item.id} onClick={() => openItem(item.id)}>
             <div className="article-row-meta"><span>{item.author || item.sourceName || "未知作者"}</span><span className="article-meta-trailing"><time>{when(item.publishedAt)}</time>{Boolean(item.isRead) && <span className="read-status"><Check size={11} weight="bold" aria-hidden="true" />已读</span>}{Boolean(item.isSaved) && <span className="saved-status" aria-label="已收藏" title="已收藏"><BookmarkSimple size={12} weight="fill" aria-hidden="true" /></span>}</span></div><h2>{item.translatedTitle || item.title}</h2><p>{item.translatedExcerpt || item.originalExcerpt || "等待读取正文"}</p>
           </button>)}
@@ -1822,7 +1774,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
         {!selectedItem && <div className="reader-empty"><BookOpenText size={28} weight="duotone" aria-hidden="true" /><h2>选择一篇文章开始阅读</h2><p>正文会留在这里，不再跳出当前页面。</p></div>}
         {selectedItem && <>
           <div className="reader-toolbar"><div className="reader-toolbar-leading">{immersiveDiscoverReading && <button className="immersive-back" onClick={() => setDiscoverImmersive(false)}><CaretLeft size={14} weight="bold" />返回来源列表</button>}<span>{selectedItem.sourceName || "随手收录"}</span><div className="reader-mode-switch" role="group" aria-label="阅读模式"><button className={readerMode === "clean" ? "active" : ""} aria-pressed={readerMode === "clean"} onClick={() => setReaderMode("clean")}>净化阅读</button><button className={readerMode === "original" ? "active" : ""} aria-pressed={readerMode === "original"} onClick={() => setReaderMode("original")}>原网页</button></div></div><div className="reader-toolbar-actions">{canToggleAnnotations && <button className={annotationPanelOpen ? "active" : ""} onClick={() => setAnnotationPanelOpen((open) => !open)}><ChatText size={14} weight="duotone" aria-hidden="true" />批注 {itemAnnotations.length}</button>}<button onClick={() => { if (!discoverImmersive) setSelectedItemId(selectedItem.id); setDiscoverImmersive((immersive) => !immersive); }}>{immersiveDiscoverReading ? <CornersIn size={14} /> : <CornersOut size={14} />}{immersiveDiscoverReading ? "退出沉浸" : "沉浸阅读"}</button><button className={selectedItem.isRead ? "read" : ""} disabled={Boolean(selectedItem.isRead) || busy === "read"} onClick={markSelectedRead}><Check size={14} weight="bold" aria-hidden="true" />{selectedItem.isRead ? "已读" : busy === "read" ? "正在标记" : "标记已读"}</button><button className={selectedItem.isSaved ? "saved" : ""} disabled={busy === "save"} onClick={toggleSaved}><BookmarkSimple size={14} weight={selectedItem.isSaved ? "fill" : "regular"} aria-hidden="true" />{selectedItem.isSaved ? "已收藏" : "收藏"}</button><a href={selectedItem.url} target="_blank" rel="noreferrer">打开原文 <ArrowSquareOut size={14} aria-hidden="true" /></a></div></div>
-          {readerMode === "clean" && <div className={`reader-annotation-layout ${showAnnotationSidebar ? "with-sidebar" : ""}`}><article className="reader-document"><header><div className="reader-kicker"><span>{selectedDetail?.author || selectedItem.author || selectedItem.sourceName || "未知作者"}</span><time>{when(selectedItem.publishedAt, true)}</time>{selectedItem.topic && <em>{selectedItem.topic}</em>}</div><h1>{selectedItem.translatedTitle || selectedItem.title}</h1>{(selectedItem.translatedExcerpt || selectedItem.originalExcerpt) && <p className="reader-summary">{selectedItem.translatedExcerpt || selectedItem.originalExcerpt}</p>}</header>{detailLoading && !selectedDetail && <div className="document-loading"><i /><i /><i /><i /></div>}{selectedDetail?.contentMarkdown && <MarkdownArticle markdown={selectedDetail.contentMarkdown} itemId={selectedItem.id} annotations={itemAnnotations} activeAnnotationId={activeAnnotationId} onSelection={handleArticleSelection} onAnnotationFocus={(annotation) => focusAnnotation(annotation, "document")} />}</article>{showAnnotationSidebar && <AnnotationSidebar annotations={itemAnnotations} loading={annotationsLoading} draft={sidebarDraft} user={data.user} activeAnnotationId={activeAnnotationId} busy={busy} onCollapse={() => setAnnotationPanelOpen(false)} onCancelDraft={cancelAnnotationDraft} onCreate={createCurrentAnnotation} onFocus={focusAnnotation} onReply={replyToAnnotation} onRequireLogin={() => openAuth("login")} onOpenProfile={openProfile} />}</div>}
+          {readerMode === "clean" && <div className={`reader-annotation-layout ${showAnnotationSidebar ? "with-sidebar" : ""}`}><article className="reader-document"><header><div className="reader-kicker"><span>{selectedDetail?.author || selectedItem.author || selectedItem.sourceName || "未知作者"}</span><time>{when(selectedItem.publishedAt, true)}</time>{selectedItem.topic && <em>{selectedItem.topic}</em>}</div><h1>{selectedItem.translatedTitle || selectedItem.title}</h1>{(selectedItem.translatedExcerpt || selectedItem.originalExcerpt) && <p className="reader-summary">{selectedItem.translatedExcerpt || selectedItem.originalExcerpt}</p>}</header>{detailLoading && !selectedDetail && <div className="document-loading"><i /><i /><i /><i /></div>}{selectedDetail?.contentMarkdown && <MarkdownArticle markdown={selectedDetail.contentMarkdown} itemId={selectedItem.id} annotations={itemAnnotations} activeAnnotationId={activeAnnotationId} onSelection={handleArticleSelection} onAnnotationFocus={(annotation) => focusAnnotation(annotation, "document")} />}</article>{showAnnotationSidebar && <AnnotationSidebar annotations={itemAnnotations} loading={annotationsLoading} draft={sidebarDraft} user={data.user} activeAnnotationId={activeAnnotationId} busy={busy} onCollapse={() => setAnnotationPanelOpen(false)} onCancelDraft={cancelAnnotationDraft} onCreate={createCurrentAnnotation} onFocus={focusAnnotation} onReply={replyToAnnotation} onRequireLogin={() => goToLogin()} onOpenProfile={openProfile} />}</div>}
           {readerMode === "original" && <div className="original-reader"><div className="original-reader-note"><span>正在显示原站页面</span><p>如果网站拒绝嵌入，请使用右上角“新窗口打开”。</p></div><iframe key={selectedItem.url} src={selectedItem.url} title={`${selectedItem.title} 原网页`} loading="lazy" referrerPolicy="no-referrer-when-downgrade" sandbox="allow-forms allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts" /></div>}
         </>}
       </section>
@@ -1845,7 +1797,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
       <div className="leaderboard-card">
         <div className="leaderboard-caption"><strong>{leaderboardMetric === "reading" ? "有效阅读排行" : "订阅贡献排行"}</strong><span>{leaderboardMetric === "contribution" ? "全站累计" : leaderboardData?.day || "读取中"}</span></div>
         {!leaderboardData && <div className="list-loading"><i /><i /><i /></div>}
-        {leaderboardData && (leaderboardMetric === "reading" ? leaderboardData.reading : leaderboardData.contribution).length === 0 && <div className="list-empty"><strong>还没有用户上榜</strong><p>注册后开始阅读或贡献内容来源吧。</p></div>}
+        {leaderboardData && (leaderboardMetric === "reading" ? leaderboardData.reading : leaderboardData.contribution).length === 0 && <div className="list-empty"><strong>还没有用户上榜</strong><p>开始阅读或贡献内容来源吧。</p></div>}
         {leaderboardData && leaderboardMetric === "reading" && leaderboardData.reading.map((row, index) => <div className={`rank-row ${index < 3 ? `podium-row podium-${index + 1}` : ""}`} key={row.id}><RankMarker position={index + 1} /><button className="rank-user-link" type="button" onClick={() => openProfile(row.id)}><Avatar user={row} size="leaderboard" /><span className="rank-user-name">{row.nickname}</span></button><div className="rank-stats"><span><small><BookOpenText size={12} aria-hidden="true" />阅读文章</small><strong>{row.readCount}<em>篇</em></strong></span><span><small><ClockCountdown size={12} aria-hidden="true" />阅读时间</small><strong>{formatDuration(row.readSeconds)}</strong></span></div></div>)}
         {leaderboardData && leaderboardMetric === "contribution" && leaderboardData.contribution.map((row, index) => <div className={`rank-row ${index < 3 ? `podium-row podium-${index + 1}` : ""}`} key={row.id}><RankMarker position={index + 1} /><button className="rank-user-link" type="button" onClick={() => openProfile(row.id)}><Avatar user={row} size="leaderboard" /><span className="rank-user-name">{row.nickname}</span></button><div className="rank-stats contribution"><span><small><Trophy size={12} aria-hidden="true" />贡献来源</small><strong>{row.contributionCount}<em>个</em></strong></span></div></div>)}
       </div>
@@ -1853,7 +1805,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
 
     {view === "profile" && <section className="full-view profile-view" id="view-content">
       {!profileTargetResolved ? <div className="profile-page-loading" role="status"><i /><i /><i /><i /></div>
-        : !profileUserId ? <div className="profile-card signed-out"><LockKey size={28} weight="duotone" /><h2>登录后查看自己的主页</h2><p>也可以从批注广场或排行榜点击他人的头像，查看公开主页。</p><button className="primary-button" onClick={() => openAuth("login")}>登录 / 注册</button></div>
+        : !profileUserId ? null
         : profileLoading && !profileData ? <div className="profile-page-loading" role="status"><i /><i /><i /><i /></div>
         : profileError && !profileData ? <div className="profile-card signed-out"><LockKey size={28} weight="duotone" /><h2>主页暂时没有加载出来</h2><p>{profileError}</p><button className="primary-button" onClick={() => window.location.reload()}>重新加载</button></div>
         : profileData && <div className="profile-page-shell">
@@ -1898,7 +1850,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
 
           <section className="profile-section profile-message-section" aria-label={`${profileData.user.nickname} 的留言板`}>
             <header><div className="profile-section-heading"><span className="profile-section-icon"><ChatText size={18} weight="duotone" /></span><div><div className="profile-section-title"><h2>留言板</h2><strong>{profileData.messages.length}<span>条</span></strong></div><p>{profileData.isOwner ? "其他读者写给你的公开留言。" : `给 ${profileData.user.nickname} 留下一句话。`}</p></div></div></header>
-            {!profileData.isOwner && <form className="profile-message-form" onSubmit={submitProfileMessage}><Avatar user={data.user || { nickname: "访客", avatarUrl: null }} size="small" /><textarea value={profileMessageBody} maxLength={500} rows={3} placeholder={data.user ? `给 ${profileData.user.nickname} 留言…` : "登录后可以留言"} disabled={!data.user || busy === "profile-message"} onChange={(event) => setProfileMessageBody(event.target.value)} /><button className="primary-button" disabled={!data.user || !profileMessageBody.trim() || busy === "profile-message"}>{busy === "profile-message" ? "发布中" : "发布留言"}</button></form>}
+            {!profileData.isOwner && <form className="profile-message-form" onSubmit={submitProfileMessage}><Avatar user={data.user!} size="small" /><textarea value={profileMessageBody} maxLength={500} rows={3} placeholder={`给 ${profileData.user.nickname} 留言…`} disabled={busy === "profile-message"} onChange={(event) => setProfileMessageBody(event.target.value)} /><button className="primary-button" disabled={!profileMessageBody.trim() || busy === "profile-message"}>{busy === "profile-message" ? "发布中" : "发布留言"}</button></form>}
             {profileData.messages.length === 0 ? <div className="profile-section-empty compact"><div><strong>还没有公开留言</strong><p>第一条留言会出现在这里。</p></div></div>
               : <div className="profile-message-list">{profileData.messages.map((message) => <article key={message.id}><button className="avatar-link" type="button" aria-label={`查看 ${message.nickname} 的主页`} onClick={() => openProfile(message.authorUserId)}><Avatar user={message} size="normal" /></button><div><button className="message-author-link" type="button" onClick={() => openProfile(message.authorUserId)}>{message.nickname}</button><time>{annotationWhen(message.createdAt)}</time><p>{message.body}</p></div></article>)}</div>}
           </section>
@@ -1907,7 +1859,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
     </section>}
 
     {view === "settings" && <section className="full-view settings-view" id="view-content">
-      {!data.user ? <div className="profile-card signed-out"><Key size={28} weight="duotone" /><h2>登录后管理 API 密钥</h2><p>API 密钥让你在命令行、其他电脑上免密码读取订阅与选题。</p><button className="primary-button" onClick={() => openAuth("login")}>登录 / 注册</button></div>
+      {!data.user ? null
         : <div className="settings-shell">
           <header className="profile-page-heading"><div><small>账号设置</small><h1>API 密钥</h1></div></header>
           <p className="settings-intro">API 密钥用于 <code>topics</code> 命令行工具和其他设备免密码登录。每台设备建议单独生成一枚，丢失或不用时随时撤销，不影响其它设备。</p>
@@ -1941,9 +1893,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
 
     {addOpen && <Modal title="收录新来源" onClose={() => setAddOpen(false)} wide><form className="modal-form" onSubmit={addSubscription}><label htmlFor="source-input">作者主页、公众号文章或博客地址</label><input id="source-input" value={sourceInput} onChange={(event) => setSourceInput(event.target.value)} placeholder="粘贴作者主页、公众号文章或博客地址" /><fieldset className="source-category-choice"><legend>内容分类</legend><p>选择这个来源最常发布的主题。</p><div>{SOURCE_CATEGORIES.map((category) => <label className={sourceCategory === category.value ? "selected" : ""} key={category.value}><input type="radio" name="source-category" value={category.value} checked={sourceCategory === category.value} onChange={() => setSourceCategory(category.value)} /><span>{category.label}</span></label>)}</div></fieldset><p>收录成功后会自动关注。系统首次导入最近 20 篇，X 默认每小时更新，其他默认每天更新；可在 topics CLI 用 sources set 调整每源拉取间隔。</p><div className="form-actions"><button type="button" onClick={() => setAddOpen(false)}>取消</button><button className="primary-button" disabled={busy === "source"}>{busy === "source" ? "正在识别" : "收录并关注"}</button></div></form></Modal>}
 
-    {authOpen && <Modal title={authMode === "login" ? `登录${BRAND_NAME}` : `注册${BRAND_NAME}`} onClose={() => { setAuthOpen(false); setAuthError(""); }}><form className="modal-form" onSubmit={submitAuth}><div className="auth-switch"><button type="button" className={authMode === "login" ? "active" : ""} onClick={() => { setAuthMode("login"); setAuthError(""); }}>登录</button><button type="button" className={authMode === "register" ? "active" : ""} onClick={() => { setAuthMode("register"); setAuthError(""); }}>注册</button></div><label>账号<input value={authAccount} maxLength={64} autoComplete="username" onChange={(event) => setAuthAccount(event.target.value)} /></label>{authMode === "register" && <label>昵称<input value={authNickname} maxLength={40} autoComplete="nickname" onChange={(event) => setAuthNickname(event.target.value)} /></label>}<label>密码<input type="password" value={authPassword} minLength={8} maxLength={128} autoComplete={authMode === "login" ? "current-password" : "new-password"} onChange={(event) => setAuthPassword(event.target.value)} /></label>{authMode === "register" && <label>确认密码<input type="password" value={authConfirm} minLength={8} maxLength={128} autoComplete="new-password" onChange={(event) => setAuthConfirm(event.target.value)} /></label>}{authMode === "register" && <label>邀请码（如有）<input value={authInviteCode} maxLength={128} autoComplete="off" onChange={(event) => setAuthInviteCode(event.target.value)} /></label>}<p>{authMode === "login" ? "登录后会保存你的阅读、收藏和批注记录。" : "账号用于登录，昵称会显示在排行榜和公开批注中。"}</p>{authError && <div className="auth-feedback error" role="alert">{authError}</div>}<button className="primary-button full" disabled={busy === "auth"}>{busy === "auth" ? authMode === "login" ? "正在登录…" : "正在注册…" : authMode === "login" ? "登录" : "注册并登录"}</button></form></Modal>}
 
-    {registrationSuccess && <Modal title="注册成功" onClose={() => setRegistrationSuccess(null)}><div className="registration-success" role="status"><span className="success-mark"><Check size={22} weight="bold" aria-hidden="true" /></span><strong>欢迎你，{registrationSuccess.nickname}</strong><p>账号已经创建并自动登录。先关注几位作者，关注后即可进入今日阅读；下次登录会直接回到那里。</p><button className="primary-button full" onClick={() => setRegistrationSuccess(null)}>开始关注作者</button></div></Modal>}
 
     {passwordOpen && <Modal title="修改密码" onClose={() => setPasswordOpen(false)}><form className="modal-form" onSubmit={submitPassword}><label>当前密码<input type="password" value={currentPassword} autoComplete="current-password" onChange={(event) => setCurrentPassword(event.target.value)} /></label><label>新密码<input type="password" value={newPassword} minLength={8} maxLength={128} autoComplete="new-password" onChange={(event) => setNewPassword(event.target.value)} /></label><label>确认新密码<input type="password" value={confirmPassword} minLength={8} maxLength={128} autoComplete="new-password" onChange={(event) => setConfirmPassword(event.target.value)} /></label><p>修改后，其他设备上的登录会话会自动退出。</p><button className="primary-button full" disabled={busy === "password"}>{busy === "password" ? "保存中" : "确认修改"}</button></form></Modal>}
 

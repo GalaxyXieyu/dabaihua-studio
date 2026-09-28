@@ -126,7 +126,7 @@ test("ships public passage annotations, one-level replies, plaza feeds, personal
   assert.match(page, /返回来源列表/);
   assert.match(page, /sidebarDraft/);
   assert.equal([...page.matchAll(/onSelection=\{handleArticleSelection\}/g)].length, 2);
-  assert.match(page, /登录\$\{BRAND_NAME\}/);
+  assert.doesNotMatch(page, /登录\$\{BRAND_NAME\}/);
   assert.match(styles, /reader-annotation-layout\.with-sidebar/);
   assert.match(styles, /annotation-sidebar/);
   assert.match(styles, /discover-immersive/);
@@ -412,8 +412,8 @@ test("ships secure accounts, personal state, source follows, contributors, and d
   assert.match(page, /<SiteNavCluster/);
   assert.match(page, /className="brand-block source-context-header"/);
   assert.match(page, /immersiveTodayReading/);
-  assert.match(page, /账号已经创建并自动登录/);
-  assert.match(page, /auth-feedback error/);
+  assert.doesNotMatch(page, /账号已经创建并自动登录/);
+  assert.doesNotMatch(page, /auth-feedback error/);
   assert.doesNotMatch(page, /aria-label="未读"|article-row-foot/);
   assert.match(page, /className="read-status"/);
   assert.match(page, /已读<\/span>/);
@@ -959,7 +959,7 @@ test("gates registration behind DABAIHUA_ALLOW_REGISTER and an optional invite c
   assert.match(auth, /注册已关闭，请联系管理员/);
   assert.match(auth, /邀请码不正确/);
   assert.match(route, /inviteCode\?: string/);
-  assert.match(page, /inviteCode: authInviteCode/);
+  assert.doesNotMatch(page, /inviteCode: authInviteCode/);
 });
 
 test("ships the Aries deploy helpers and the publish-review CLI", async () => {
@@ -1433,4 +1433,15 @@ test("builds the admin-only today page from real in-app signals and keeps /readi
   assert.equal(sectionForPath("/reading"), "content");
   assert.equal(activeTabKey("/reading"), "reading");
   assert.match(siteNav, /hasPrefix\(pathname, "\/reading"\)/);
+});
+
+test("keeps the retired visitor auth screens out of the desk app", async () => {
+  const page = await readFile(new URL("../app/_components/DeskApp.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(page, /openAuth\(/);
+  assert.doesNotMatch(page, /submitAuth/);
+  assert.doesNotMatch(page, /registrationSuccess/);
+  assert.doesNotMatch(page, /登录后，开始你的今日阅读/);
+  assert.doesNotMatch(page, /global-login/);
+  assert.match(page, /goToLogin/);
+  assert.match(page, /\/login\?next=/);
 });
