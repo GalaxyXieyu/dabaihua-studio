@@ -11,33 +11,8 @@
  * 本脚本绝不打印 key。
  */
 
-import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import path from "node:path";
-
-const DEFAULT_BASE = "https://topic.aigalaxy.top";
-const CONFIG_DIR = process.env.TOPICS_CONFIG_DIR || path.join(homedir(), ".config", "topics-cli");
-const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
-
-function loadConfig() {
-  try {
-    if (existsSync(CONFIG_FILE)) return JSON.parse(readFileSync(CONFIG_FILE, "utf8"));
-  } catch {
-    /* 配置损坏时按未登录处理 */
-  }
-  return {};
-}
-
-function resolveBase(flagBase) {
-  const configured = flagBase || process.env.DABAIHUA_BASE_URL || loadConfig().endpoint || DEFAULT_BASE;
-  return String(configured).trim().replace(/\/+$/, "");
-}
-
-function resolveKey() {
-  const envKey = String(process.env.DABAIHUA_API_KEY || "").trim();
-  if (envKey) return envKey;
-  return String(loadConfig().token || "").trim();
-}
+import { readFileSync } from "node:fs";
+import { apiRequest as request, resolveBase, resolveKey } from "./lib/dabaihua-api.mjs";
 
 function usage() {
   process.stdout.write(
@@ -63,29 +38,6 @@ function parseArgs(argv) {
   return { positional, flags };
 }
 
-async function request(base, token, pathname, options = {}) {
-  const response = await fetch(base + pathname, {
-    method: options.method || "GET",
-    headers: {
-      authorization: `Bearer ${token}`,
-      ...(options.body ? { "content-type": "application/json" } : {}),
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
-  const text = await response.text();
-  let data = {};
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    data = {};
-  }
-  if (!response.ok) {
-    const detail = Array.isArray(data.errors) ? data.errors.join("；") : data.error || `HTTP ${response.status}`;
-    throw new Error(detail);
-  }
-  return data;
-}
-
 async function cmdPush(positional, flags, base, token) {
   const file = positional[0];
   if (!file) throw new Error("用法：node scripts/brief.mjs push <file.json> [--base URL]");
@@ -101,6 +53,9 @@ async function cmdPush(positional, flags, base, token) {
   const result = await request(base, token, `/api/briefs/${raw.date}`, { method: "PUT", body: raw });
   const action = result.created ? "已导入" : "已更新";
   process.stdout.write(`${action} ${result.date}：${result.topicCount} 个选题，保留了 ${result.responsesKept} 条回复\n`);
+  if (result.materials) {
+    process.stdout.write(`素材：新增 ${result.materials.added}，更新 ${result.materials.updated}，已在阅读 ${result.materials.linked}\n`);
+  }
   process.stdout.write(`页面地址：${result.url}\n`);
 }
 

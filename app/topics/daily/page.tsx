@@ -5,6 +5,7 @@ import { getSessionUser } from "../../../lib/auth";
 import { requestOrigin } from "../../../lib/request-origin";
 import { getBrief, getLatestBriefDate, listBriefDates, listResponses } from "../../../lib/daily-brief";
 import { isValidBriefDate } from "../../../lib/daily-brief-core";
+import { findItemsByUrls } from "../../../lib/store";
 import { dateLabel, shanghaiDate } from "../../../lib/today-core";
 import { SiteAppBar } from "../../_components/SiteAppBar";
 import { DailyBrief } from "./_components/DailyBrief";
@@ -33,6 +34,10 @@ export default async function DailyBriefPage({ searchParams }: { searchParams: P
   const selected = requested && isValidBriefDate(requested) ? requested : await getLatestBriefDate(env);
   const stored = selected ? await getBrief(env, selected) : null;
   const label = dateLabel(selected ?? shanghaiDate());
+  const materialUrls = stored
+    ? stored.brief.topics.flatMap((topic) => topic.materials.map((material) => material.url)).filter(Boolean)
+    : [];
+  const materialReaderLinks = Object.fromEntries(await findItemsByUrls(env, materialUrls));
 
   return (
     <div className="db-page">
@@ -45,6 +50,7 @@ export default async function DailyBriefPage({ searchParams }: { searchParams: P
           dates={dates}
           userAccount={user.account}
           initialResponses={await listResponses(env, { date: selected })}
+          materialReaderLinks={materialReaderLinks}
         />
       ) : (
         <main className="db-empty-wrap">

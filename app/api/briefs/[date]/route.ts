@@ -59,7 +59,7 @@ export async function PUT(request: Request, { params }: Params) {
   const result = validateBrief(body);
   if (!result.ok) return json({ error: "invalid brief", errors: result.errors }, 400);
 
-  const { created } = await upsertBrief(env, result.brief, auth.user.id);
+  const { created, materials } = await upsertBrief(env, result.brief, auth.user.id);
   const responsesKept = await countResponses(env, date);
   const base = publicBaseUrl(env, request);
   return json(
@@ -70,6 +70,7 @@ export async function PUT(request: Request, { params }: Params) {
       topicCount: result.brief.topics.length,
       url: `${base}/topics/daily?date=${date}`,
       responsesKept,
+      materials,
     },
     200,
   );

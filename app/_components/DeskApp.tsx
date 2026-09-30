@@ -43,7 +43,7 @@ import { BRAND_NAME } from "../../lib/brand";
 import { SiteNavCluster } from "./SiteNav";
 
 type SessionUser = { id: number; account: string; nickname: string; bio: string; avatarUrl: string | null; role: "user" | "admin"; createdAt: string };
-type Source = { id: number; kind: "rss" | "wechat" | "x"; category: SourceCategory; name: string; url: string; enabled: number | boolean; lastSyncedAt: string | null; lastError: string | null; avatarUrl: string | null; itemCount: number; contributorUserId: number | null; contributorNickname: string; canManage: number | boolean; isFollowed: number | boolean };
+type Source = { id: number; kind: "rss" | "wechat" | "x" | "digest"; category: SourceCategory; name: string; url: string; enabled: number | boolean; lastSyncedAt: string | null; lastError: string | null; avatarUrl: string | null; itemCount: number; contributorUserId: number | null; contributorNickname: string; canManage: number | boolean; isFollowed: number | boolean };
 type Item = { id: number; sourceId: number | null; kind: "rss" | "link"; title: string; author: string | null; originalExcerpt: string | null; translatedTitle: string | null; translatedExcerpt: string | null; url: string; publishedAt: string | null; topic: string | null; status: "pending" | "ready" | "needs_ai"; isRead: number | boolean; isSaved: number | boolean; sourceName: string | null };
 type Detail = Item & { contentMarkdown: string | null };
 type ImportJob = { id: number; query: string; status: "pending" | "completed" | "failed"; stage: "queued" | "reading" | "importing" | "history" | "retrying" | "completed"; resultName: string | null; itemCount: number; lastError: string | null; createdAt: string; updatedAt: string | null };
@@ -52,7 +52,7 @@ type LeaderboardData = { period: "today" | "yesterday"; day: string; reading: Ar
 type AnnotationReply = { id: number; annotationId: number; userId: number; nickname: string; avatarUrl: string | null; replyToUserId: number | null; replyToNickname: string | null; body: string; createdAt: string };
 type Annotation = { id: number; itemId: number; userId: number; nickname: string; avatarUrl: string | null; quote: string; body: string; blockIndex: number; startOffset: number; endOffset: number; createdAt: string; updatedAt: string; replyCount: number; replies: AnnotationReply[]; itemTitle?: string; itemAuthor?: string | null; sourceName?: string | null };
 type AnnotationSelection = { itemId: number; quote: string; blockIndex: number; startOffset: number; endOffset: number; top: number; left: number };
-type ProfileSource = { id: number; kind: "rss" | "wechat" | "x"; category: SourceCategory | null; name: string; url: string; avatarUrl: string | null; itemCount: number };
+type ProfileSource = { id: number; kind: "rss" | "wechat" | "x" | "digest"; category: SourceCategory | null; name: string; url: string; avatarUrl: string | null; itemCount: number };
 type ProfileMessage = { id: number; authorUserId: number; nickname: string; avatarUrl: string | null; body: string; createdAt: string };
 type PublicProfile = {
   user: Pick<SessionUser, "id" | "account" | "nickname" | "bio" | "avatarUrl" | "createdAt">;
@@ -164,6 +164,7 @@ function todayHeading() {
 function sourceStatus(source: Source) {
   if (!source.enabled) return "已暂停";
   if (source.lastError) return `同步失败：${source.lastError}`;
+  if (source.kind === "digest") return "随每日选题更新";
   if (source.lastSyncedAt) return `更新于 ${when(source.lastSyncedAt)}`;
   return source.kind === "x" ? "每小时自动更新" : "每日自动更新";
 }
@@ -171,6 +172,7 @@ function sourceStatus(source: Source) {
 function sourceKind(source: Source) {
   if (source.kind === "wechat") return "微信公众号";
   if (source.kind === "x") return "X";
+  if (source.kind === "digest") return "选题素材";
   return "博客";
 }
 
@@ -449,7 +451,8 @@ function ProfileSourceAvatar({ source }: { source: ProfileSource }) {
 }
 
 function ProfileSourceLink({ source, onOpen }: { source: ProfileSource; onOpen: () => void }) {
-  return <button type="button" onClick={onOpen}><ProfileSourceAvatar source={source} /><span><strong>{source.name}</strong><small>{source.kind === "wechat" ? "微信公众号" : source.kind === "x" ? "X" : "博客"} · {source.itemCount} 篇</small></span><CaretRight size={14} weight="bold" /></button>;
+  const kindLabel = source.kind === "wechat" ? "微信公众号" : source.kind === "x" ? "X" : source.kind === "digest" ? "选题素材" : "博客";
+  return <button type="button" onClick={onOpen}><ProfileSourceAvatar source={source} /><span><strong>{source.name}</strong><small>{kindLabel} · {source.itemCount} 篇</small></span><CaretRight size={14} weight="bold" /></button>;
 }
 
 function AnnotationCard({ annotation, active, user, busy, onFocus, onReply, onRequireLogin, onOpenProfile }: { annotation: Annotation; active: boolean; user: SessionUser | null; busy: string; onFocus: () => void; onReply: (annotationId: number, replyToUserId: number, body: string) => Promise<void>; onRequireLogin: () => void; onOpenProfile: (userId: number) => void }) {
@@ -1593,7 +1596,14 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
   const navActiveTab = view === "today" || view === "discover" ? "reading" : null;
   const handleNavSelect = (key: string, event: ReactMouseEvent<HTMLAnchorElement>) => {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
-    if (key === "content" || key === "reading") { event.preventDefault(); navigate("discover"); }
+    if (key === "content") {
+      // Admins land on the first content tab (选题简报); everyone else stays on 阅读.
+      if (data.user?.role === "admin") return;
+      event.preventDefault();
+      navigate("discover");
+      return;
+    }
+    if (key === "reading") { event.preventDefault(); navigate("discover"); }
   };
 
   return <main className={`reader-workspace ${sourcePaneCollapsed ? "sources-collapsed" : ""} ${mobileSourcePaneOpen ? "mobile-sources-open" : ""} view-${view} ${navSection ? "has-subnav" : ""} ${immersiveTodayReading ? "today-immersive" : ""} ${immersiveDiscoverReading ? "discover-immersive" : ""} ${showAnnotationSidebar ? "annotations-open" : ""}`} id="main-content" style={{ "--article-pane-width": `${articlePaneWidth}px` } as CSSProperties}>

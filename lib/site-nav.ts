@@ -10,6 +10,7 @@ export const HIDDEN_FROM_NAV = ["/annotations", "/leaderboard"];
 
 const TODAY_ITEM: NavItem = { key: "today", label: "今天", href: "/" };
 const CONTENT_ITEM: NavItem = { key: "content", label: "内容", href: "/discover" };
+const ADMIN_CONTENT_ITEM: NavItem = { key: "content", label: "内容", href: "/topics/daily" };
 const GROWTH_ITEM: NavItem = { key: "growth", label: "成长", href: "/career" };
 
 const CONTENT_TABS: NavItem[] = [
@@ -35,15 +36,15 @@ function hasPrefix(pathname: string, base: string): boolean {
 }
 
 export function primaryNavItems(role: string | null | undefined): NavItem[] {
-  if (isAdmin(role)) return [TODAY_ITEM, CONTENT_ITEM, GROWTH_ITEM];
+  if (isAdmin(role)) return [TODAY_ITEM, ADMIN_CONTENT_ITEM, GROWTH_ITEM];
   return [TODAY_ITEM, CONTENT_ITEM];
 }
 
 export function sectionTabs(section: NavSection, role: string | null | undefined): NavItem[] {
   if (section === "content") {
     if (!isAdmin(role)) return CONTENT_TABS;
-    // 选题简报 follows 选题 for admins only.
-    return [CONTENT_TABS[0], CONTENT_TABS[1], BRIEF_TAB, CONTENT_TABS[2], CONTENT_TABS[3]];
+    // 选题简报 leads the admin content tabs.
+    return [BRIEF_TAB, ...CONTENT_TABS];
   }
   if (section === "growth") return isAdmin(role) ? GROWTH_TABS : [];
   return [];

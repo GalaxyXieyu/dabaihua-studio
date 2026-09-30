@@ -12,8 +12,10 @@ import { normalizeXPublishedAt } from "../lib/x-date.ts";
 import { inferSourceCategory, isSourceCategory } from "../lib/source-category.ts";
 import { matchesHostPattern, secureRedirectResponse, upgradeForwardedRequest, upgradeForwardedRequestWithFlag } from "../lib/trusted-proxy.ts";
 import { splitSentences } from "../lib/sentences.ts";
+import { mergeWeakMaterial } from "../lib/topic-material-merge.ts";
 import { decideReviewMode } from "../app/_components/review-mode.ts";
 import { PayloadTooLargeError, discardBody, isValidIsoWeek, publicBaseUrl, readBodyWithLimit, shanghaiIso } from "../lib/weekly.ts";
+import { parseDigestMarkdown, stripBodyHeader } from "../scripts/lib/topic-materials.mjs";
 
 test("converts entity-escaped feed HTML before rendering Markdown", () => {
   const markdown = htmlToMarkdown('&lt;img src=&quot;https://cdn.example.com/cover.jpg&quot; alt=&quot;封面&quot;&gt;&lt;p&gt;&lt;strong&gt;最新文字&lt;/strong&gt;&lt;br&gt;正文&lt;/p&gt;');
@@ -1322,11 +1324,13 @@ test("runs the login gate in the worker before serving weekly reports", async ()
 test("configures primary navigation by role", () => {
   const admin = primaryNavItems("admin");
   assert.deepEqual(admin.map((item) => item.label), ["今天", "内容", "成长"]);
-  assert.deepEqual(admin.map((item) => item.href), ["/", "/discover", "/career"]);
+  assert.deepEqual(admin.map((item) => item.href), ["/", "/topics/daily", "/career"]);
+  assert.equal(admin.find((item) => item.key === "content")?.href, "/topics/daily");
 
   for (const role of ["user", null, undefined]) {
     const items = primaryNavItems(role);
     assert.deepEqual(items.map((item) => item.label), ["今天", "内容"]);
+    assert.equal(items.find((item) => item.key === "content")?.href, "/discover");
     assert.equal(JSON.stringify(items).includes("成长"), false);
   }
 
@@ -1339,8 +1343,8 @@ test("configures primary navigation by role", () => {
 
 test("configures section tabs by section and role", () => {
   assert.deepEqual(sectionTabs("content", "user").map((item) => item.label), ["阅读", "选题", "文章", "策略"]);
-  assert.deepEqual(sectionTabs("content", "admin").map((item) => item.href), ["/discover", "/topics", "/topics/daily", "/articles", "/strategy"]);
-  assert.deepEqual(sectionTabs("content", "admin").map((item) => item.label), ["阅读", "选题", "选题简报", "文章", "策略"]);
+  assert.deepEqual(sectionTabs("content", "admin").map((item) => item.href), ["/topics/daily", "/discover", "/topics", "/articles", "/strategy"]);
+  assert.deepEqual(sectionTabs("content", "admin").map((item) => item.label), ["选题简报", "阅读", "选题", "文章", "策略"]);
   assert.equal(JSON.stringify(sectionTabs("content", "user")).includes("/topics/daily"), false);
   assert.deepEqual(sectionTabs("growth", "admin").map((item) => item.label), ["周报", "职业"]);
   assert.deepEqual(sectionTabs("growth", "user"), []);
@@ -1676,7 +1680,7 @@ test("shapes brief replies with question pairing and missing-topic flags", () =>
 });
 
 test("ships the daily brief storage, API, page and CLI", async () => {
-  const [schema, store, migration, journal, domain, core, listRoute, dateRoute, responseRoute, readRoute, cli, packageJson, page, component, css, nav, todayLib, topicsPage] = await Promise.all([
+  const [schema, store, migration, journal, domain, core, listRoute, dateRoute, responseRoute, readRoute, cli, apiLib, packageJson, page, component, css, nav, todayLib, topicsPage] = await Promise.all([
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/store.ts", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0016_daily_briefs.sql", import.meta.url), "utf8"),
@@ -1688,6 +1692,7 @@ test("ships the daily brief storage, API, page and CLI", async () => {
     readFile(new URL("../app/api/briefs/[date]/responses/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/briefs/responses/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../scripts/brief.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/lib/dabaihua-api.mjs", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
     readFile(new URL("../app/topics/daily/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/topics/daily/_components/DailyBrief.tsx", import.meta.url), "utf8"),
@@ -1739,11 +1744,13 @@ test("ships the daily brief storage, API, page and CLI", async () => {
 
   const pkg = JSON.parse(packageJson);
   assert.equal(pkg.scripts.brief, "node scripts/brief.mjs");
-  assert.match(cli, /DABAIHUA_API_KEY/);
-  assert.match(cli, /DABAIHUA_BASE_URL/);
-  assert.match(cli, /topics-cli/);
+  assert.match(cli, /from ".\/lib\/dabaihua-api.mjs"/);
+  assert.match(apiLib, /DABAIHUA_API_KEY/);
+  assert.match(apiLib, /DABAIHUA_BASE_URL/);
+  assert.match(apiLib, /topics-cli/);
   assert.match(cli, /请设置 DABAIHUA_API_KEY 或先运行 topics login/);
   assert.doesNotMatch(cli, /process\.stdout\.write\([^)]*token/i);
+  assert.doesNotMatch(apiLib, /process\.stdout\.write\([^)]*token/i);
 
   assert.match(page, /dynamic = "force-dynamic"/);
   assert.match(page, /role !== "admin"/);
@@ -1767,4 +1774,126 @@ test("ships the daily brief storage, API, page and CLI", async () => {
   assert.match(component, /rel="noopener noreferrer"/);
   assert.match(css, /max-width: 760px/);
   assert.match(css, /@media \(min-width: 900px\)/);
+});
+
+test("parses digest markdown into importable topic materials", async () => {
+  const file = "/workspace/projects/daily-topics/2026-09-30.md";
+  if (!existsSync(file)) return; // Fixture lives on the box; skip elsewhere.
+  const text = await readFile(file, "utf8");
+  const { items, references } = parseDigestMarkdown(text);
+  assert.ok(items.length >= 8, `expected at least 8 digest items, got ${items.length}`);
+  for (const item of items) {
+    assert.ok(item.url.startsWith("http"), item.url);
+    assert.ok(item.title);
+    assert.ok(item.origin, `${item.title} is missing origin`);
+  }
+  assert.equal(items[0].title, "MCP Agent 校验要给「来源」打分，而不只是核对事实");
+  assert.ok(references.length >= 3);
+
+  const synthetic = [
+    "## 今日干货",
+    "",
+    "### 1. 一条干货标题",
+    "",
+    "未能读取原文",
+    "",
+    "- 原文：[Original Title](https://example.com/a)",
+    "- 来源：Example · 2026-09-30",
+    "- 标签：Agent",
+    "",
+    "## 推荐选题",
+    "",
+    "- **依据素材**：",
+    "  - [另一篇](https://example.com/b)",
+    "",
+  ].join("\n");
+  const parsed = parseDigestMarkdown(synthetic);
+  assert.equal(parsed.items.length, 1);
+  assert.equal(parsed.items[0].summary, "");
+  assert.equal(parsed.items[0].url, "https://example.com/a");
+  assert.equal(parsed.items[0].origin, "Example");
+  assert.deepEqual(parsed.references, [{ title: "另一篇", url: "https://example.com/b" }]);
+});
+
+test("strips the body cache header before pushing content", () => {
+  const raw = "URL: https://example.com/a\nFETCHED: 2026-09-30T00:00:00.000Z\n\n正文第一段\n正文第二段\n";
+  assert.equal(stripBodyHeader(raw), "正文第一段\n正文第二段");
+  assert.equal(stripBodyHeader("没有头部\n直接正文"), "没有头部\n直接正文");
+});
+
+test("weak topic materials only fill empty fields and never overwrite stored values", () => {
+  const stored = {
+    title: "真正的原文标题",
+    translatedTitle: "已有的中文标题",
+    originalExcerpt: "已有的原摘要",
+    translatedExcerpt: "已有的中文摘要",
+    contentMarkdown: "已有的正文",
+    author: "Example",
+    publishedAt: "2026-09-30T00:00:00.000Z",
+  };
+  const weak = {
+    title: "真正的原文标题。",
+    translatedTitle: "摘要第一句顶替的中文标题",
+    originalExcerpt: "摘要第一句",
+    translatedExcerpt: "摘要第一句",
+    contentMarkdown: "更长的正文",
+    author: "other.example.com",
+    publishedAt: "2026-01-01T00:00:00.000Z",
+  };
+  assert.deepEqual(mergeWeakMaterial(stored, weak), stored);
+
+  const blank = {
+    title: "",
+    translatedTitle: null,
+    originalExcerpt: "  ",
+    translatedExcerpt: null,
+    contentMarkdown: "",
+    author: null,
+    publishedAt: null,
+  };
+  assert.deepEqual(mergeWeakMaterial(blank, weak), weak);
+});
+
+test("ships an admin-only topic materials import API and pushes digest materials", async () => {
+  const [route, store, digest, materialsCli, component, brief] = await Promise.all([
+    readFile(new URL("../app/api/materials/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/store.ts", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/daily-ai-digest.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/materials.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../app/topics/daily/_components/DailyBrief.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/daily-brief.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(route, /authenticateApiKey/);
+  assert.match(route, /role !== "admin"/);
+  assert.match(route, /importTopicMaterials/);
+  assert.match(route, /weak: body\.weak === true/);
+  assert.match(route, /findItemsByUrls/);
+  assert.match(route, /readBodyWithLimit/);
+  assert.match(route, /cache-control/);
+  assert.match(store, /export async function importTopicMaterials/);
+  assert.match(store, /mergeWeakMaterial/);
+  assert.match(store, /input\.weak/);
+  assert.match(store, /ensureDigestSource/);
+  assert.match(store, /digest:\/\/topic-materials/);
+  assert.match(brief, /weak: true/);
+  assert.match(materialsCli, /weak: true/);
+  assert.match(digest, /--no-push/);
+  assert.match(digest, /DIGEST_PUSH_MATERIALS/);
+  assert.match(digest, /pushDate\(date, outDir/);
+  assert.match(materialsCli, /push-all/);
+  assert.match(component, /brief-material-reader-link/);
+  assert.match(component, /在阅读中打开/);
+});
+
+test("renders the digest 选题素材 source without an avatar proxy or management controls", async () => {
+  const [deskApp, avatarRoute] = await Promise.all([
+    readFile(new URL("../app/_components/DeskApp.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/source-avatar/route.ts", import.meta.url), "utf8"),
+  ]);
+  assert.match(deskApp, /"rss" \| "wechat" \| "x" \| "digest"/);
+  assert.match(deskApp, /选题素材/);
+  assert.match(deskApp, /随每日选题更新/);
+  // Only rss / x go through the avatar proxy; digest falls back to an initial.
+  assert.match(deskApp, /source\.kind === "rss" \|\| source\.kind === "x"\) return `\/api\/source-avatar/);
+  assert.match(avatarRoute, /status: 404/);
 });

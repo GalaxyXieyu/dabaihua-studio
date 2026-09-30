@@ -2,6 +2,7 @@ import { discoverFeedLinks, feedTitle, isFeedDocument, parseFeed, type FeedEntry
 import { fetchPublicText, publicHttpUrl } from "./safe-fetch";
 import { extractArticle, htmlToMarkdown, readHtmlMeta } from "./article";
 import { inferSourceCategory, isSourceCategory, type SourceCategory } from "./source-category";
+import { mergeWeakMaterial } from "./topic-material-merge";
 import { readXArticles, readXPost, readXProfile, xPostAddress, xProfileAddress } from "./x";
 
 export type AppEnv = { DB: D1Database; AI?: { run: (model: string, input: unknown) => Promise<unknown> } };
@@ -430,7 +431,7 @@ export async function assertSourceContributor(env: AppEnv, id: number, userId: n
 
 export async function captureLink(env: AppEnv, url: string, title?: string) {
   await ensureSchema(env.DB);
-  const normalized = publicHttpUrl(url.trim()).toString();
+  const normalized = normalizeItemUrl(url);
   if (title && title.trim().length > 240) throw new Error("标题最多 240 个字");
 
   let resolvedTitle = title?.trim() || "";
@@ -559,6 +560,190 @@ export async function importWechatArticles(env: AppEnv, accountKey: string, acco
     if (!existing) added += 1;
   }
   return added;
+}
+
+const DIGEST_SOURCE_URL = "digest://topic-materials";
+const DIGEST_SOURCE_NAME = "选题素材";
+
+/** Normalizes a stored item URL exactly the way captureLink does. */
+export function normalizeItemUrl(value: string) {
+  return publicHttpUrl(String(value ?? "").trim()).toString();
+}
+
+/**
+ * Lazily creates the built-in 「选题素材」 source (kind `digest`) and makes sure
+ * every admin follows it. Digest sources are never synced or fetched: the
+ * scheduler only touches kind `rss` / `x`.
+ */
+async function ensureDigestSource(env: AppEnv) {
+  await ensureSchema(env.DB);
+  await env.DB.prepare("INSERT INTO sources (kind, category, name, url, enabled, contributor_user_id, created_at) VALUES ('digest', 'ai', ?, ?, 1, NULL, ?) ON CONFLICT(url) DO NOTHING")
+    .bind(DIGEST_SOURCE_NAME, DIGEST_SOURCE_URL, now()).run();
+  const source = await env.DB.prepare("SELECT id FROM sources WHERE url = ?").bind(DIGEST_SOURCE_URL).first<{ id: number }>();
+  if (!source) throw new Error("选题素材来源创建失败");
+  await env.DB.prepare("INSERT OR IGNORE INTO user_source_follows (user_id, source_id, created_at) SELECT id, ?, ? FROM users WHERE role = 'admin'")
+    .bind(source.id, now()).run();
+  return source.id;
+}
+
+export type TopicMaterialInput = {
+  url?: unknown;
+  title?: unknown;
+  titleZh?: unknown;
+  origin?: unknown;
+  publishedAt?: unknown;
+  summary?: unknown;
+  contentMarkdown?: unknown;
+  tag?: unknown;
+  /** 弱素材（简报 / topics.json / 推荐选题依据素材）更新时只填空，不覆盖已有值。 */
+  weak?: unknown;
+};
+
+export type ImportedTopicMaterial = { url: string; id: number | null; status: "added" | "updated" | "linked" | "skipped"; reason?: string };
+export type TopicMaterialsResult = { added: number; updated: number; linked: number; skipped: number; items: ImportedTopicMaterial[] };
+
+const hasCjk = (text: string) => /[\u4e00-\u9fff]/.test(text);
+
+function normalizeMaterialPublishedAt(raw: unknown): string | null {
+  const value = String(raw ?? "").trim();
+  if (!value) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return `${value}T00:00:00.000Z`;
+  const timestamp = Date.parse(value);
+  if (Number.isNaN(timestamp)) return null;
+  return new Date(timestamp).toISOString();
+}
+
+/**
+ * Imports 晴儿's digest materials into `items` as their own source. Existing
+ * URLs from any other source are left untouched and only counted as `linked`.
+ */
+export async function importTopicMaterials(env: AppEnv, items: unknown, context?: { date?: string; weak?: boolean }): Promise<TopicMaterialsResult> {
+  const sourceId = await ensureDigestSource(env);
+  const list = Array.isArray(items) ? items : [];
+  if (list.length > 200) throw new Error("单次最多导入 200 条素材");
+  const result: TopicMaterialsResult = { added: 0, updated: 0, linked: 0, skipped: 0, items: [] };
+  const seen = new Set<string>();
+
+  for (const raw of list) {
+    const input = (raw && typeof raw === "object" ? raw : {}) as TopicMaterialInput;
+    const weak = input.weak === undefined ? context?.weak === true : input.weak === true;
+    let url = "";
+    try {
+      url = normalizeItemUrl(String(input.url ?? ""));
+    } catch {
+      result.skipped += 1;
+      result.items.push({ url: String(input.url ?? ""), id: null, status: "skipped", reason: "url 不合法" });
+      continue;
+    }
+    if (seen.has(url)) {
+      result.skipped += 1;
+      result.items.push({ url, id: null, status: "skipped", reason: "批内重复" });
+      continue;
+    }
+    seen.add(url);
+
+    const title = String(input.title ?? "").trim();
+    if (!title) {
+      result.skipped += 1;
+      result.items.push({ url, id: null, status: "skipped", reason: "缺少标题" });
+      continue;
+    }
+    if (title.length > 300) {
+      result.skipped += 1;
+      result.items.push({ url, id: null, status: "skipped", reason: "标题超过 300 字" });
+      continue;
+    }
+    const titleZh = String(input.titleZh ?? "").trim();
+    const summary = String(input.summary ?? "").trim().slice(0, 1200);
+    const origin = String(input.origin ?? "").trim().slice(0, 120);
+    const rawContent = String(input.contentMarkdown ?? "").trim().slice(0, 120_000);
+    const content = rawContent || [summary, `[原文链接](${url})`].filter(Boolean).join("\n\n");
+    const translatedTitle = titleZh || (hasCjk(title) ? title : null);
+    const publishedAt = normalizeMaterialPublishedAt(input.publishedAt);
+    const language = hasCjk(`${title}${summary}`) ? "zh" : "en";
+
+    const existing = await env.DB.prepare("SELECT id, source_id AS sourceId, title, translated_title AS translatedTitle, original_excerpt AS originalExcerpt, translated_excerpt AS translatedExcerpt, content_markdown AS contentMarkdown, author, published_at AS publishedAt FROM items WHERE url = ?")
+      .bind(url).first<{ id: number; sourceId: number | null; title: string | null; translatedTitle: string | null; originalExcerpt: string | null; translatedExcerpt: string | null; contentMarkdown: string | null; author: string | null; publishedAt: string | null }>();
+
+    if (!existing) {
+      const inserted = await env.DB.prepare("INSERT INTO items (source_id, kind, title, original_excerpt, content_markdown, author, translated_title, translated_excerpt, url, published_at, language, status, created_at) VALUES (?, 'link', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ready', ?)")
+        .bind(sourceId, title, summary || null, content, origin || null, translatedTitle, summary || null, url, publishedAt, language, now()).run();
+      result.added += 1;
+      result.items.push({ url, id: Number(inserted.meta.last_row_id), status: "added" });
+      continue;
+    }
+
+    if (existing.sourceId !== sourceId) {
+      result.linked += 1;
+      result.items.push({ url, id: existing.id, status: "linked" });
+      continue;
+    }
+
+    if (weak) {
+      const merged = mergeWeakMaterial(
+        {
+          title: String(existing.title ?? ""),
+          translatedTitle: existing.translatedTitle,
+          originalExcerpt: existing.originalExcerpt,
+          translatedExcerpt: existing.translatedExcerpt,
+          contentMarkdown: String(existing.contentMarkdown ?? ""),
+          author: existing.author,
+          publishedAt: existing.publishedAt,
+        },
+        {
+          title,
+          translatedTitle,
+          originalExcerpt: summary || null,
+          translatedExcerpt: summary || null,
+          contentMarkdown: content,
+          author: origin || null,
+          publishedAt,
+        },
+      );
+      await env.DB.prepare("UPDATE items SET title = ?, translated_title = ?, original_excerpt = ?, translated_excerpt = ?, content_markdown = ?, author = ?, published_at = ? WHERE id = ?")
+        .bind(merged.title, merged.translatedTitle, merged.originalExcerpt, merged.translatedExcerpt, merged.contentMarkdown, merged.author, merged.publishedAt, existing.id).run();
+      result.updated += 1;
+      result.items.push({ url, id: existing.id, status: "updated" });
+      continue;
+    }
+
+    const existingContent = String(existing.contentMarkdown || "");
+    const nextContent = !existingContent.trim() || content.length > existingContent.length ? content : existingContent;
+    await env.DB.prepare("UPDATE items SET title = ?, translated_title = COALESCE(?, translated_title), original_excerpt = COALESCE(?, original_excerpt), translated_excerpt = COALESCE(?, translated_excerpt), content_markdown = ?, author = COALESCE(NULLIF(?, ''), author), published_at = COALESCE(published_at, ?) WHERE id = ?")
+      .bind(title, translatedTitle, summary || null, summary || null, nextContent, origin, publishedAt, existing.id).run();
+    result.updated += 1;
+    result.items.push({ url, id: existing.id, status: "updated" });
+  }
+
+  return result;
+}
+
+/** Looks up item ids for a list of raw material URLs using the same normalization. */
+export async function findItemsByUrls(env: AppEnv, urls: string[]): Promise<Map<string, number>> {
+  await ensureSchema(env.DB);
+  const normalizedToOriginals = new Map<string, string[]>();
+  for (const raw of urls || []) {
+    try {
+      const original = String(raw ?? "");
+      const normalized = normalizeItemUrl(original);
+      const list = normalizedToOriginals.get(normalized) || [];
+      if (!list.includes(original)) list.push(original);
+      normalizedToOriginals.set(normalized, list);
+    } catch {
+      // Ignore links that cannot be normalized.
+    }
+  }
+  const found = new Map<string, number>();
+  if (!normalizedToOriginals.size) return found;
+  const placeholders = Array.from(normalizedToOriginals.keys()).map(() => "?").join(",");
+  const rows = await env.DB.prepare(`SELECT id, url FROM items WHERE url IN (${placeholders})`)
+    .bind(...normalizedToOriginals.keys()).all<{ id: number; url: string }>();
+  const byNormalized = new Map(rows.results.map((row) => [row.url, row.id]));
+  for (const [normalized, originals] of normalizedToOriginals) {
+    const id = byNormalized.get(normalized);
+    if (id) for (const original of originals) found.set(original, id);
+  }
+  return found;
 }
 
 function stripHtml(value: string) {

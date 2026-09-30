@@ -6,19 +6,21 @@
  *
  * 新流程：选定干货后，逐条抓取原文正文并用 pi 生成中文摘要（写进 markdown 正文位置），
  *         原文链接放摘要之后；正文与摘要都有本地缓存，可断点续跑。
+ * 写完后（除非 --no-push 或 DIGEST_PUSH_MATERIALS=0）把当天素材推到线上「选题素材」来源。
  *
  * 用法：
  *   export PATH=/home/box/.local/bin:$PATH   # node 22 + pi
  *   export OPENCODE_API_KEY=...              # 也可从 /home/box/agent-data/box-secrets.json 读取，切勿提交
  *   npm run digest            # 或: node scripts/daily-ai-digest.mjs [flags]
  *
- * flags：--date YYYY-MM-DD  --refresh  --force  --dry-run  --no-board
+ * flags：--date YYYY-MM-DD  --refresh  --force  --dry-run  --no-board  --no-push
  *        --no-summaries（或 DIGEST_SUMMARIES=0，跳过正文抓取与摘要）
  *        --out <path>（把 markdown 写到指定路径，便于试跑）
  *        --resummarize（忽略摘要缓存，强制重算）
  *
  * 环境变量：OPENCODE_API_KEY（可选，缺失时读本机密钥库）、DIGEST_MODEL、PI_BIN、
- *          DIGEST_OUT_DIR、DIGEST_D1_PATH、GITHUB_TOKEN（可选）、DIGEST_SUMMARIES。
+ *          DIGEST_OUT_DIR、DIGEST_D1_PATH、GITHUB_TOKEN（可选）、DIGEST_SUMMARIES、
+ *          DIGEST_PUSH_MATERIALS=0（关闭素材推送）、DABAIHUA_API_KEY / DABAIHUA_BASE_URL。
  * 注意：本脚本不会打印任何密钥或完整环境变量。
  */
 
@@ -48,6 +50,8 @@ import {
   SUMMARY_CONCURRENCY,
 } from "./lib/digest-fetch.mjs";
 import { runPi, loadPiKey, resolveModel } from "./lib/digest-pi.mjs";
+import { resolveBase, resolveKey } from "./lib/dabaihua-api.mjs";
+import { pushDate } from "./materials.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const UA = "dabaihua-daily-digest/1.0";
@@ -784,7 +788,7 @@ function writeCache(outDir, date, payload) {
 function parseArgs(argv) {
   const options = {
     date: "", refresh: false, force: false, dryRun: false, noBoard: false,
-    noSummaries: false, out: "", resummarize: false,
+    noSummaries: false, out: "", resummarize: false, noPush: false,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -798,6 +802,7 @@ function parseArgs(argv) {
     else if (arg === "--force") options.force = true;
     else if (arg === "--dry-run") options.dryRun = true;
     else if (arg === "--no-board") options.noBoard = true;
+    else if (arg === "--no-push") options.noPush = true;
     else if (arg === "--no-summaries") options.noSummaries = true;
     else if (arg === "--resummarize") options.resummarize = true;
     else if (arg !== "") warn(`忽略未知参数：${arg}`);
@@ -905,6 +910,23 @@ async function main() {
       } catch (error) {
         boardFailed = true;
         warn(`选题板写入失败（markdown 已保留）：${error.message}`);
+      }
+    }
+  }
+
+  if (!options.noPush && process.env.DIGEST_PUSH_MATERIALS !== "0") {
+    const token = resolveKey();
+    if (!token) {
+      warn("未找到 DABAIHUA_API_KEY / topics-cli token，跳过素材推送");
+    } else {
+      try {
+        const totals = await pushDate(date, outDir, resolveBase(""), token, false);
+        const reasons = totals.skippedReasons?.length
+          ? `（跳过：${totals.skippedReasons.map(([reason, count]) => `${reason} ${count}`).join("；")}）`
+          : "";
+        log(`素材推送：新增 ${totals.added}、更新 ${totals.updated}、已在阅读 ${totals.linked}、跳过 ${totals.skipped}${reasons}`);
+      } catch (error) {
+        warn(`素材推送失败（不影响 digest 退出码）：${error.message}`);
       }
     }
   }

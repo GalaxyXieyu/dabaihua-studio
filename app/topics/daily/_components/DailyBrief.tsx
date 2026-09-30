@@ -29,6 +29,7 @@ type Props = {
   dates: BriefDateOption[];
   userAccount: string;
   initialResponses: ShapedBriefResponse[];
+  materialReaderLinks: Record<string, number>;
 };
 
 const STARS = [1, 2, 3, 4, 5];
@@ -87,7 +88,7 @@ function StatusTag({ state }: { state: ResponseState }) {
   );
 }
 
-export function DailyBrief({ date, dateLabel, brief, dates, userAccount, initialResponses }: Props) {
+export function DailyBrief({ date, dateLabel, brief, dates, userAccount, initialResponses, materialReaderLinks }: Props) {
   const [responses, setResponses] = useState<Record<string, ResponseState>>(() => {
     const map: Record<string, ResponseState> = {};
     for (const response of initialResponses) {
@@ -191,6 +192,7 @@ export function DailyBrief({ date, dateLabel, brief, dates, userAccount, initial
             reason={brief.recommendation?.topicId === topic.id ? brief.recommendation?.reason || "" : ""}
             state={responses[topic.id] || emptyState()}
             busy={Boolean(busy[topic.id])}
+            materialReaderLinks={materialReaderLinks}
             onSave={save}
           />
         ))}
@@ -228,10 +230,11 @@ type CardProps = {
   reason: string;
   state: ResponseState;
   busy: boolean;
+  materialReaderLinks: Record<string, number>;
   onSave: (topicId: string, patch: Record<string, unknown>, optimistic: Partial<ResponseState>) => Promise<void>;
 };
 
-function Card({ topic, recommended, reason, state, busy, onSave }: CardProps) {
+function Card({ topic, recommended, reason, state, busy, materialReaderLinks, onSave }: CardProps) {
   const [open, setOpen] = useState(false);
   const [pickOpen, setPickOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -412,6 +415,14 @@ function Card({ topic, recommended, reason, state, busy, onSave }: CardProps) {
                         {material.url && (
                           <a href={material.url} target="_blank" rel="noopener noreferrer">
                             原文链接
+                          </a>
+                        )}
+                        {material.url && materialReaderLinks[material.url] && (
+                          <a
+                            href={`/discover?item=${materialReaderLinks[material.url]}`}
+                            data-testid="brief-material-reader-link"
+                          >
+                            在阅读中打开
                           </a>
                         )}
                         {material.links.map((link, linkIndex) => (

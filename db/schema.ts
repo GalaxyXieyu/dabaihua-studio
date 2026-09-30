@@ -33,7 +33,7 @@ export const authAttempts = sqliteTable("auth_attempts", {
 
 export const sources = sqliteTable("sources", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  kind: text("kind", { enum: ["rss", "wechat", "x"] }).notNull().default("rss"),
+  kind: text("kind", { enum: ["rss", "wechat", "x", "digest"] }).notNull().default("rss"),
   category: text("category", { enum: ["ai", "investment", "gaming", "technology", "business", "product"] }),
   name: text("name").notNull(),
   url: text("url").notNull().unique(),

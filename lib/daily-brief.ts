@@ -7,7 +7,7 @@
  * history and is read back with `topicMissing: true`.
  */
 
-import { ensureSchema } from "./store";
+import { ensureSchema, importTopicMaterials } from "./store";
 import {
   shapeResponse,
   validateBrief,
@@ -33,6 +33,36 @@ export type BriefDateSummary = {
 
 export type StoredBrief = { brief: DailyBrief; updatedAt: string };
 
+/** A first-sentence fallback used when a material only carries a summary. */
+function materialTitle(summary: string): string {
+  const text = summary.trim();
+  if (!text) return "";
+  const stop = text.indexOf("。");
+  const sentence = stop >= 0 ? text.slice(0, stop + 1) : text;
+  return sentence.slice(0, 60);
+}
+
+/** Collects the URL-bearing brief materials into the shape importTopicMaterials expects. */
+function briefMaterialInputs(brief: DailyBrief) {
+  const inputs: Array<{ url: string; title: string; origin: string; summary: string; weak: true }> = [];
+  const seen = new Set<string>();
+  for (const topic of brief.topics) {
+    for (const material of topic.materials) {
+      const url = String(material.url || "").trim();
+      if (!url || seen.has(url)) continue;
+      seen.add(url);
+      let origin = "";
+      try {
+        origin = new URL(url).hostname.replace(/^www\./, "");
+      } catch {
+        origin = "";
+      }
+      inputs.push({ url, title: material.title || materialTitle(material.summary), origin, summary: material.summary, weak: true });
+    }
+  }
+  return inputs;
+}
+
 function parseStoredBrief(dataJson: string): DailyBrief | null {
   try {
     const result = validateBrief(JSON.parse(dataJson));
@@ -42,19 +72,34 @@ function parseStoredBrief(dataJson: string): DailyBrief | null {
   }
 }
 
-export async function upsertBrief(env: Env, brief: DailyBrief, importedBy: number | null): Promise<{ created: boolean }> {
+export async function upsertBrief(env: Env, brief: DailyBrief, importedBy: number | null): Promise<{ created: boolean; materials: { added: number; updated: number; linked: number } }> {
   await ensureSchema(env.DB);
   const timestamp = now();
   const dataJson = JSON.stringify(brief);
   const existing = await env.DB.prepare("SELECT id FROM daily_briefs WHERE date = ?").bind(brief.date).first<{ id: number }>();
+  let created: boolean;
   if (existing) {
     await env.DB.prepare("UPDATE daily_briefs SET data_json = ?, topic_count = ?, imported_by = ?, updated_at = ? WHERE date = ?")
       .bind(dataJson, brief.topics.length, importedBy, timestamp, brief.date).run();
-    return { created: false };
+    created = false;
+  } else {
+    await env.DB.prepare("INSERT INTO daily_briefs (date, data_json, topic_count, imported_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)")
+      .bind(brief.date, dataJson, brief.topics.length, importedBy, timestamp, timestamp).run();
+    created = true;
   }
-  await env.DB.prepare("INSERT INTO daily_briefs (date, data_json, topic_count, imported_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)")
-    .bind(brief.date, dataJson, brief.topics.length, importedBy, timestamp, timestamp).run();
-  return { created: true };
+
+  // Material import is best-effort: a failure must never drop the brief itself.
+  let materials = { added: 0, updated: 0, linked: 0 };
+  try {
+    const inputs = briefMaterialInputs(brief);
+    if (inputs.length) {
+      const result = await importTopicMaterials(env, inputs, { date: brief.date });
+      materials = { added: result.added, updated: result.updated, linked: result.linked };
+    }
+  } catch {
+    // Keep the reply: the CLI can retry materials on the next import.
+  }
+  return { created, materials };
 }
 
 export async function getBrief(env: Env, date: string): Promise<StoredBrief | null> {
