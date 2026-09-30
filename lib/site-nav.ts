@@ -19,6 +19,8 @@ const CONTENT_TABS: NavItem[] = [
   { key: "strategy", label: "策略", href: "/strategy" },
 ];
 
+const BRIEF_TAB: NavItem = { key: "brief", label: "选题简报", href: "/topics/daily" };
+
 const GROWTH_TABS: NavItem[] = [
   { key: "weekly", label: "周报", href: "/weekly" },
   { key: "career", label: "职业", href: "/career" },
@@ -38,7 +40,11 @@ export function primaryNavItems(role: string | null | undefined): NavItem[] {
 }
 
 export function sectionTabs(section: NavSection, role: string | null | undefined): NavItem[] {
-  if (section === "content") return CONTENT_TABS;
+  if (section === "content") {
+    if (!isAdmin(role)) return CONTENT_TABS;
+    // 选题简报 follows 选题 for admins only.
+    return [CONTENT_TABS[0], CONTENT_TABS[1], BRIEF_TAB, CONTENT_TABS[2], CONTENT_TABS[3]];
+  }
   if (section === "growth") return isAdmin(role) ? GROWTH_TABS : [];
   return [];
 }
@@ -63,6 +69,7 @@ export function sectionForPath(pathname: string): NavSection | null {
 
 export function activeTabKey(pathname: string): string | null {
   if (hasPrefix(pathname, "/reading") || hasPrefix(pathname, "/discover")) return "reading";
+  if (hasPrefix(pathname, "/topics/daily")) return "brief";
   if (hasPrefix(pathname, "/topics")) return "topics";
   if (hasPrefix(pathname, "/articles") || hasPrefix(pathname, "/review")) return "articles";
   if (hasPrefix(pathname, "/strategy")) return "strategy";

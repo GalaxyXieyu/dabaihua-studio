@@ -7,7 +7,7 @@ import { readXArticles, readXPost, readXProfile, xPostAddress, xProfileAddress }
 export type AppEnv = { DB: D1Database; AI?: { run: (model: string, input: unknown) => Promise<unknown> } };
 const now = () => new Date().toISOString();
 const day = () => new Date().toISOString().slice(0, 10);
-const SCHEMA_VERSION = "2026-08-03.6";
+const SCHEMA_VERSION = "2026-09-30.1";
 const schemaReady = new WeakMap<object, Promise<void>>();
 
 async function initializeSchema(db: D1Database) {
@@ -76,6 +76,10 @@ async function initializeSchema(db: D1Database) {
     db.prepare("CREATE TABLE IF NOT EXISTS weekly_report_chunks (report_id INTEGER NOT NULL, version INTEGER NOT NULL, idx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY(report_id, version, idx))"),
     db.prepare("CREATE TABLE IF NOT EXISTS weekly_upload_log (user_id INTEGER NOT NULL, at TEXT NOT NULL)"),
     db.prepare("CREATE INDEX IF NOT EXISTS weekly_upload_log_user_idx ON weekly_upload_log(user_id, at)"),
+    db.prepare("CREATE TABLE IF NOT EXISTS daily_briefs (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL UNIQUE, data_json TEXT NOT NULL, topic_count INTEGER NOT NULL, imported_by INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"),
+    db.prepare("CREATE TABLE IF NOT EXISTS daily_brief_responses (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, topic_id TEXT NOT NULL, user_id INTEGER NOT NULL REFERENCES users(id), rating INTEGER, rating_comment TEXT NOT NULL DEFAULT '', decision TEXT, scenario_index INTEGER, scenario_text TEXT NOT NULL DEFAULT '', answers_json TEXT NOT NULL DEFAULT '[]', reject_reason TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(date, topic_id, user_id))"),
+    db.prepare("CREATE INDEX IF NOT EXISTS daily_brief_responses_updated_idx ON daily_brief_responses(updated_at)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS daily_brief_responses_date_idx ON daily_brief_responses(date)"),
   ]);
   const legacyFollowCleanupKey = "legacy_source_follow_seed_cleanup_v1";
   const legacyFollowCleanup = await db.prepare("SELECT value FROM app_meta WHERE key = ?").bind(legacyFollowCleanupKey).first<{ value: string }>();

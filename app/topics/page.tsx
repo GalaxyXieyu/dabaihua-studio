@@ -95,6 +95,13 @@ export default async function TopicsPage() {
           <p className="page-kicker">内容 · 选题</p>
           <h1 className="page-title">选题看板</h1>
           <p className="page-sub">共 <span className="tp-num">{topics.length}</span> 个选题</p>
+          {user.role === "admin" && (
+            <p className="tp-brief-link-wrap">
+              <a className="tp-brief-link" href="/topics/daily">
+                每日选题简报 →
+              </a>
+            </p>
+          )}
           <div className="double-rule" />
         </header>
         <Board initialTopics={topics} initialSeries={series} />

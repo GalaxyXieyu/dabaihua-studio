@@ -20,7 +20,8 @@
     "articles:sync": "node scripts/sync-articles.mjs",
     "articles:watch": "node scripts/sync-articles.mjs --watch",
     "publish:draft": "node scripts/publish-draft.mjs",
-    "publish-review": "node scripts/publish-review.mjs"
+    "publish-review": "node scripts/publish-review.mjs",
+    "brief": "node scripts/brief.mjs"
   },
   "dependencies": {
     "@fontsource-variable/newsreader": "^5.3.0",

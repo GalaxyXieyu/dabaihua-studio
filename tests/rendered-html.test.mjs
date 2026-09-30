@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 import { htmlToMarkdown } from "../lib/article.ts";
+import { shapeResponse, summarizeResponses, validateBrief } from "../lib/daily-brief-core.ts";
 import { isPublicPath, loginRedirectLocation, loginRedirectResponse } from "../lib/login-gate.ts";
 import { HIDDEN_FROM_NAV, activeTabKey, primaryNavItems, sectionForPath, sectionTabs } from "../lib/site-nav.ts";
 import { dateLabel, digestReason, isPendingArticle, isPendingTopicDraft, isoWeekOf, missingLine, shanghaiDate } from "../lib/today-core.ts";
@@ -755,7 +756,7 @@ test("keeps the article review backend, asset route, and sync script wired to th
   assert.match(store, /CREATE TABLE IF NOT EXISTS article_versions/);
   assert.match(store, /CREATE TABLE IF NOT EXISTS review_marks/);
   assert.match(store, /CREATE TABLE IF NOT EXISTS review_rounds/);
-  assert.match(store, /SCHEMA_VERSION = "2026-08-03\.6"/);
+  assert.match(store, /SCHEMA_VERSION = "2026-09-30\.1"/);
   assert.match(schema, /export const articles/);
   assert.match(schema, /export const articleAssets/);
   assert.match(schema, /export const articleVersions/);
@@ -1338,7 +1339,9 @@ test("configures primary navigation by role", () => {
 
 test("configures section tabs by section and role", () => {
   assert.deepEqual(sectionTabs("content", "user").map((item) => item.label), ["阅读", "选题", "文章", "策略"]);
-  assert.deepEqual(sectionTabs("content", "admin").map((item) => item.href), ["/discover", "/topics", "/articles", "/strategy"]);
+  assert.deepEqual(sectionTabs("content", "admin").map((item) => item.href), ["/discover", "/topics", "/topics/daily", "/articles", "/strategy"]);
+  assert.deepEqual(sectionTabs("content", "admin").map((item) => item.label), ["阅读", "选题", "选题简报", "文章", "策略"]);
+  assert.equal(JSON.stringify(sectionTabs("content", "user")).includes("/topics/daily"), false);
   assert.deepEqual(sectionTabs("growth", "admin").map((item) => item.label), ["周报", "职业"]);
   assert.deepEqual(sectionTabs("growth", "user"), []);
   assert.deepEqual(sectionTabs("growth", null), []);
@@ -1347,7 +1350,7 @@ test("configures section tabs by section and role", () => {
 
 test("maps paths to navigation sections and active tabs", () => {
   assert.equal(sectionForPath("/"), "today");
-  for (const pathname of ["/reading", "/discover", "/topics", "/articles", "/articles/hello", "/review/1", "/strategy", "/annotations", "/leaderboard"]) {
+  for (const pathname of ["/reading", "/discover", "/topics", "/topics/daily", "/articles", "/articles/hello", "/review/1", "/strategy", "/annotations", "/leaderboard"]) {
     assert.equal(sectionForPath(pathname), "content", `${pathname} should be content`);
   }
   for (const pathname of ["/weekly", "/weekly/2026-W39/", "/career"]) {
@@ -1360,6 +1363,7 @@ test("maps paths to navigation sections and active tabs", () => {
   assert.equal(activeTabKey("/reading"), "reading");
   assert.equal(activeTabKey("/discover"), "reading");
   assert.equal(activeTabKey("/topics"), "topics");
+  assert.equal(activeTabKey("/topics/daily"), "brief");
   assert.equal(activeTabKey("/articles/hello"), "articles");
   assert.equal(activeTabKey("/review/1"), "articles");
   assert.equal(activeTabKey("/strategy"), "strategy");
@@ -1552,4 +1556,215 @@ test("keeps emoji out of app and lib sources", async () => {
     }
     assert.doesNotMatch(source, EMOJI_PATTERN, `unexpected emoji in ${file.pathname}`);
   }
+});
+
+test("validates, normalizes and shapes daily briefs", async () => {
+  const samplePath = "/workspace/projects/daily-topics/2026-09-30-topics.json";
+  if (existsSync(samplePath)) {
+    const sample = JSON.parse(await readFile(samplePath, "utf8"));
+    const result = validateBrief(sample);
+    assert.equal(result.ok, true, result.ok ? "" : result.errors.join("\n"));
+    if (result.ok) {
+      assert.equal(result.brief.topics.length, 7);
+      assert.equal(result.brief.date, "2026-09-30");
+      assert.equal(result.brief.topics[0].type, "新闻题");
+      for (const topic of result.brief.topics) {
+        for (const material of topic.materials) {
+          if (material.url) assert.match(material.url, /^https?:\/\//);
+          for (const link of material.links) assert.match(link.url, /^https?:\/\//);
+        }
+      }
+    }
+  }
+
+  const base = {
+    version: 1,
+    date: "2026-09-30",
+    topics: [
+      { id: "land-1", type: "落地题", title: "标题" },
+      { id: "land-2", type: "新闻题", title: "标题 2", questions: ["问一", "问二"] },
+    ],
+  };
+  const normalized = validateBrief(base);
+  assert.equal(normalized.ok, true);
+  if (normalized.ok) {
+    assert.equal(normalized.brief.intro, "");
+    assert.equal(normalized.brief.recommendation, null);
+    assert.equal(normalized.brief.topics[0].oneLiner, "");
+    assert.deepEqual(normalized.brief.topics[0].materials, []);
+    assert.deepEqual(normalized.brief.topics[1].questions, ["问一", "问二"]);
+  }
+
+  const bad = (input) => {
+    const result = validateBrief(input);
+    assert.equal(result.ok, false);
+    return result.ok ? [] : result.errors.join("\n");
+  };
+  assert.match(bad({ ...base, date: "2026-13-40" }), /date 不是合法日期/);
+  assert.match(bad({ ...base, topics: [] }), /topics 必填且至少 1 个选题/);
+  assert.match(bad({ ...base, version: 2 }), /version 只能是 1/);
+  assert.match(bad({ ...base, topics: [{ id: "a", type: "落地题", title: "x" }, { id: "a", type: "落地题", title: "y" }] }), /topics\[1\]\.id 与前面的选题重复/);
+  assert.match(bad({ ...base, topics: [{ id: "a", type: "主题", title: "x" }] }), /topics\[0\]\.type 只能是 落地题 或 新闻题/);
+  assert.match(bad({ ...base, topics: [{ id: "a", type: "落地题", title: "" }] }), /topics\[0\]\.title 不能为空/);
+  assert.match(bad({ ...base, topics: [{ id: "bad id!", type: "落地题", title: "x" }] }), /topics\[0\]\.id/);
+  assert.match(bad({ ...base, recommendation: { topicId: "nope", reason: "" } }), /recommendation\.topicId 指向不存在的选题/);
+  assert.match(bad({ ...base, topics: [{ id: "a", type: "落地题", title: "x", materials: [{ url: "ftp://x" }] }] }), /topics\[0\]\.materials\[0\]\.url 只允许 http 或 https/);
+});
+
+test("shapes brief replies with question pairing and missing-topic flags", () => {
+  const brief = {
+    version: 1,
+    date: "2026-09-30",
+    title: "",
+    intro: "",
+    recommendation: null,
+    topics: [{
+      id: "land-1",
+      type: "落地题",
+      label: "",
+      title: "题目",
+      oneLiner: "",
+      detail: "",
+      scenarios: ["场景 A", "场景 B"],
+      questions: ["问一", "问二"],
+      materials: [],
+      note: "",
+    }],
+    notes: "",
+    sources: [],
+  };
+  const row = {
+    date: "2026-09-30",
+    topicId: "land-1",
+    rating: 4,
+    ratingComment: "不错",
+    decision: "pick",
+    scenarioIndex: 1,
+    scenarioText: "场景 B",
+    answersJson: JSON.stringify(["答一", "答二"]),
+    rejectReason: "",
+    createdAt: "t0",
+    updatedAt: "t1",
+    account: "xieyu",
+    nickname: "Yu",
+  };
+  const shaped = shapeResponse(row, brief);
+  assert.equal(shaped.topicTitle, "题目");
+  assert.equal(shaped.topicMissing, false);
+  assert.deepEqual(shaped.answers, [{ question: "问一", answer: "答一" }, { question: "问二", answer: "答二" }]);
+  assert.deepEqual(shaped.scenario, { index: 1, text: "场景 B" });
+  assert.equal(shaped.user.account, "xieyu");
+  assert.equal(shaped.decision, "pick");
+
+  const missing = shapeResponse({ ...row, topicId: "gone" }, brief);
+  assert.equal(missing.topicMissing, true);
+  assert.equal(missing.topicTitle, "");
+  assert.deepEqual(missing.answers, [{ question: "", answer: "答一" }, { question: "", answer: "答二" }]);
+
+  const fallbackScenario = shapeResponse({ ...row, scenarioText: "" }, brief);
+  assert.deepEqual(fallbackScenario.scenario, { index: 1, text: "场景 B" });
+
+  assert.deepEqual(
+    summarizeResponses([
+      { rating: 5, decision: null },
+      { rating: null, decision: "pick" },
+      { rating: null, decision: "reject" },
+      { rating: null, decision: null, ratingComment: "" },
+    ], 7),
+    { pick: 1, reject: 1, rated: 1, total: 7 },
+  );
+});
+
+test("ships the daily brief storage, API, page and CLI", async () => {
+  const [schema, store, migration, journal, domain, core, listRoute, dateRoute, responseRoute, readRoute, cli, packageJson, page, component, css, nav, todayLib, topicsPage] = await Promise.all([
+    readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/store.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0016_daily_briefs.sql", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/meta/_journal.json", import.meta.url), "utf8"),
+    readFile(new URL("../lib/daily-brief.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/daily-brief-core.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/briefs/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/briefs/[date]/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/briefs/[date]/responses/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/briefs/responses/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../scripts/brief.mjs", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../app/topics/daily/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/topics/daily/_components/DailyBrief.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/topics/daily/daily-brief.css", import.meta.url), "utf8"),
+    readFile(new URL("../lib/site-nav.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/today.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/topics/page.tsx", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(schema, /export const dailyBriefs/);
+  assert.match(schema, /export const dailyBriefResponses/);
+  assert.match(store, /CREATE TABLE IF NOT EXISTS daily_briefs/);
+  assert.match(store, /CREATE TABLE IF NOT EXISTS daily_brief_responses/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS `daily_briefs`/);
+  assert.match(migration, /CREATE TABLE IF NOT EXISTS `daily_brief_responses`/);
+  assert.match(journal, /0016_daily_briefs/);
+
+  assert.match(domain, /export async function upsertBrief/);
+  assert.match(domain, /export async function getBrief/);
+  assert.match(domain, /export async function listBriefDates/);
+  assert.match(domain, /export async function getLatestBriefDate/);
+  assert.match(domain, /export async function upsertResponse/);
+  assert.match(domain, /export async function listResponses/);
+
+  // Re-importing a day only ever updates the document: replies are kept.
+  const upsertStart = domain.indexOf("export async function upsertBrief");
+  const upsertEnd = domain.indexOf("export async function getBrief", upsertStart);
+  const upsertBody = domain.slice(upsertStart, upsertEnd);
+  assert.doesNotMatch(upsertBody, /DELETE FROM daily_brief_responses/);
+  assert.match(upsertBody, /UPDATE daily_briefs SET data_json/);
+
+  for (const route of [listRoute, dateRoute, responseRoute, readRoute]) {
+    assert.match(route, /authenticateApiKey/);
+    assert.match(route, /getSessionUser/);
+    assert.match(route, /role !== "admin"/);
+    assert.match(route, /cache-control/);
+  }
+  assert.match(dateRoute, /readBodyWithLimit/);
+  assert.match(dateRoute, /PayloadTooLargeError/);
+  assert.match(dateRoute, /publicBaseUrl/);
+  assert.match(responseRoute, /assertSameOrigin/);
+
+  assert.match(core, /export function validateBrief/);
+  assert.match(core, /export function shapeResponse/);
+
+  assert.match(nav, /选题简报/);
+  assert.match(nav, /activeTabKey/);
+  assert.match(topicsPage, /每日选题简报/);
+
+  const pkg = JSON.parse(packageJson);
+  assert.equal(pkg.scripts.brief, "node scripts/brief.mjs");
+  assert.match(cli, /DABAIHUA_API_KEY/);
+  assert.match(cli, /DABAIHUA_BASE_URL/);
+  assert.match(cli, /topics-cli/);
+  assert.match(cli, /请设置 DABAIHUA_API_KEY 或先运行 topics login/);
+  assert.doesNotMatch(cli, /process\.stdout\.write\([^)]*token/i);
+
+  assert.match(page, /dynamic = "force-dynamic"/);
+  assert.match(page, /role !== "admin"/);
+  assert.match(page, /notFound\(\)/);
+  assert.match(page, /SiteAppBar/);
+  assert.match(todayLib, /loadTodayBrief/);
+  assert.match(todayLib, /daily_briefs/);
+  assert.match(todayLib, /catch \{\s*return null;\s*\}/s);
+
+  assert.match(component, /const STARS = \[1, 2, 3, 4, 5\]/);
+  for (const testid of [
+    "brief-card", "brief-recommended", "brief-toggle", "brief-section-scenarios",
+    "brief-section-questions", "brief-section-materials", "brief-star-",
+    "brief-rating-comment", "brief-pick", "brief-pick-scenario-", "brief-pick-answer-",
+    "brief-pick-submit", "brief-reject", "brief-reject-reason", "brief-reject-submit",
+    "brief-status", "brief-undo", "brief-date-select", "brief-prev", "brief-next",
+  ]) {
+    assert.match(component, new RegExp(testid));
+  }
+  assert.match(component, /target="_blank"/);
+  assert.match(component, /rel="noopener noreferrer"/);
+  assert.match(css, /max-width: 760px/);
+  assert.match(css, /@media \(min-width: 900px\)/);
 });

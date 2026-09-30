@@ -20,6 +20,7 @@ export type TodayDraftItem = { title: string; href: string };
 export type TodayDrafts = { total: number; items: TodayDraftItem[] };
 export type TodayCandidates = { total: number; top: { id: number; title: string } | null };
 export type TodayDigest = { today: number; latestDate: string | null; latestCount: number };
+export type TodayBrief = { date: string; isToday: boolean; topicCount: number; responseCount: number };
 export type TodayMissing = { total: number; items: string[] };
 export type TodayWeekly =
   | { week: string; href: string; isThisWeek: boolean; thisWeek: string }
@@ -28,6 +29,7 @@ export type TodayWeekly =
 export type TodayData = {
   date: string;
   drafts: TodayDrafts;
+  brief: TodayBrief | null;
   candidates: TodayCandidates;
   digest: TodayDigest;
   missing: TodayMissing | { unavailable: true } | null;
@@ -35,6 +37,32 @@ export type TodayData = {
 };
 
 const DIGEST_PREFIX = "daily-ai-digest:";
+
+/**
+ * Today's brief (or the latest one). Missing table / query errors must never
+ * break the today page, so anything thrown returns null.
+ */
+async function loadTodayBrief(env: Env): Promise<TodayBrief | null> {
+  try {
+    const today = shanghaiDate();
+    const row = await env.DB.prepare(
+      `SELECT b.date AS date, b.topic_count AS topicCount,
+        (SELECT COUNT(*) FROM daily_brief_responses r WHERE r.date = b.date) AS responseCount
+       FROM daily_briefs b
+       ORDER BY CASE WHEN b.date = ? THEN 0 ELSE 1 END, b.date DESC
+       LIMIT 1`,
+    ).bind(today).first<{ date: string; topicCount: number; responseCount: number }>();
+    if (!row) return null;
+    return {
+      date: String(row.date),
+      isToday: String(row.date) === today,
+      topicCount: Number(row.topicCount || 0),
+      responseCount: Number(row.responseCount || 0),
+    };
+  } catch {
+    return null;
+  }
+}
 
 export async function getTodayData(env: Env, { isAdmin }: { isAdmin: boolean }): Promise<TodayData> {
   await ensureSchema(env.DB);
@@ -54,6 +82,7 @@ export async function getTodayData(env: Env, { isAdmin }: { isAdmin: boolean }):
     digestToday,
     digestLatest,
     reports,
+    brief,
   ] = await Promise.all([
     env.DB.prepare(`SELECT COUNT(*) AS c FROM topics WHERE ${pendingTopicWhere}`).first<{ c: number }>(),
     env.DB.prepare(`SELECT COUNT(*) AS c FROM articles WHERE ${pendingArticleWhere}`).first<{ c: number }>(),
@@ -64,6 +93,7 @@ export async function getTodayData(env: Env, { isAdmin }: { isAdmin: boolean }):
     env.DB.prepare("SELECT COUNT(*) AS c FROM topics WHERE reason = ?").bind(digestReason(date)).first<{ c: number }>(),
     env.DB.prepare(`SELECT reason, COUNT(*) AS c FROM topics WHERE reason LIKE '${DIGEST_PREFIX}%' GROUP BY reason ORDER BY reason DESC LIMIT 1`).first<{ reason: string; c: number }>(),
     isAdmin ? listWeeklyReports(env) : Promise.resolve([]),
+    isAdmin ? loadTodayBrief(env) : Promise.resolve(null),
   ]);
 
   const merged: TodayDraftItem[] = [
@@ -90,6 +120,7 @@ export async function getTodayData(env: Env, { isAdmin }: { isAdmin: boolean }):
   return {
     date,
     drafts: { total: Number(topicDraftCount?.c || 0) + Number(articleDraftCount?.c || 0), items: merged },
+    brief,
     candidates: { total: Number(candidateCount?.c || 0), top: candidateTop ? { id: Number(candidateTop.id), title: candidateTop.title || `选题 #${candidateTop.id}` } : null },
     digest: {
       today: Number(digestToday?.c || 0),

@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "今天", robots: { index: false, follow: false } };
 
 const WEEKDAY_CN = "日一二三四五六";
-const ROMAN = ["I", "II", "III", "IV", "V"];
+const ROMAN = ["I", "II", "III", "IV", "V", "VI"];
 
 /** 报纸刊头第一行：`2026 年 9 月 28 日 · 星期一`。 */
 function mastheadLine(dateStr: string): string {
@@ -106,9 +106,41 @@ export default async function TodayPage() {
           </div>
         </section>
 
+        {isAdmin && (
+          <section className="td-a-row" aria-labelledby="td-a-row-brief">
+            <div className="td-a-col-label">
+              <span className="td-a-roman" aria-hidden="true">{ROMAN[1]}</span>
+              <span className="td-a-label" id="td-a-row-brief">选题简报</span>
+            </div>
+            <div className="td-a-col-body">
+              {data.brief ? (
+                data.brief.isToday ? (
+                  <p className="td-a-lede">今天 {data.brief.topicCount} 个选题，已回复 {data.brief.responseCount} 个</p>
+                ) : (
+                  <>
+                    <p className="td-a-lede">今天还没有简报</p>
+                    <p className="td-a-note">
+                      最近一期 {data.brief.date}，{data.brief.topicCount} 个选题，已回复 {data.brief.responseCount} 个
+                    </p>
+                  </>
+                )
+              ) : (
+                <p className="td-a-empty">还没有选题简报</p>
+              )}
+              <a className="td-a-action" href="/topics/daily">
+                去看简报 →
+              </a>
+            </div>
+            <div className="td-a-col-figure">
+              <span className={indexClass(data.brief?.topicCount ?? 0)}>{data.brief?.topicCount ?? 0}</span>
+              <span className="td-a-unit">个</span>
+            </div>
+          </section>
+        )}
+
         <section className="td-a-row" aria-labelledby="td-a-row-candidates">
           <div className="td-a-col-label">
-            <span className="td-a-roman" aria-hidden="true">{ROMAN[1]}</span>
+            <span className="td-a-roman" aria-hidden="true">{isAdmin ? ROMAN[2] : ROMAN[1]}</span>
             <span className="td-a-label" id="td-a-row-candidates">待挑选题</span>
           </div>
           <div className="td-a-col-body">
@@ -134,7 +166,7 @@ export default async function TodayPage() {
 
         <section className="td-a-row" aria-labelledby="td-a-row-digest">
           <div className="td-a-col-label">
-            <span className="td-a-roman" aria-hidden="true">{ROMAN[2]}</span>
+            <span className="td-a-roman" aria-hidden="true">{isAdmin ? ROMAN[3] : ROMAN[2]}</span>
             <span className="td-a-label" id="td-a-row-digest">每日 AI 简报</span>
           </div>
           <div className="td-a-col-body">
@@ -165,7 +197,7 @@ export default async function TodayPage() {
         {isAdmin && data.missing && (
           <section className="td-a-row" aria-labelledby="td-a-row-missing">
             <div className="td-a-col-label">
-              <span className="td-a-roman" aria-hidden="true">{ROMAN[3]}</span>
+              <span className="td-a-roman" aria-hidden="true">{ROMAN[4]}</span>
               <span className="td-a-label" id="td-a-row-missing">缺数字</span>
             </div>
             <div className="td-a-col-body">
@@ -201,7 +233,7 @@ export default async function TodayPage() {
         {isAdmin && data.weekly && (
           <section className="td-a-row" aria-labelledby="td-a-row-weekly">
             <div className="td-a-col-label">
-              <span className="td-a-roman" aria-hidden="true">{ROMAN[4]}</span>
+              <span className="td-a-roman" aria-hidden="true">{ROMAN[5]}</span>
               <span className="td-a-label" id="td-a-row-weekly">本周周报</span>
             </div>
             <div className="td-a-col-body">

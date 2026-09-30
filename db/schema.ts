@@ -412,3 +412,33 @@ export const weeklyUploadLog = sqliteTable("weekly_upload_log", {
   userId: integer("user_id").notNull(),
   at: text("at").notNull(),
 }, (table) => [index("weekly_upload_log_user_idx").on(table.userId, table.at)]);
+
+export const dailyBriefs = sqliteTable("daily_briefs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  date: text("date").notNull().unique(),
+  dataJson: text("data_json").notNull(),
+  topicCount: integer("topic_count").notNull(),
+  importedBy: integer("imported_by"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const dailyBriefResponses = sqliteTable("daily_brief_responses", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  date: text("date").notNull(),
+  topicId: text("topic_id").notNull(),
+  userId: integer("user_id").notNull().references(() => users.id),
+  rating: integer("rating"),
+  ratingComment: text("rating_comment").notNull().default(""),
+  decision: text("decision", { enum: ["pick", "reject"] }),
+  scenarioIndex: integer("scenario_index"),
+  scenarioText: text("scenario_text").notNull().default(""),
+  answersJson: text("answers_json").notNull().default("[]"),
+  rejectReason: text("reject_reason").notNull().default(""),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("daily_brief_responses_unique_idx").on(table.date, table.topicId, table.userId),
+  index("daily_brief_responses_updated_idx").on(table.updatedAt),
+  index("daily_brief_responses_date_idx").on(table.date),
+]);

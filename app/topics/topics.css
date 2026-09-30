@@ -473,3 +473,19 @@
   .tp-icon-button { width: 44px; height: 44px; }
   .tp-item { padding: 16px 0; }
 }
+
+/* ── 每日选题简报入口（admin） ─────────────────────────── */
+.tp-brief-link-wrap {
+  margin: 12px 0 0;
+}
+
+.tp-brief-link {
+  color: var(--accent);
+  font-size: 13px;
+  letter-spacing: .04em;
+}
+
+.tp-brief-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
