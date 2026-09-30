@@ -64,7 +64,7 @@ export default async function TodayPage() {
             {mastheadLine(data.date)}
           </time>
           <h1 className="td-a-wordmark">今天</h1>
-          <p className="td-a-subtitle">今日需要你拍板的五件事</p>
+          <p className="td-a-subtitle">今日需要你拍板的事</p>
         </header>
         <div className="td-a-double-rule" />
       </div>
