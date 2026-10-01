@@ -43,29 +43,185 @@ body:has(.mirror-a) {
   padding: 18px 0 0;
 }
 
-.mirror-a-lede {
-  margin: 12px 0 0;
-  color: var(--muted);
-  font-size: 15px;
-}
-
 .mirror-a-main {
   padding-bottom: 72px;
 }
 
+/* ── 摘要：类别数字 + 比例条 + 按月柱图 ──────────────── */
+.mirror-a-summary {
+  margin-top: 24px;
+  border: 1px solid var(--line);
+  border-top: 2px solid var(--ink);
+  background: var(--paper);
+}
+
+.mirror-a-figures {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-bottom: 1px solid var(--line);
+}
+
+.mirror-a-figure {
+  padding: 16px 12px 14px;
+  border-left: 1px solid var(--line);
+}
+
+.mirror-a-figure:first-child {
+  border-left: 0;
+}
+
+.mirror-a-figure-num {
+  display: block;
+  font-family: var(--font-latin);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.mirror-a-figure-label {
+  display: block;
+  margin-top: 7px;
+  color: var(--faint);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.mirror-a-figure.is-inbox .mirror-a-figure-num {
+  color: var(--accent);
+}
+
+.mirror-a-summary-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.mirror-a-summary-label {
+  margin: 0 0 12px;
+  color: var(--faint);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+}
+
+.mirror-a-ratio {
+  padding: 16px 20px 20px;
+  border-right: 1px solid var(--line);
+}
+
+.mirror-a-ratio-track {
+  display: flex;
+  height: 20px;
+  overflow: hidden;
+  background: var(--canvas);
+  border: 1px solid var(--line-strong);
+}
+
+.mirror-a-ratio-seg {
+  display: block;
+  height: 100%;
+}
+
+.mirror-a-ratio-seg:nth-child(1) { background: var(--ink); }
+.mirror-a-ratio-seg:nth-child(2) { background: var(--accent); }
+.mirror-a-ratio-seg:nth-child(3) { background: var(--muted); }
+.mirror-a-ratio-seg:nth-child(4) { background: var(--faint); }
+.mirror-a-ratio-seg:nth-child(5) { background: var(--line-strong); }
+.mirror-a-ratio-seg:nth-child(6) { background: var(--line); }
+
+.mirror-a-trend {
+  padding: 16px 20px 20px;
+}
+
+.mirror-a-trend-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mirror-a-trend-legend {
+  display: inline-flex;
+  gap: 12px;
+  margin-bottom: 12px;
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.mirror-a-trend-legend span {
+  display: inline-flex;
+  align-items: center;
+}
+
+.mirror-a-trend-legend i {
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  display: inline-block;
+}
+
+.mirror-a-trend-legend i.is-added {
+  background: var(--ink);
+}
+
+.mirror-a-trend-legend i.is-superseded {
+  background: var(--accent);
+}
+
+.mirror-a-months {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+}
+
+.mirror-a-month {
+  flex: 1 1 0;
+  max-width: 132px;
+}
+
+.mirror-a-month-bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+  height: 64px;
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.mirror-a-month-bar {
+  display: block;
+  width: 18px;
+}
+
+.mirror-a-month-bar.is-added {
+  background: var(--ink);
+}
+
+.mirror-a-month-bar.is-superseded {
+  background: var(--accent);
+}
+
+.mirror-a-month-label {
+  display: block;
+  margin-top: 7px;
+  color: var(--faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums lining-nums;
+  text-align: center;
+}
+
 /* ── 分区 ────────────────────────────────────────────── */
 .mirror-a-section {
-  margin-top: 34px;
+  margin-top: 38px;
 }
 
 .mirror-a-heading {
   margin: 0;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--line);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--ink);
   font-family: var(--font-serif);
-  font-size: 18px;
+  font-size: 24px;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 1.35;
 }
 
 .mirror-a-note {
@@ -87,6 +243,10 @@ body:has(.mirror-a) {
 }
 
 /* ── 条目 ────────────────────────────────────────────── */
+.mirror-a-list {
+  margin: 0;
+}
+
 .mirror-a-entry {
   border-bottom: 1px solid var(--line);
 }
@@ -103,20 +263,63 @@ body:has(.mirror-a) {
   display: none;
 }
 
+.mirror-a-entry-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
 .mirror-a-entry-title {
   display: block;
   font-family: var(--font-serif);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  line-height: 1.5;
+  line-height: 1.6;
+}
+
+.mirror-a-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 7px;
+  color: var(--faint);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-xs);
+  font-size: 11px;
+  line-height: 1.7;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.mirror-a-tag.is-accent {
+  color: var(--paper);
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .mirror-a-entry-meta {
-  display: block;
-  margin-top: 4px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 6px;
   color: var(--faint);
   font-size: 12px;
   letter-spacing: 0.02em;
+}
+
+.mirror-a-scope-tags {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.mirror-a-scope-tag {
+  padding: 0 6px;
+  color: var(--faint);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  font-size: 11px;
+  line-height: 1.6;
 }
 
 .mirror-a-entry-new {
@@ -144,7 +347,8 @@ body:has(.mirror-a) {
   transition: transform 160ms var(--ease-out);
 }
 
-.mirror-a-entry[open] .mirror-a-caret {
+.mirror-a-entry[open] .mirror-a-caret,
+.mirror-a-inbox-item[open] .mirror-a-caret {
   transform: rotate(90deg);
 }
 
@@ -204,33 +408,60 @@ body:has(.mirror-a) {
   color: var(--muted);
 }
 
-/* ── 我是怎样的人：大号衬线 ─────────────────────────── */
-.mirror-a-profiles .mirror-a-entry-title {
-  font-size: 26px;
-  line-height: 1.35;
-  letter-spacing: 0.01em;
+/* ── 我是怎样的人：引语卡片网格 ─────────────────────── */
+.mirror-a-profiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 2px;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+}
+
+.mirror-a-profiles .mirror-a-entry {
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .mirror-a-profiles .mirror-a-entry-summary {
-  padding-top: 18px;
-  padding-bottom: 18px;
+  padding: 20px 20px 18px 54px;
+}
+
+.mirror-a-profiles .mirror-a-entry-title {
+  font-size: 19px;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
 }
 
 .mirror-a-profiles .mirror-a-caret {
-  top: 24px;
+  top: 22px;
+  right: 16px;
 }
 
-/* ── 偏好：按 scope 分组 ─────────────────────────────── */
+.mirror-a-entry-index {
+  position: absolute;
+  left: 18px;
+  top: 22px;
+  color: var(--faint);
+  font-family: var(--font-latin);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+
+/* ── 偏好：按第一个 scope 分组 ───────────────────────── */
 .mirror-a-prefs {
   display: grid;
-  gap: 18px;
+  gap: 22px;
 }
 
 .mirror-a-pref-scope {
-  margin: 16px 0 0;
-  color: var(--faint);
-  font-size: 12px;
-  letter-spacing: 0.12em;
+  margin: 0;
+  padding: 12px 0 6px;
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-serif);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
 }
 
 /* ── 决策：时间线 + 筛选 ─────────────────────────────── */
@@ -261,21 +492,21 @@ body:has(.mirror-a) {
 }
 
 .mirror-a-timeline {
-  margin: 10px 0 0;
+  margin: 14px 0 0;
   padding: 0;
   list-style: none;
 }
 
 .mirror-a-timeline-item {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
+  grid-template-columns: 132px minmax(0, 1fr);
   gap: 18px;
   align-items: start;
 }
 
 .mirror-a-timeline-date {
   padding-top: 16px;
-  color: var(--faint);
+  color: var(--muted);
   font-family: var(--font-latin);
   font-size: 12px;
   font-variant-numeric: tabular-nums lining-nums;
@@ -286,6 +517,16 @@ body:has(.mirror-a) {
   border-bottom: 1px solid var(--line);
 }
 
+/* ── 正在调整：左侧细竖线 + 状态标签 ──────────────────── */
+.mirror-a-section.is-adjustment .mirror-a-entry {
+  padding-left: 16px;
+  border-left: 2px solid var(--accent);
+}
+
+.mirror-a-section.is-adjustment .mirror-a-heading {
+  border-bottom-color: var(--accent);
+}
+
 /* ── 等你确认 ────────────────────────────────────────── */
 .mirror-a-inbox {
   margin: 10px 0 0;
@@ -294,22 +535,42 @@ body:has(.mirror-a) {
 }
 
 .mirror-a-inbox li {
-  padding: 12px 0;
   border-bottom: 1px solid var(--line);
 }
 
+.mirror-a-inbox-summary {
+  position: relative;
+  padding: 14px 26px 14px 0;
+  display: block;
+  cursor: pointer;
+  list-style: none;
+}
+
+.mirror-a-inbox-summary::-webkit-details-marker {
+  display: none;
+}
+
 .mirror-a-inbox-title {
+  display: block;
   margin: 0;
   font-family: var(--font-serif);
   font-size: 15px;
   font-weight: 600;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .mirror-a-inbox-meta {
-  margin: 4px 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 6px;
   color: var(--faint);
   font-size: 12px;
+}
+
+.mirror-a-inbox-body {
+  padding: 0 0 16px;
 }
 
 /* ── 简易 markdown（复用 mini-markdown 的类名）───────── */
@@ -400,6 +661,30 @@ body:has(.mirror-a) {
   border-radius: var(--r-xs);
 }
 
+/* ── 中等屏 ─────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .mirror-a-figures {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .mirror-a-figure:nth-child(4n + 1) {
+    border-left: 0;
+  }
+
+  .mirror-a-summary-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mirror-a-ratio {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .mirror-a-profiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* ── 手机 ────────────────────────────────────────────── */
 @media (max-width: 640px) {
   .mirror-a-masthead-wrap,
@@ -416,8 +701,41 @@ body:has(.mirror-a) {
     padding-bottom: calc(72px + env(safe-area-inset-bottom));
   }
 
+  .mirror-a-summary {
+    margin-top: 20px;
+  }
+
+  .mirror-a-figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mirror-a-figure:nth-child(2n + 1) {
+    border-left: 0;
+  }
+
+  .mirror-a-figure-num {
+    font-size: 20px;
+  }
+
+  .mirror-a-heading {
+    font-size: 20px;
+  }
+
+  .mirror-a-profiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .mirror-a-profiles .mirror-a-entry-title {
-    font-size: 21px;
+    font-size: 17px;
+  }
+
+  .mirror-a-profiles .mirror-a-entry-summary {
+    padding: 18px 20px 16px 48px;
+  }
+
+  .mirror-a-entry-index {
+    left: 16px;
+    top: 20px;
   }
 
   .mirror-a-timeline-item {

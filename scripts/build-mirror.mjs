@@ -103,6 +103,7 @@ export function toEntry(rows) {
     status: asString(latest.status),
     confirmedBy: asString(latest.confirmed_by),
     confirmedAt: asString(latest.confirmed_at),
+    decidedAt: asString(latest.decided_at),
     supersedes: asArray(latest.supersedes).map(asString).filter(Boolean),
     supersededBy: asString(latest.superseded_by),
     reviewAfter: asString(latest.review_after),

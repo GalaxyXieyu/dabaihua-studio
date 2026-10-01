@@ -19,7 +19,7 @@ import { decideReviewMode } from "../app/_components/review-mode.ts";
 import { PayloadTooLargeError, discardBody, isValidIsoWeek, publicBaseUrl, readBodyWithLimit, shanghaiIso } from "../lib/weekly.ts";
 import { parseDigestMarkdown, stripBodyHeader } from "../scripts/lib/topic-materials.mjs";
 import { buildMirrorData, parseJsonl } from "../scripts/build-mirror.mjs";
-import { computeStats, decisionEntries, decisionScopes, entriesByCategory, entryDate, formatMirrorDate, preferenceGroups, sourceLine } from "../lib/mirror.ts";
+import { categoryCounts, computeStats, decisionEntries, decisionScopes, entriesByCategory, entryDate, entryOwnDate, formatMirrorDate, formatShortDate, monthlyTrend, preferenceGroups, sourceLine } from "../lib/mirror.ts";
 
 test("converts entity-escaped feed HTML before rendering Markdown", () => {
   const markdown = htmlToMarkdown('&lt;img src=&quot;https://cdn.example.com/cover.jpg&quot; alt=&quot;封面&quot;&gt;&lt;p&gt;&lt;strong&gt;最新文字&lt;/strong&gt;&lt;br&gt;正文&lt;/p&gt;');
@@ -2339,15 +2339,40 @@ test("groups mirror entries by category and scope and computes the masthead stat
   assert.deepEqual(decisionEntries(data.entries).map((entry) => entry.id), ["H-DEC-20260905-01"]);
   assert.deepEqual(decisionEntries(data.entries, "职业"), []);
 
-  // 一条偏好属于多个 scope 时，每组各出现一次。
+  // 一条偏好属于多个 scope 时只归到第一个 scope，不再重复出现。
   const groups = preferenceGroups(data.entries);
-  assert.deepEqual(groups.map((group) => group.scope), ["沟通", "内容"]);
-  assert.equal(groups.find((group) => group.scope === "沟通").entries.length, 2);
-  assert.equal(groups.find((group) => group.scope === "内容").entries.length, 1);
+  assert.deepEqual(groups.map((group) => group.scope), ["沟通"]);
+  assert.deepEqual(
+    groups[0].entries.map((entry) => entry.id).sort(),
+    ["H-PREF-20260901-01", "H-PREF-20260910-01"],
+  );
+  // 其余 scope 由页面做小标签展示。
+  const multi = groups[0].entries.find((entry) => entry.id === "H-PREF-20260910-01");
+  assert.deepEqual(multi.scope.filter((scope) => scope !== groups[0].scope), ["内容"]);
+
+  // 类别计数固定顺序、缺的补 0（复盘为空也占一个数字）。
+  assert.deepEqual(categoryCounts(data.entries).map((item) => [item.category, item.count]), [
+    ["画像", 1],
+    ["偏好", 2],
+    ["方法论", 1],
+    ["决策", 1],
+    ["复盘结论", 0],
+    ["待调整", 1],
+  ]);
+
+  // 按月趋势：新增按条目自己的日期算，推翻按最新版本写入日期算。
+  assert.deepEqual(monthlyTrend(data.entries), [
+    { month: "2026-09", label: "9 月", added: 6, superseded: 0 },
+    { month: "2026-10", label: "10 月", added: 0, superseded: 1 },
+  ]);
 
   const profile = data.entries.find((entry) => entry.id === "H-PROF-20260901-01");
   assert.equal(entryDate(profile), "2026-10-02");
-  assert.equal(sourceLine(profile), "福伦 · 2026-09-01");
+  // 时间线用自己的日期（来源日期），不是构建写入日期。
+  assert.equal(entryOwnDate(profile), "2026-09-01");
+  assert.equal(entryOwnDate(data.entries.find((entry) => entry.id === "H-DEC-20260905-01")), "2026-09-05");
+  assert.equal(sourceLine(profile), "福伦 · 09-01");
+  assert.equal(formatShortDate("2026-10-02"), "10-02");
   assert.equal(formatMirrorDate("2026-10-02"), "2026 年 10 月 2 日");
 
   const stats = computeStats(data.entries, data.inbox, new Date("2026-10-15T00:00:00Z"));
@@ -2390,10 +2415,20 @@ test("gates the admin-only mirror page and keeps the private feed out of git", a
   }
   assert.match(page, /computeStats\(/);
   assert.match(page, /preferenceGroups\(/);
-  assert.match(page, /entryDate\(/);
+  assert.match(page, /entryOwnDate\(/);
   assert.match(page, /已被 \{entry\.supersededBy\} 取代/);
   assert.match(page, /mirror-a-history/);
   assert.match(page, /<MiniMarkdown/);
+  // 摘要、去重小标签、可展开的待确认、正在调整的独立样式。
+  assert.match(page, /MirrorSummary/);
+  assert.match(page, /mirror-a-summary/);
+  assert.match(page, /mirror-a-ratio-track/);
+  assert.match(page, /mirror-a-scope-tag/);
+  assert.match(page, /mirror-a-inbox-item/);
+  assert.match(page, /entry\.options\.join/);
+  assert.match(page, /variant="adjustment"/);
+  // 空分区（复盘为空）不再单独占一节，靠摘要里的 0 表达。
+  assert.match(page, /reviews\.length > 0 \? \(/);
 
   assert.match(mirrorData, /import\.meta\.glob\(/);
   assert.match(mirrorData, /content\/mirror\/mirror\.json/);
@@ -2401,11 +2436,19 @@ test("gates the admin-only mirror page and keeps the private feed out of git", a
   assert.match(mirror, /export function decisionEntries/);
   assert.match(mirror, /export function computeStats/);
   assert.match(mirror, /export function entryDate/);
+  assert.match(mirror, /export function entryOwnDate/);
+  assert.match(mirror, /export function categoryCounts/);
+  assert.match(mirror, /export function monthlyTrend/);
+  assert.match(mirror, /export function formatShortDate/);
 
   // 杂志风：复用令牌，不用渐变、卡片阴影和 emoji。
   assert.match(css, /\.mirror-a/);
   assert.match(css, /var\(--accent\)/);
   assert.match(css, /var\(--font-serif\)/);
+  assert.match(css, /mirror-a-section\.is-adjustment/);
+  assert.match(css, /mirror-a-ratio-seg/);
+  assert.match(css, /mirror-a-month-bar/);
+  assert.match(css, /mirror-a-trend-legend/);
   assert.doesNotMatch(css, /gradient/);
   assert.doesNotMatch(css, /box-shadow/);
   assert.match(css, /@media \(max-width: 640px\)/);

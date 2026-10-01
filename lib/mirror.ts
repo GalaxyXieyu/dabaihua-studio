@@ -26,6 +26,7 @@ export type MirrorEntry = {
   status: string;
   confirmedBy: string;
   confirmedAt: string;
+  decidedAt: string;
   supersedes: string[];
   supersededBy: string;
   reviewAfter: string;
@@ -55,6 +56,12 @@ export type MirrorData = {
 
 export type MirrorScopeGroup = { scope: string; entries: MirrorEntry[] };
 
+/** 摘要里固定展示的类别顺序（复盘等为空也占一个数字，显示 0）。 */
+export const SUMMARY_CATEGORIES = ["画像", "偏好", "方法论", "决策", "复盘结论", "待调整"];
+export type CategoryCount = { category: string; count: number };
+
+export type MirrorMonthPoint = { month: string; label: string; added: number; superseded: number };
+
 export const CATEGORY_ORDER = ["画像", "待调整", "偏好", "方法论", "决策", "复盘结论"];
 export const PREFERENCE_SCOPES = ["沟通", "内容", "职业", "工作", "工作台"];
 
@@ -81,6 +88,19 @@ export function monthOf(date: string): string {
   return isMirrorDate(date) ? date.slice(0, 7) : "";
 }
 
+/**
+ * 条目自己的日期：优先第一条来源日期，其次显式决策日期，最后才是版本写入日期。
+ * 时间线和趋势都用它，避免同一批条目因为构建时间统一显示成写入日期。
+ */
+export function entryOwnDate(entry: MirrorEntry): string {
+  const source = (entry.sources || [])[0]?.date;
+  if (isMirrorDate(source)) return source;
+  if (isMirrorDate(entry.decidedAt)) return entry.decidedAt;
+  const recorded = entry.history?.[0]?.recordedAt;
+  if (isMirrorDate(recorded)) return recorded;
+  return entryDate(entry);
+}
+
 /** `2026-10-01` → `2026 年 10 月 1 日`。 */
 export function formatMirrorDate(date: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || "");
@@ -88,11 +108,18 @@ export function formatMirrorDate(date: string): string {
   return `${Number(match[1])} 年 ${Number(match[2])} 月 ${Number(match[3])} 日`;
 }
 
-/** 来源小字：`福伦 · 2026-10-01`，多条来源只显示第一条。 */
+/** `2026-10-01` → `10-01`；元信息里统一用短日期。 */
+export function formatShortDate(date: string): string {
+  const match = /^\d{4}-(\d{2})-(\d{2})$/.exec(date || "");
+  if (!match) return date || "";
+  return `${match[1]}-${match[2]}`;
+}
+
+/** 来源小字：`福伦 · 10-01`，多条来源只显示第一条。 */
 export function sourceLine(entry: MirrorEntry): string {
   const source = (entry.sources || [])[0];
   if (!source) return "";
-  const parts = [source.agent, source.date].filter(Boolean);
+  const parts = [source.agent, formatShortDate(source.date)].filter(Boolean);
   return parts.join(" · ");
 }
 
@@ -117,17 +144,61 @@ export function decisionScopes(entries: MirrorEntry[]): string[] {
   return PREFERENCE_SCOPES.filter((scope) => present.has(scope));
 }
 
-/** 「我喜欢这样」：按 scope 分组；一条偏好属于多个 scope 时会在每组各出现一次。 */
+/**
+ * 「我喜欢这样」：每条偏好只归到它的第一个 scope 下，避免多 scope 的条目重复出现；
+ * 其它 scope 由页面作为小标签展示。没有 scope 的进「通用」。
+ */
 export function preferenceGroups(entries: MirrorEntry[]): MirrorScopeGroup[] {
   const preferences = entries.filter((entry) => entry.category === "偏好");
-  const groups: MirrorScopeGroup[] = [];
-  for (const scope of PREFERENCE_SCOPES) {
-    const items = preferences.filter((entry) => entry.scope.includes(scope));
-    if (items.length > 0) groups.push({ scope, entries: items });
+  const buckets = new Map<string, MirrorEntry[]>();
+  for (const entry of preferences) {
+    const key = entry.scope[0] || "通用";
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(entry);
+    else buckets.set(key, [entry]);
   }
-  const general = preferences.filter((entry) => entry.scope.length === 0);
-  if (general.length > 0) groups.push({ scope: "通用", entries: general });
-  return groups;
+  const known = PREFERENCE_SCOPES.filter((scope) => buckets.has(scope));
+  const extra = [...buckets.keys()].filter((scope) => scope !== "通用" && !PREFERENCE_SCOPES.includes(scope)).sort();
+  const general = buckets.has("通用") ? ["通用"] : [];
+  return [...known, ...extra, ...general].map((scope) => ({
+    scope,
+    entries: buckets.get(scope) as MirrorEntry[],
+  }));
+}
+
+/** 摘要用的类别条数，固定顺序、缺的补 0。 */
+export function categoryCounts(entries: MirrorEntry[]): CategoryCount[] {
+  const counts = new Map<string, number>();
+  for (const entry of entries) counts.set(entry.category, (counts.get(entry.category) ?? 0) + 1);
+  return SUMMARY_CATEGORIES.map((category) => ({ category, count: counts.get(category) ?? 0 }));
+}
+
+/** 按月统计新增（按条目自己的日期）和推翻（按最新版本的写入日期）。 */
+export function monthlyTrend(entries: MirrorEntry[]): MirrorMonthPoint[] {
+  const buckets = new Map<string, { added: number; superseded: number }>();
+  const bucketOf = (month: string) => {
+    let bucket = buckets.get(month);
+    if (!bucket) {
+      bucket = { added: 0, superseded: 0 };
+      buckets.set(month, bucket);
+    }
+    return bucket;
+  };
+  for (const entry of entries) {
+    const addedMonth = monthOf(entryOwnDate(entry));
+    if (addedMonth) bucketOf(addedMonth).added += 1;
+    if (entry.status === "已推翻") {
+      const latest = entry.history?.[entry.history.length - 1];
+      const supersededMonth = monthOf(latest?.recordedAt || "");
+      if (supersededMonth) bucketOf(supersededMonth).superseded += 1;
+    }
+  }
+  return [...buckets.keys()].sort().map((month) => ({
+    month,
+    label: `${Number(month.slice(5, 7))} 月`,
+    added: buckets.get(month)?.added ?? 0,
+    superseded: buckets.get(month)?.superseded ?? 0,
+  }));
 }
 
 /** 本月新增 / 推翻统计，按数据算。now 传入 build 时的时间，测试可固定。 */
