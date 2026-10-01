@@ -1330,6 +1330,11 @@ test("gates the admin-only daily page and keeps the private feed out of git", as
   assert.match(page, /daily-a-repo-track is-commits/);
   assert.match(css, /\.daily-a-repo-nums \{[^}]*font-size: 12px/);
   assert.match(css, /\.daily-a-repo-track\.is-commits \{[^}]*grid-area: commits/);
+  // 桌面「按仓库」默认只显示前 5 个，其余收进「展开其余 N 个」。
+  assert.match(page, /REPO_VISIBLE_COUNT = 5/);
+  assert.match(page, /展开其余 \{hiddenRepos\.length\} 个/);
+  assert.match(css, /\.daily-a-repos-more\[open\] \.daily-a-caret/);
+  assert.match(css, /\.daily-a-repos-rest \{[^}]*display: grid/);
   // 手机端收起没有日报的空周，桌面保持完整月历。
   assert.match(page, /monthWeeks/);
   assert.match(page, /daily-a-calendar-week/);
@@ -1355,6 +1360,18 @@ test("gates the admin-only daily page and keeps the private feed out of git", as
   assert.doesNotMatch(css, /\.daily-a-fold:first-child/);
   assert.match(page, /markdownPlainText\([^)]*\)\.length < FOLD_MIN_LENGTH/);
   assert.match(page, /previewText\(/);
+  // 「做了什么」预览固定一行，超出省略。
+  assert.match(css, /\.daily-a-what-preview,[^}]*white-space: nowrap/);
+  assert.match(css, /\.daily-a-what-preview,[^}]*text-overflow: ellipsis/);
+  // 桌面「结果数字」和折叠块并排两栏，半栏里长数值卡片改回两列。
+  assert.match(page, /daily-a-pair/);
+  assert.match(css, /\.daily-a-pair \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.daily-a-pair > \.daily-a-pair-col:only-child \{[^}]*grid-column: 1 \/ -1/);
+  assert.match(css, /\.daily-a-pair \.daily-a-result-grid\[data-count="3"\]/);
+  // 宽屏月历进右侧窄栏；手机仍收起空周。
+  assert.match(page, /daily-a-rail/);
+  assert.match(css, /\.daily-a-body \{[^}]*grid-template-columns: minmax\(0, 1fr\) 300px/);
+  assert.match(css, /@media \(min-width: 1200px\)/);
   // 两栏 + 展开跨栏，不留大空洞。
   assert.match(css, /align-items: start/);
   assert.match(css, /\.daily-a-what\[open\] \{[^}]*grid-column: 1 \/ -1/);

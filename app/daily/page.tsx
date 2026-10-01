@@ -22,6 +22,7 @@ import {
   selectDay,
   trendPoints,
   weekdayOf,
+  type DailyRepoStat,
   type DailyWhatEntry,
 } from "../../lib/daily";
 import { SiteAppBar } from "../_components/SiteAppBar";
@@ -34,6 +35,8 @@ export const viewport = { width: "device-width", initialScale: 1 };
 export const metadata = { title: "日报 · 成长", robots: { index: false, follow: false } };
 
 const WEEKDAY_HEAD = ["一", "二", "三", "四", "五", "六", "日"];
+/** 「按仓库」默认只铺前 5 个，其余收进可展开项，避免右侧一长串。 */
+const REPO_VISIBLE_COUNT = 5;
 
 function caret() {
   return <span className="daily-a-caret" aria-hidden="true">›</span>;
@@ -124,6 +127,29 @@ function ResultNumbers({ markdown, excludeValues }: { markdown: string; excludeV
   );
 }
 
+function RepoRow({ stat, maxCommits, maxLines }: { stat: DailyRepoStat; maxCommits: number; maxLines: number }) {
+  return (
+    <div className="daily-a-repo">
+      <span className="daily-a-repo-name">{stat.repo}</span>
+      <span className="daily-a-repo-track is-commits">
+        <span
+          className="daily-a-repo-bar is-commits"
+          style={{ width: `${Math.max(2, (stat.commits / maxCommits) * 100)}%` }}
+        />
+      </span>
+      <span className="daily-a-repo-track is-lines">
+        <span
+          className="daily-a-repo-bar is-lines"
+          style={{ width: `${Math.max(2, ((stat.additions + stat.deletions) / maxLines) * 100)}%` }}
+        />
+      </span>
+      <span className="daily-a-repo-nums tabular-nums">
+        {formatNumber(stat.commits)} 个 · {formatSigned(stat.additions)} / {formatSigned(-stat.deletions)}
+      </span>
+    </div>
+  );
+}
+
 function EmptyState({ user }: { user: Awaited<ReturnType<typeof getSessionUser>> }) {
   return (
     <div className="daily-a">
@@ -196,6 +222,8 @@ export default async function DailyPage({ searchParams }: { searchParams: Promis
 
   const maxRepoCommits = Math.max(1, ...day.repoStats.map((stat) => stat.commits));
   const maxRepoLines = Math.max(1, ...day.repoStats.map((stat) => stat.additions + stat.deletions));
+  const visibleRepos = day.repoStats.slice(0, REPO_VISIBLE_COUNT);
+  const hiddenRepos = day.repoStats.slice(REPO_VISIBLE_COUNT);
 
   const parts = dateParts(day.date);
   const monthPrefix = parts ? `${parts.year}-${String(parts.month).padStart(2, "0")}-` : "";
@@ -243,134 +271,143 @@ export default async function DailyPage({ searchParams }: { searchParams: Promis
           ))}
         </section>
 
-        <section className="daily-a-section">
-          <h2 className="daily-a-heading">{trendHeading}</h2>
-          <DailyTrend points={trend} selected={day.date} />
-        </section>
+        <div className="daily-a-body">
+          <section className="daily-a-section is-trend">
+            <h2 className="daily-a-heading">{trendHeading}</h2>
+            <DailyTrend points={trend} selected={day.date} />
+          </section>
 
-        {day.repoStats.length > 0 ? (
-          <section className="daily-a-section">
-            <h2 className="daily-a-heading">按仓库</h2>
-            <div className="daily-a-repos">
-              <div className="daily-a-repos-head" aria-hidden="true">
-                <span>仓库</span>
-                <span>提交</span>
-                <span>改动行</span>
-                <span />
-              </div>
-              {day.repoStats.map((stat) => (
-                <div key={stat.repo} className="daily-a-repo">
-                  <span className="daily-a-repo-name">{stat.repo}</span>
-                  <span className="daily-a-repo-track is-commits">
-                    <span
-                      className="daily-a-repo-bar is-commits"
-                      style={{ width: `${Math.max(2, (stat.commits / maxRepoCommits) * 100)}%` }}
-                    />
-                  </span>
-                  <span className="daily-a-repo-track is-lines">
-                    <span
-                      className="daily-a-repo-bar is-lines"
-                      style={{ width: `${Math.max(2, ((stat.additions + stat.deletions) / maxRepoLines) * 100)}%` }}
-                    />
-                  </span>
-                  <span className="daily-a-repo-nums tabular-nums">
-                    {formatNumber(stat.commits)} 个 · {formatSigned(stat.additions)} / {formatSigned(-stat.deletions)}
-                  </span>
+          {day.repoStats.length > 0 ? (
+            <section className="daily-a-section is-repos">
+              <h2 className="daily-a-heading">按仓库</h2>
+              <div className="daily-a-repos">
+                <div className="daily-a-repos-head" aria-hidden="true">
+                  <span>仓库</span>
+                  <span>提交</span>
+                  <span>改动行</span>
+                  <span />
                 </div>
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        {day.sections.what.length > 0 ? (
-          <section className="daily-a-section">
-            <h2 className="daily-a-heading">做了什么</h2>
-            <div className="daily-a-whats">
-              {day.sections.what.map((entry, entryIndex) => (
-                <WhatEntry key={`${entryIndex}-${entry.title}`} entry={entry} />
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        {day.sections.results ? (
-          <section className="daily-a-section">
-            <h2 className="daily-a-heading">结果数字</h2>
-            <ResultNumbers
-              markdown={day.sections.results}
-              excludeValues={[day.commits, day.tokensM, repoCount].filter((value): value is number => typeof value === "number")}
-            />
-          </section>
-        ) : null}
-
-        {folds.some(([, markdown]) => markdown) ? (
-          <section className="daily-a-section">
-            <div className="daily-a-folds">
-              {folds.map(([title, markdown]) => (markdown ? <Fold key={title} title={title} markdown={markdown} /> : null))}
-            </div>
-          </section>
-        ) : null}
-
-        <section className="daily-a-section">
-          <div className="daily-a-calendar-head">
-            <h2 className="daily-a-heading">{parts ? `${parts.year} 年 ${parts.month} 月` : "日历"}</h2>
-            <div className="daily-a-calendar-nav">
-              {prevMonth ? (
-                <a href={`/daily?date=${prevMonth}`} aria-label="上一个月">
-                  ‹
-                </a>
-              ) : (
-                <span className="is-disabled">‹</span>
-              )}
-              {nextMonth ? (
-                <a href={`/daily?date=${nextMonth}`} aria-label="下一个月">
-                  ›
-                </a>
-              ) : (
-                <span className="is-disabled">›</span>
-              )}
-            </div>
-          </div>
-          <div className="daily-a-calendar" role="grid" aria-label="按月的日报">
-            {WEEKDAY_HEAD.map((weekday) => (
-              <span key={weekday} className="daily-a-calendar-weekday">
-                {weekday}
-              </span>
-            ))}
-            {cells.map((week) => (
-              <div
-                key={week.index}
-                className={`daily-a-calendar-week${week.hasReport || week.isCurrent ? "" : " is-collapsed"}`}
-              >
-                {week.cells.map((cell, cellIndex) => {
-                  if (!cell) return <span key={`empty-${cellIndex}`} className="daily-a-calendar-empty" />;
-                  const dayNumber = dateParts(cell.date)?.day ?? "";
-                  if (!cell.day) {
-                    return (
-                      <span key={cell.date} className="daily-a-calendar-cell is-empty" aria-hidden="true">
-                        {dayNumber}
-                      </span>
-                    );
-                  }
-                  const commits = cell.day.commits;
-                  const level = commits == null || commits <= 0 ? 1 : Math.min(4, Math.max(1, Math.ceil((commits / monthMax) * 4)));
-                  return (
-                    <a
-                      key={cell.date}
-                      href={`/daily?date=${cell.date}`}
-                      className={`daily-a-calendar-cell is-level-${level} ${cell.date === day.date ? "is-selected" : ""}`}
-                      aria-label={`${formatMonthDay(cell.date)}：${commits ?? 0} 个提交`}
-                      aria-current={cell.date === day.date ? "date" : undefined}
-                    >
-                      {dayNumber}
-                      {commits != null ? <span className="daily-a-calendar-count">{commits}</span> : null}
-                    </a>
-                  );
-                })}
+                {visibleRepos.map((stat) => (
+                  <RepoRow key={stat.repo} stat={stat} maxCommits={maxRepoCommits} maxLines={maxRepoLines} />
+                ))}
+                {hiddenRepos.length > 0 ? (
+                  <details className="daily-a-repos-more">
+                    <summary className="daily-a-repos-more-summary">
+                      <span className="daily-a-repos-more-label">展开其余 {hiddenRepos.length} 个</span>
+                      {caret()}
+                    </summary>
+                    <div className="daily-a-repos-rest">
+                      {hiddenRepos.map((stat) => (
+                        <RepoRow key={stat.repo} stat={stat} maxCommits={maxRepoCommits} maxLines={maxRepoLines} />
+                      ))}
+                    </div>
+                  </details>
+                ) : null}
               </div>
-            ))}
-          </div>
-        </section>
+            </section>
+          ) : null}
+
+          {day.sections.what.length > 0 ? (
+            <section className="daily-a-section is-what">
+              <h2 className="daily-a-heading">做了什么</h2>
+              <div className="daily-a-whats">
+                {day.sections.what.map((entry, entryIndex) => (
+                  <WhatEntry key={`${entryIndex}-${entry.title}`} entry={entry} />
+                ))}
+              </div>
+            </section>
+          ) : null}
+
+          {day.sections.results || folds.some(([, markdown]) => markdown) ? (
+            <section className="daily-a-section is-pair">
+              <div className="daily-a-pair">
+                {day.sections.results ? (
+                  <div className="daily-a-pair-col is-results">
+                    <h2 className="daily-a-heading">结果数字</h2>
+                    <ResultNumbers
+                      markdown={day.sections.results}
+                      excludeValues={[day.commits, day.tokensM, repoCount].filter(
+                        (value): value is number => typeof value === "number",
+                      )}
+                    />
+                  </div>
+                ) : null}
+                {folds.some(([, markdown]) => markdown) ? (
+                  <div className="daily-a-pair-col is-folds">
+                    <div className="daily-a-folds">
+                      {folds.map(([title, markdown]) =>
+                        markdown ? <Fold key={title} title={title} markdown={markdown} /> : null,
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
+
+          <aside className="daily-a-rail" aria-label="按月的日报">
+            <section className="daily-a-section is-calendar">
+              <div className="daily-a-calendar-head">
+                <h2 className="daily-a-heading">{parts ? `${parts.year} 年 ${parts.month} 月` : "日历"}</h2>
+                <div className="daily-a-calendar-nav">
+                  {prevMonth ? (
+                    <a href={`/daily?date=${prevMonth}`} aria-label="上一个月">
+                      ‹
+                    </a>
+                  ) : (
+                    <span className="is-disabled">‹</span>
+                  )}
+                  {nextMonth ? (
+                    <a href={`/daily?date=${nextMonth}`} aria-label="下一个月">
+                      ›
+                    </a>
+                  ) : (
+                    <span className="is-disabled">›</span>
+                  )}
+                </div>
+              </div>
+              <div className="daily-a-calendar" role="grid" aria-label="按月的日报">
+                {WEEKDAY_HEAD.map((weekday) => (
+                  <span key={weekday} className="daily-a-calendar-weekday">
+                    {weekday}
+                  </span>
+                ))}
+                {cells.map((week) => (
+                  <div
+                    key={week.index}
+                    className={`daily-a-calendar-week${week.hasReport || week.isCurrent ? "" : " is-collapsed"}`}
+                  >
+                    {week.cells.map((cell, cellIndex) => {
+                      if (!cell) return <span key={`empty-${cellIndex}`} className="daily-a-calendar-empty" />;
+                      const dayNumber = dateParts(cell.date)?.day ?? "";
+                      if (!cell.day) {
+                        return (
+                          <span key={cell.date} className="daily-a-calendar-cell is-empty" aria-hidden="true">
+                            {dayNumber}
+                          </span>
+                        );
+                      }
+                      const commits = cell.day.commits;
+                      const level = commits == null || commits <= 0 ? 1 : Math.min(4, Math.max(1, Math.ceil((commits / monthMax) * 4)));
+                      return (
+                        <a
+                          key={cell.date}
+                          href={`/daily?date=${cell.date}`}
+                          className={`daily-a-calendar-cell is-level-${level} ${cell.date === day.date ? "is-selected" : ""}`}
+                          aria-label={`${formatMonthDay(cell.date)}：${commits ?? 0} 个提交`}
+                          aria-current={cell.date === day.date ? "date" : undefined}
+                        >
+                          {dayNumber}
+                          {commits != null ? <span className="daily-a-calendar-count">{commits}</span> : null}
+                        </a>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </section>
+          </aside>
+        </div>
       </main>
     </div>
   );

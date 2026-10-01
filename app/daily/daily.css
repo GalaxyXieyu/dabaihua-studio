@@ -49,6 +49,12 @@ body:has(.daily-a) {
   padding-bottom: 72px;
 }
 
+/* 主内容 + 右侧月历栏：宽屏才拆栏，窄屏仍按文档流堆叠。 */
+.daily-a-body,
+.daily-a-rail {
+  min-width: 0;
+}
+
 /* ── 大数字 ─────────────────────────────────────────── */
 .daily-a-metrics {
   display: grid;
@@ -291,6 +297,40 @@ body:has(.daily-a) {
   white-space: nowrap;
 }
 
+/* 仓库超过 5 个时，其余收进可展开项，默认不占高度。 */
+.daily-a-repos-more {
+  border: 0;
+}
+
+.daily-a-repos-more-summary {
+  position: relative;
+  padding: 10px 26px 10px 0;
+  display: block;
+  cursor: pointer;
+  list-style: none;
+  color: var(--accent);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.daily-a-repos-more-summary::-webkit-details-marker {
+  display: none;
+}
+
+.daily-a-repos-more[open] .daily-a-caret {
+  transform: rotate(90deg);
+}
+
+.daily-a-repos-more-summary .daily-a-caret {
+  top: 11px;
+}
+
+.daily-a-repos-rest {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
 /* ── 「做了什么」折叠条目 ───────────────────────────── */
 .daily-a-whats {
   margin-top: 12px;
@@ -326,24 +366,21 @@ body:has(.daily-a) {
   line-height: 1.5;
 }
 
-.daily-a-what-preview {
+/* 预览固定只占一行，超出用省略号，保证「做了什么」默认只剩标题 + 一行。 */
+.daily-a-what-preview,
+.daily-a-fold-preview {
   display: block;
   margin-top: 4px;
+  overflow: hidden;
   color: var(--muted);
   font-size: 13px;
   line-height: 1.6;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .daily-a-what[open] .daily-a-what-preview {
   display: none;
-}
-
-.daily-a-fold-preview {
-  display: block;
-  margin-top: 4px;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.6;
 }
 
 .daily-a-fold[open] .daily-a-fold-preview {
@@ -376,6 +413,20 @@ body:has(.daily-a) {
   margin-top: 12px;
   /* 卡点、未完成、牵头、概览共用一个容器，只用一条细线分隔。 */
   border-top: 1px solid var(--line);
+}
+
+/* 「结果数字」和折叠块在桌面并排两栏；单边存在时自己占满整行。 */
+.daily-a-pair {
+  display: grid;
+  gap: 20px;
+}
+
+.daily-a-pair-col {
+  min-width: 0;
+}
+
+.daily-a-pair .daily-a-folds {
+  margin-top: 0;
 }
 
 .daily-a-fold {
@@ -852,5 +903,69 @@ body:has(.daily-a) {
   /* 展开的条目跨两栏，另一栏不会被拉长留出大空洞。 */
   .daily-a-what[open] {
     grid-column: 1 / -1;
+  }
+
+  /* 「结果数字」和折叠块并排，压缩纵向长度；单边存在时自己占满整行。 */
+  .daily-a-pair {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 44px;
+    align-items: start;
+  }
+
+  .daily-a-pair > .daily-a-pair-col:only-child {
+    grid-column: 1 / -1;
+  }
+
+  /* 半栏里 3/4 张卡片换成两列，长数值不会被 nowrap 顶出卡片；字号和内边距也收一点。 */
+  .daily-a-pair .daily-a-result-grid {
+    --result-value-size: clamp(14px, 3vw, 24px);
+  }
+
+  .daily-a-pair .daily-a-result-card {
+    padding: 14px 14px 12px;
+  }
+
+  .daily-a-pair .daily-a-result-grid[data-count="3"],
+  .daily-a-pair .daily-a-result-grid[data-count="4"] {
+    --result-cols: 2;
+  }
+}
+
+/* ── 宽屏：月历进右侧窄栏，页面少一屏半 ────────── */
+@media (min-width: 1200px) {
+  .daily-a-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    column-gap: 40px;
+    align-items: start;
+  }
+
+  /* 趋势和仓库排在左栏，月历独占右侧窄栏；下面两节通栏，不跟着被压窄。 */
+  .daily-a-body > .daily-a-section {
+    grid-column: 1;
+  }
+
+  .daily-a-body > .is-what,
+  .daily-a-body > .is-pair {
+    grid-column: 1 / -1;
+  }
+
+  .daily-a-rail {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: start;
+    position: sticky;
+    top: 24px;
+  }
+
+  /* 窄栏里把格子和间距收一点，整月仍能一眼看完。 */
+  .daily-a-calendar {
+    gap: 3px;
+  }
+
+  .daily-a-calendar-cell {
+    min-height: 40px;
+    padding: 3px;
+    font-size: 12.5px;
   }
 }
