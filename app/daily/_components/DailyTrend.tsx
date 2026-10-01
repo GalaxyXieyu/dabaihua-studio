@@ -1,18 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type TrendPoint = { date: string; label: string; commits: number; tokensM: number | null };
 
-const W = 720;
-const H = 220;
-const PAD = { left: 40, right: 12, top: 26, bottom: 34 };
-const PLOT_W = W - PAD.left - PAD.right;
-const PLOT_H = H - PAD.top - PAD.bottom;
-const BASE_Y = PAD.top + PLOT_H;
+const H = 240;
+const SLOTS = 30;
+const PAD = { left: 44, right: 44, top: 72, bottom: 34 };
+const MIN_W = 320;
+const DEFAULT_W = 720;
+const TOOLTIP_H = 76;
 
 function formatToken(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return "—";
+  return String(Number(value.toFixed(1)));
+}
+
+function formatAxis(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  if (Math.abs(value) >= 100) return String(Math.round(value));
   return String(Number(value.toFixed(1)));
 }
 
@@ -23,19 +29,44 @@ function formatDay(date: string): string {
 
 /**
  * 最近 30 天的提交柱 + token 线。纯 SVG，无图表依赖；悬停出数字，点击切换当天。
+ * viewBox 宽度跟随容器实测宽度，让 11px 的文字在手机上也是实打实的 11px。
  */
 export function DailyTrend({ points, selected }: { points: TrendPoint[]; selected: string }) {
   const [hover, setHover] = useState<number | null>(null);
+  const [width, setWidth] = useState(DEFAULT_W);
+  const plotRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const element = plotRef.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const measure = () => setWidth(Math.max(MIN_W, Math.round(element.clientWidth) || DEFAULT_W));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   if (points.length === 0) return null;
 
-  const column = PLOT_W / points.length;
-  const barWidth = Math.max(2, column * 0.5);
+  const W = width;
+  const plotW = W - PAD.left - PAD.right;
+  const plotH = H - PAD.top - PAD.bottom;
+  const baseY = PAD.top + plotH;
+  const slots = Math.max(SLOTS, points.length);
+  const column = plotW / slots;
+  const barWidth = Math.max(2, column * 0.54);
   const maxCommits = Math.max(1, ...points.map((point) => point.commits));
-  const tokens = points.map((point) => point.tokensM).filter((value): value is number => value != null && Number.isFinite(value));
-  const maxTokens = tokens.length > 0 ? Math.max(1, ...tokens) : 1;
+  const tokenValues = points
+    .map((point) => point.tokensM)
+    .filter((value): value is number => value != null && Number.isFinite(value));
+  const maxTokens = tokenValues.length > 0 ? Math.max(1, ...tokenValues) : 1;
+
+  const dotX = (index: number) => PAD.left + column * (index + 0.5);
+  const commitY = (commits: number) => baseY - (commits / maxCommits) * plotH;
+  const tokenY = (tokens: number) => baseY - (tokens / maxTokens) * plotH;
 
   const lineSegments: string[] = [];
+  const dots: Array<{ x: number; y: number }> = [];
   let current: string[] = [];
   points.forEach((point, index) => {
     if (point.tokensM == null || !Number.isFinite(point.tokensM)) {
@@ -43,14 +74,20 @@ export function DailyTrend({ points, selected }: { points: TrendPoint[]; selecte
       current = [];
       return;
     }
-    const x = PAD.left + column * (index + 0.5);
-    const y = BASE_Y - (point.tokensM / maxTokens) * PLOT_H;
+    const x = dotX(index);
+    const y = tokenY(point.tokensM);
+    dots.push({ x, y });
     current.push(`${x.toFixed(1)},${y.toFixed(1)}`);
   });
   if (current.length > 1) lineSegments.push(current.join(" "));
 
-  const labelStep = Math.max(1, Math.ceil(points.length / 6));
+  const narrow = W < 520;
   const active = hover == null ? null : points[hover];
+  const hoverX = hover == null ? 0 : dotX(hover);
+  const hoverTop = hover == null ? 0 : commitY(points[hover].commits);
+  const tooltipHalf = 86;
+  const tooltipLeft = Math.min(Math.max(hoverX, tooltipHalf), Math.max(tooltipHalf, W - tooltipHalf));
+  const tooltipTop = Math.max(0, hoverTop - TOOLTIP_H - 8);
 
   return (
     <div className="daily-a-trend">
@@ -62,24 +99,30 @@ export function DailyTrend({ points, selected }: { points: TrendPoint[]; selecte
           <span className="daily-a-legend-line" />token（百万）
         </span>
       </div>
-      <div className="daily-a-trend-plot" onMouseLeave={() => setHover(null)}>
+      <div className="daily-a-trend-plot" ref={plotRef} onMouseLeave={() => setHover(null)}>
         <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="最近 30 天的提交数与 token 趋势">
-          <line x1={PAD.left} y1={BASE_Y} x2={W - PAD.right} y2={BASE_Y} className="daily-a-axis" />
+          <line x1={PAD.left} y1={baseY} x2={W - PAD.right} y2={baseY} className="daily-a-axis" />
           <text x={PAD.left - 8} y={PAD.top + 4} textAnchor="end" className="daily-a-axis-label">
             {maxCommits}
           </text>
-          <text x={PAD.left - 8} y={BASE_Y} textAnchor="end" className="daily-a-axis-label">
+          <text x={PAD.left - 8} y={baseY} textAnchor="end" className="daily-a-axis-label">
+            0
+          </text>
+          <text x={W - PAD.right + 8} y={PAD.top + 4} textAnchor="start" className="daily-a-axis-label is-token">
+            {formatAxis(maxTokens)}
+          </text>
+          <text x={W - PAD.right + 8} y={baseY} textAnchor="start" className="daily-a-axis-label is-token">
             0
           </text>
           {points.map((point, index) => {
-            const x = PAD.left + column * (index + 0.5);
-            const height = (point.commits / maxCommits) * PLOT_H;
+            const x = dotX(index);
+            const height = (point.commits / maxCommits) * plotH;
             const isSelected = point.date === selected;
             return (
               <g key={point.date}>
                 <rect
                   x={x - barWidth / 2}
-                  y={BASE_Y - height}
+                  y={baseY - height}
                   width={barWidth}
                   height={Math.max(1, height)}
                   className={`daily-a-bar ${isSelected ? "is-selected" : ""} ${hover === index ? "is-hover" : ""}`}
@@ -92,12 +135,12 @@ export function DailyTrend({ points, selected }: { points: TrendPoint[]; selecte
                     x={PAD.left + column * index}
                     y={PAD.top}
                     width={column}
-                    height={PLOT_H}
+                    height={plotH}
                     fill="transparent"
                     onMouseEnter={() => setHover(index)}
                   />
                 </a>
-                {index % labelStep === 0 || isSelected ? (
+                {index === 0 || index === points.length - 1 || isSelected || (!narrow && index % 6 === 0) || (narrow && index % 7 === 0) ? (
                   <text x={x} y={H - 12} textAnchor="middle" className={`daily-a-axis-label ${isSelected ? "is-selected" : ""}`}>
                     {formatDay(point.date).replace(" 月 ", "/").replace(" 日", "")}
                   </text>
@@ -108,12 +151,12 @@ export function DailyTrend({ points, selected }: { points: TrendPoint[]; selecte
           {lineSegments.map((segment, index) => (
             <polyline key={index} points={segment} className="daily-a-line" />
           ))}
+          {dots.map((dot, index) => (
+            <circle key={`dot-${index}`} cx={dot.x} cy={dot.y} r={2.6} className="daily-a-line-dot" />
+          ))}
         </svg>
         {active ? (
-          <div
-            className="daily-a-tooltip"
-            style={{ left: `${((PAD.left + column * (hover! + 0.5)) / W) * 100}%` }}
-          >
+          <div className="daily-a-tooltip" style={{ left: `${tooltipLeft}px`, top: `${tooltipTop}px` }}>
             <span className="daily-a-tooltip-date">{formatDay(active.date)}</span>
             <span className="daily-a-tooltip-row">提交 {active.commits}</span>
             <span className="daily-a-tooltip-row">token {formatToken(active.tokensM)} 百万</span>

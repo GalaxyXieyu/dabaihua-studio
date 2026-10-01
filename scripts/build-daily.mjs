@@ -171,13 +171,30 @@ export function parseDailyMarkdown(text, fallbackDate = "") {
   };
 }
 
+/** v1 在顶层 `commits`，v2（git-daily/2）放在 `git.commits`，两种都支持。 */
+function collectCommits(raw) {
+  if (Array.isArray(raw?.commits)) return raw.commits;
+  if (Array.isArray(raw?.git?.commits)) return raw.git.commits;
+  return [];
+}
+
+/** 旧格式 `noise: true`（合并 / stash）跳过；v2 的 `bump` 仍计入日报口径。 */
+function isNoiseCommit(commit) {
+  if (!commit) return true;
+  if (commit.exclude_from_net === true) return true;
+  const noise = commit.noise;
+  if (noise === true) return true;
+  if (typeof noise === "string") return noise !== "" && noise !== "bump";
+  return false;
+}
+
 /** 从 git-daily json 汇总每个仓库的净提交数与增删行（剔掉噪声提交）。 */
 export function summarizeCommitRepos(raw) {
-  const commits = Array.isArray(raw?.commits) ? raw.commits : [];
+  const commits = collectCommits(raw);
   const byRepo = new Map();
   if (commits.length > 0) {
     for (const commit of commits) {
-      if (commit?.noise) continue;
+      if (isNoiseCommit(commit)) continue;
       const repo = String(commit.repo || "unknown");
       const entry = byRepo.get(repo) || { repo, commits: 0, additions: 0, deletions: 0 };
       entry.commits += 1;

@@ -82,7 +82,7 @@ function renderList(items: ListItem[], keyPrefix: string): ReactNode {
   if (items.length === 0) return null;
   const Tag = items[0].ordered ? "ol" : "ul";
   return (
-    <Tag className="db-md-list">
+    <Tag className={`db-md-list ${items[0].ordered ? "is-ordered" : "is-unordered"}`}>
       {items.map((item, index) => (
         <li key={`${keyPrefix}-${index}`}>
           {renderInline(item.text, `${keyPrefix}-${index}`)}

@@ -14,6 +14,7 @@ import {
   formatSigned,
   monthCells,
   nearestReportInMonth,
+  parseResultCards,
   selectDay,
   trendPoints,
   weekdayOf,
@@ -51,16 +52,40 @@ function WhatEntry({ entry }: { entry: DailyWhatEntry }) {
 }
 
 function Fold({ title, markdown }: { title: string; markdown: string }) {
+  const preview = firstSentence(markdown);
   return (
     <details className="daily-a-fold">
       <summary className="daily-a-fold-summary">
         <span className="daily-a-fold-title">{title}</span>
+        {preview ? <span className="daily-a-fold-preview">{preview}</span> : null}
         {caret()}
       </summary>
       <div className="daily-a-fold-body">
         <MiniMarkdown text={markdown} />
       </div>
     </details>
+  );
+}
+
+/** 「结果数字」：把带数字的条目做成大号数字卡片网格，解析不出的用列表兜底。 */
+function ResultNumbers({ markdown }: { markdown: string }) {
+  const { cards, rest } = parseResultCards(markdown);
+  if (cards.length === 0) return <MiniMarkdown text={markdown} />;
+  return (
+    <div className="daily-a-results">
+      <div className="daily-a-result-grid">
+        {cards.map((card, index) => (
+          <div key={`${index}-${card.value}`} className="daily-a-result-card">
+            <p className="daily-a-result-value tabular-nums">
+              {card.value}
+              {card.unit ? <span className="daily-a-result-unit">{card.unit}</span> : null}
+            </p>
+            <p className="daily-a-result-label">{card.label}</p>
+          </div>
+        ))}
+      </div>
+      {rest ? <MiniMarkdown text={rest} /> : null}
+    </div>
   );
 }
 
@@ -148,7 +173,6 @@ export default async function DailyPage({ searchParams }: { searchParams: Promis
     ["卡点和返工", day.sections.blockers],
     ["未完成", day.sections.unfinished],
     ["牵头和带人", day.sections.leading],
-    ["结果数字", day.sections.results],
   ];
 
   return (
@@ -230,6 +254,13 @@ export default async function DailyPage({ searchParams }: { searchParams: Promis
           </section>
         ) : null}
 
+        {day.sections.results ? (
+          <section className="daily-a-section">
+            <h2 className="daily-a-heading">结果数字</h2>
+            <ResultNumbers markdown={day.sections.results} />
+          </section>
+        ) : null}
+
         {folds.some(([, markdown]) => markdown) ? (
           <section className="daily-a-section">
             <div className="daily-a-folds">
@@ -272,25 +303,26 @@ export default async function DailyPage({ searchParams }: { searchParams: Promis
             ))}
             {cells.map((cell, cellIndex) => {
               if (!cell) return <span key={`empty-${cellIndex}`} className="daily-a-calendar-empty" />;
-              const weekday = dateParts(cell.date)?.day ?? "";
-              if (!cell.commits && cell.commits !== 0) {
+              const dayNumber = dateParts(cell.date)?.day ?? "";
+              if (!cell.day) {
                 return (
-                  <span key={cell.date} className="daily-a-calendar-cell is-empty">
-                    {weekday}
+                  <span key={cell.date} className="daily-a-calendar-cell is-empty" aria-hidden="true">
+                    {dayNumber}
                   </span>
                 );
               }
-              const level = cell.commits <= 0 ? 1 : Math.min(4, Math.max(1, Math.ceil((cell.commits / monthMax) * 4)));
+              const commits = cell.day.commits;
+              const level = commits == null || commits <= 0 ? 1 : Math.min(4, Math.max(1, Math.ceil((commits / monthMax) * 4)));
               return (
                 <a
                   key={cell.date}
                   href={`/daily?date=${cell.date}`}
                   className={`daily-a-calendar-cell is-level-${level} ${cell.date === day.date ? "is-selected" : ""}`}
-                  aria-label={`${formatMonthDay(cell.date)}：${cell.commits} 个提交`}
+                  aria-label={`${formatMonthDay(cell.date)}：${commits ?? 0} 个提交`}
                   aria-current={cell.date === day.date ? "date" : undefined}
                 >
-                  {weekday}
-                  <span className="daily-a-calendar-count">{cell.commits}</span>
+                  {dayNumber}
+                  {commits != null ? <span className="daily-a-calendar-count">{commits}</span> : null}
                 </a>
               );
             })}

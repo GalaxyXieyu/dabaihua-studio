@@ -4,7 +4,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { htmlToMarkdown } from "../lib/article.ts";
-import { compareToPrevious, firstSentence, formatFullDate, monthCells, nearestReportInMonth, selectDay, trendPoints, weekdayOf } from "../lib/daily.ts";
+import { compareToPrevious, firstSentence, formatFullDate, monthCells, nearestReportInMonth, parseResultCards, selectDay, trendPoints, weekdayOf } from "../lib/daily.ts";
 import { shapeResponse, summarizeResponses, validateBrief } from "../lib/daily-brief-core.ts";
 import { isPublicPath, loginRedirectLocation, loginRedirectResponse } from "../lib/login-gate.ts";
 import { HIDDEN_FROM_NAV, activeTabKey, primaryNavItems, sectionForPath, sectionTabs } from "../lib/site-nav.ts";
@@ -1286,6 +1286,31 @@ test("gates the admin-only daily page and keeps the private feed out of git", as
   assert.match(trend, /"use client"/);
   assert.match(trend, /<svg/);
   assert.match(trend, /<polyline/);
+  // viewBox 跟随容器实测宽度，手机上 11px 文字不再被缩小。
+  assert.match(trend, /ResizeObserver/);
+  assert.match(trend, /viewBox=\{`0 0 \$\{W\} \$\{H\}`\}/);
+  // token 线有独立右轴和数据点；悬停柱子用深色，和选中的朱红区分开。
+  assert.match(trend, /is-token/);
+  assert.match(trend, /daily-a-line-dot/);
+  assert.match(css, /\.daily-a-bar\.is-selected \{[^}]*fill: var\(--accent\)/);
+  assert.match(css, /\.daily-a-bar\.is-hover \{[^}]*fill: var\(--ink\)/);
+  // 没有日报的日子也要显示日期数字。
+  assert.match(page, /className="daily-a-calendar-cell is-empty"/);
+  assert.match(page, /daily-a-calendar-count/);
+  assert.match(css, /\.daily-a-calendar-cell\.is-selected \{[^}]*background: var\(--ink\)/);
+  // Markdown 列表有符号，行内代码不断行拆框。
+  assert.match(css, /\.daily-a \.db-md-list\.is-unordered \{[^}]*list-style: disc/);
+  assert.match(css, /\.daily-a \.db-md-list\.is-ordered \{[^}]*list-style: decimal/);
+  assert.match(css, /box-decoration-break: clone/);
+  // 结果数字卡片 + 折叠预览 + 宽屏两栏。
+  assert.match(page, /parseResultCards/);
+  assert.match(page, /daily-a-result-grid/);
+  assert.match(page, /daily-a-fold-preview/);
+  assert.match(css, /max-width: 1180px/);
+  assert.match(css, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /calc\(72px \+ env\(safe-area-inset-bottom\)\)/);
+  assert.match(css, /\.daily-a-tooltip \{[^}]*z-index: 5/);
+  assert.match(css, /@media \(min-width: 1024px\)/);
   assert.match(css, /\.daily-a/);
   assert.match(gitignore, /\/content\/daily\//);
   assert.match(packageJson, /"daily:build": "node scripts\/build-daily\.mjs"/);
@@ -1332,6 +1357,13 @@ test("summarizes sample daily markdown and git commits for /daily", async () => 
     { repo: "beta-svc", commits: 2, additions: 20, deletions: 14 },
   ]);
 
+  // git-daily/2 把提交放在 `git.commits`，也要能算；`bump` 仍计入，stash/merge 不算。
+  const gitJsonV2 = JSON.parse(await readFile(new URL("git-daily/2026-03-03.json", fixturesDir), "utf8"));
+  assert.deepEqual(summarizeCommitRepos(gitJsonV2), [
+    { repo: "gamma-web", commits: 3, additions: 152, deletions: 17 },
+    { repo: "delta-api", commits: 1, additions: 20, deletions: 4 },
+  ]);
+
   // 整体汇总：跳过 *.partial 和 backup-* 目录，按日期升序。
   const data = buildDailyData({ dailyDir, gitDailyDir });
   assert.deepEqual(data.days.map((item) => item.date), ["2026-03-01", "2026-03-02"]);
@@ -1364,16 +1396,50 @@ test("formats daily dates, deltas, previews and the monthly calendar", () => {
   assert.equal(selectDay([], "2026-03-02"), null);
 
   const points = trendPoints(days, "2026-03-02");
-  assert.deepEqual(points.map((point) => point.date), ["2026-03-01", "2026-03-02"]);
-  assert.equal(points[1].tokensM, null);
+  assert.equal(points.length, 30);
+  assert.equal(points.at(-1).date, "2026-03-02");
+  assert.equal(points[0].date, "2026-02-01");
+  const byDate = new Map(points.map((point) => [point.date, point]));
+  assert.equal(byDate.get("2026-03-01").commits, 7);
+  assert.equal(byDate.get("2026-03-01").tokensM, 128.5);
+  assert.equal(byDate.get("2026-03-02").tokensM, null);
+  assert.equal(byDate.get("2026-02-15").commits, 0);
+  assert.equal(byDate.get("2026-02-15").tokensM, null);
 
   const cells = monthCells(days, "2026-03-02");
   assert.equal(cells.length, 6 + 31); // 周一开头，2026-03-01 是周日
   assert.equal(cells[6].date, "2026-03-01");
+  assert.equal(cells[6].day.date, "2026-03-01");
   assert.equal(cells[7].date, "2026-03-02");
-  assert.equal(cells[8], null);
+  assert.equal(cells[7].day.date, "2026-03-02");
+  assert.equal(cells[8].date, "2026-03-03");
+  assert.equal(cells[8].day, null);
   assert.equal(nearestReportInMonth(days, "2026-03-02", 1), "2026-04-05");
   assert.equal(nearestReportInMonth(days, "2026-03-02", -1), null);
+});
+
+test("turns result numbers into cards and falls back to a list", () => {
+  const { cards, rest } = parseResultCards([
+    "- 提交：topics-daily 统计 22 个（不含合并提交），+11,342 / −525 行。",
+    "  - ai-native 16 个，+10,119 / −282。",
+    "- AI token：325.80M，按 API 列表价估算 $312.55（不是实际花费）。",
+    "- 今天没有数字可填。",
+  ].join("\n"));
+
+  assert.equal(cards.length, 2);
+  assert.deepEqual(cards[0].value, "22");
+  assert.equal(cards[0].unit, "个");
+  assert.match(cards[0].label, /提交/);
+  assert.match(cards[0].label, /ai-native 16 个/);
+  assert.equal(cards[1].value, "325.80");
+  assert.equal(cards[1].unit, "M");
+  assert.match(cards[1].label, /AI token/);
+  assert.match(rest, /今天没有数字可填/);
+
+  // 完全没有列表时原样返回。
+  const plain = parseResultCards("普通一段话");
+  assert.deepEqual(plain.cards, []);
+  assert.equal(plain.rest, "普通一段话");
 });
 
 test("classifies public paths for the site-wide login gate", () => {

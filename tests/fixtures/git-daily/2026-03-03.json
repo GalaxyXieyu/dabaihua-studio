@@ -1,0 +1,33 @@
+{
+  "schema": "git-daily/2",
+  "format": "topics-daily.report/1",
+  "tool": "git-daily-json 2.0.0",
+  "date": "2026-03-03",
+  "tz": "Asia/Shanghai",
+  "git": {
+    "source": "git log --all --source",
+    "range": { "since": "2026-03-03", "until": "2026-03-03", "days": 1 },
+    "repos": [
+      { "name": "gamma-web", "commits": 4, "net": 3, "additions": 187, "deletions": 52 },
+      { "name": "delta-api", "commits": 1, "net": 1, "additions": 20, "deletions": 4 }
+    ],
+    "commits": [
+      { "repo": "gamma-web", "noise": null, "is_noise": false, "exclude_from_net": false, "additions": 100, "deletions": 10 },
+      { "repo": "gamma-web", "noise": null, "is_noise": false, "exclude_from_net": false, "additions": 50, "deletions": 5 },
+      { "repo": "gamma-web", "noise": "bump", "is_noise": true, "exclude_from_net": false, "additions": 2, "deletions": 2 },
+      { "repo": "gamma-web", "noise": "merge", "is_noise": true, "exclude_from_net": true, "additions": 30, "deletions": 30 },
+      { "repo": "gamma-web", "noise": "stash", "is_noise": true, "exclude_from_net": true, "additions": 5, "deletions": 5 },
+      { "repo": "delta-api", "noise": null, "is_noise": false, "exclude_from_net": false, "additions": 20, "deletions": 4 }
+    ],
+    "totals": { "commits": 6, "net": 4, "noise": 3, "repos": 2, "additions": 207, "deletions": 56 }
+  },
+  "stats": {
+    "total": 6,
+    "noise": 3,
+    "net": 4,
+    "by_repo": {
+      "gamma-web": { "total": 5, "noise": 3, "net": 3, "net_excl_bump": 2 },
+      "delta-api": { "total": 1, "noise": 0, "net": 1, "net_excl_bump": 1 }
+    }
+  }
+}

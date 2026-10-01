@@ -29,7 +29,7 @@ body:has(.daily-a) {
 
 .daily-a-masthead-wrap,
 .daily-a-main {
-  max-width: 880px;
+  max-width: 1180px;
   margin: 0 auto;
   padding-left: 48px;
   padding-right: 48px;
@@ -80,15 +80,24 @@ body:has(.daily-a) {
 }
 
 .daily-a-metric-delta {
-  margin: 8px 0 0;
+  margin: 10px 0 0;
   font-family: var(--font-latin);
-  font-size: 12px;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--faint);
   font-variant-numeric: tabular-nums lining-nums;
 }
 
 .daily-a-metric-delta.is-up {
-  color: var(--ink);
+  color: var(--accent);
+}
+
+.daily-a-metric-delta.is-down {
+  color: var(--danger);
+}
+
+.daily-a-metric-delta.is-flat {
+  color: var(--muted);
 }
 
 /* ── 分区 ────────────────────────────────────────────── */
@@ -164,14 +173,21 @@ body:has(.daily-a) {
   fill: var(--ink);
 }
 
+.daily-a-axis-label.is-token {
+  fill: var(--accent);
+}
+
 .daily-a-bar {
   fill: var(--line-strong);
   transition: fill 140ms ease;
 }
 
-.daily-a-bar.is-selected,
-.daily-a-bar.is-hover {
+.daily-a-bar.is-selected {
   fill: var(--accent);
+}
+
+.daily-a-bar.is-hover {
+  fill: var(--ink);
 }
 
 .daily-a-line {
@@ -180,12 +196,18 @@ body:has(.daily-a) {
   stroke-width: 1.6;
   stroke-linejoin: round;
   stroke-linecap: round;
+  pointer-events: none;
+}
+
+.daily-a-line-dot {
+  fill: var(--paper);
+  stroke: var(--accent);
+  stroke-width: 1.6;
+  pointer-events: none;
 }
 
 .daily-a-tooltip {
   position: absolute;
-  top: -6px;
-  transform: translate(-50%, -100%);
   padding: 6px 9px;
   display: grid;
   gap: 2px;
@@ -195,8 +217,9 @@ body:has(.daily-a) {
   font-size: 12px;
   line-height: 1.5;
   white-space: nowrap;
+  transform: translateX(-50%);
   pointer-events: none;
-  z-index: var(--z-dropdown);
+  z-index: 5;
 }
 
 .daily-a-tooltip-date {
@@ -267,7 +290,7 @@ body:has(.daily-a) {
 
 /* ── 「做了什么」折叠条目 ───────────────────────────── */
 .daily-a-whats {
-  margin-top: 4px;
+  margin-top: 12px;
 }
 
 .daily-a-what {
@@ -275,7 +298,7 @@ body:has(.daily-a) {
 }
 
 .daily-a-what:first-child {
-  border-top: 1px solid var(--line);
+  border-top: 0;
 }
 
 .daily-a-what-summary,
@@ -312,6 +335,18 @@ body:has(.daily-a) {
   display: none;
 }
 
+.daily-a-fold-preview {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.daily-a-fold[open] .daily-a-fold-preview {
+  display: none;
+}
+
 .daily-a-caret {
   position: absolute;
   top: 16px;
@@ -335,6 +370,7 @@ body:has(.daily-a) {
 /* ── 折叠块 ─────────────────────────────────────────── */
 .daily-a-folds {
   display: grid;
+  margin-top: 12px;
 }
 
 .daily-a-fold {
@@ -346,6 +382,7 @@ body:has(.daily-a) {
 }
 
 .daily-a-fold-title {
+  display: block;
   font-family: var(--font-serif);
   font-size: 16px;
   font-weight: 600;
@@ -380,10 +417,24 @@ body:has(.daily-a) {
 
 .daily-a .db-md-list {
   margin: 0 0 10px;
+  padding-left: 22px;
+}
+
+.daily-a .db-md-list.is-unordered {
+  list-style: disc outside;
+}
+
+.daily-a .db-md-list.is-ordered {
+  list-style: decimal outside;
+}
+
+.daily-a .db-md-list .db-md-list {
+  margin: 6px 0 0;
   padding-left: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+}
+
+.daily-a .db-md-list > li + li {
+  margin-top: 6px;
 }
 
 .daily-a .db-md code {
@@ -393,6 +444,51 @@ body:has(.daily-a) {
   background: var(--canvas);
   border: 1px solid var(--line);
   border-radius: var(--r-xs);
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* ── 「结果数字」数字卡片 ─────────────────────────── */
+.daily-a-results {
+  margin-top: 16px;
+}
+
+.daily-a-result-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+
+.daily-a-result-card {
+  padding: 18px 18px 16px;
+  background: var(--canvas);
+}
+
+.daily-a-result-value {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 38px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+.daily-a-result-unit {
+  margin-left: 4px;
+  color: var(--accent);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.daily-a-result-label {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.65;
 }
 
 .daily-a .db-md a {
@@ -481,6 +577,7 @@ body:has(.daily-a) {
 .daily-a-calendar-cell.is-empty {
   color: var(--faint);
   border-color: var(--line);
+  background: transparent;
 }
 
 .daily-a-calendar-cell.is-level-1 {
@@ -501,7 +598,16 @@ body:has(.daily-a) {
 }
 
 .daily-a-calendar-cell.is-selected {
+  color: var(--paper);
+  background: var(--ink);
   border-color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--paper);
+  font-weight: 700;
+}
+
+.daily-a-calendar-cell.is-selected .daily-a-calendar-count {
+  color: var(--paper);
+  opacity: 0.85;
 }
 
 .daily-a-calendar-count {
@@ -553,8 +659,12 @@ body:has(.daily-a) {
     padding-top: 28px;
   }
 
-  .daily-a-main {
-    padding-bottom: calc(78px + env(safe-area-inset-bottom));
+  .daily-a .daily-a-main {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom)) !important;
+  }
+
+  .daily-a-metric-delta {
+    font-size: 13px;
   }
 
   .daily-a-metric {
@@ -585,5 +695,31 @@ body:has(.daily-a) {
 
   .daily-a-calendar-cell {
     min-height: 38px;
+  }
+
+  .daily-a-result-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  }
+
+  .daily-a-result-value {
+    font-size: 30px;
+  }
+
+  .daily-a-calendar {
+    max-width: none;
+  }
+}
+
+/* ── 宽屏：杂志式两栏 ────────────────────────────── */
+@media (min-width: 1024px) {
+  .daily-a-whats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 44px;
+  }
+
+  .daily-a-calendar-head,
+  .daily-a-calendar {
+    max-width: 760px;
   }
 }

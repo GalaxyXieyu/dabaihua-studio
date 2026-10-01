@@ -115,32 +115,99 @@ export function selectDay(days: DailyDay[], requested?: string | null): DailyDay
 
 export type DailyTrendPoint = { date: string; label: string; commits: number; tokensM: number | null };
 
-/** 以选中日为准，取最近 `limit` 条日报作为趋势图数据。 */
-export function trendPoints(days: DailyDay[], selected: string, limit = 30): DailyTrendPoint[] {
-  const end = days.findIndex((day) => day.date === selected);
-  const slice = end >= 0 ? days.slice(0, end + 1) : days;
-  return slice.slice(-limit).map((day) => ({
-    date: day.date,
-    label: formatMonthDay(day.date),
-    commits: Number(day.commits || 0),
-    tokensM: day.tokensM,
-  }));
+/** 把 `YYYY-MM-DD` 往前/后推 `days` 天，返回新的日期字符串。 */
+function shiftDate(date: string, days: number): string {
+  const parts = dateParts(date);
+  if (!parts) return date;
+  const value = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + days));
+  return `${value.getUTCFullYear()}-${String(value.getUTCMonth() + 1).padStart(2, "0")}-${String(value.getUTCDate()).padStart(2, "0")}`;
 }
 
-/** 选定日期所在月份的日历格（周一开头），空格用 null 占位。 */
-export function monthCells(days: DailyDay[], selected: string): Array<DailyDay | null> {
+/**
+ * 以选中日为右端点的固定 `limit` 天窗口。中间没有日报的日子补成 0 提交、
+ * token 为 null，保证趋势图的 x 轴永远是连续的 30 格。
+ */
+export function trendPoints(days: DailyDay[], selected: string, limit = 30): DailyTrendPoint[] {
+  const byDate = new Map(days.map((day) => [day.date, day]));
+  const points: DailyTrendPoint[] = [];
+  for (let offset = limit - 1; offset >= 0; offset -= 1) {
+    const date = shiftDate(selected, -offset);
+    const day = byDate.get(date);
+    points.push({
+      date,
+      label: formatMonthDay(date),
+      commits: Number(day?.commits || 0),
+      tokensM: day ? day.tokensM : null,
+    });
+  }
+  return points;
+}
+
+export type MonthCell = { date: string; day: DailyDay | null };
+
+/** 选定日期所在月份的日历格（周一开头）：前导空格用 null，其它日期始终带日期。 */
+export function monthCells(days: DailyDay[], selected: string): Array<MonthCell | null> {
   const parts = dateParts(selected);
   if (!parts) return [];
   const byDate = new Map(days.map((day) => [day.date, day]));
   const first = new Date(Date.UTC(parts.year, parts.month - 1, 1));
   const daysInMonth = new Date(Date.UTC(parts.year, parts.month, 0)).getUTCDate();
   const offset = (first.getUTCDay() + 6) % 7; // 周一 = 0
-  const cells: Array<DailyDay | null> = new Array(offset).fill(null);
+  const cells: Array<MonthCell | null> = new Array(offset).fill(null);
   for (let day = 1; day <= daysInMonth; day += 1) {
     const key = `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    cells.push(byDate.get(key) || null);
+    cells.push({ date: key, day: byDate.get(key) || null });
   }
   return cells;
+}
+
+export type DailyResultCard = { value: string; unit: string; label: string };
+
+const RESULT_NUMBER_RE = /([+\-−]?\d[\d,]*(?:\.\d+)?)\s*(百万|亿|万|M|K|k|%|个|项|行|次|份|天|小时|分钟|秒)?/;
+
+/**
+ * 把「结果数字」那节的列表拆成数字卡片：每条顶层条目取第一个数字做大字，
+ * 剩余文本做说明；解析不出数字的条目原样落到 `rest` 里以列表兜底。
+ */
+export function parseResultCards(markdown: string | null | undefined): { cards: DailyResultCard[]; rest: string } {
+  const lines = String(markdown ?? "").replace(/\r\n?/g, "\n").split("\n");
+  const entries: Array<{ top: string; nested: string[] }> = [];
+  let current: { top: string; nested: string[] } | null = null;
+  for (const line of lines) {
+    const top = /^[-*+]\s+(.*)$/.exec(line);
+    if (top) {
+      current = { top: top[1].trim(), nested: [] };
+      entries.push(current);
+      continue;
+    }
+    const nested = /^\s+[-*+]\s+(.*)$/.exec(line);
+    if (nested && current) {
+      current.nested.push(nested[1].trim());
+      continue;
+    }
+    if (current && line.trim()) current.nested.push(line.trim());
+  }
+  if (entries.length === 0) return { cards: [], rest: markdown ?? "" };
+
+  const cards: DailyResultCard[] = [];
+  const rest: string[] = [];
+  for (const entry of entries) {
+    const match = RESULT_NUMBER_RE.exec(entry.top);
+    if (!match) {
+      rest.push(`- ${entry.top}`);
+      for (const nested of entry.nested) rest.push(`  - ${nested}`);
+      continue;
+    }
+    const value = match[1].replace(/−/g, "-");
+    const unit = match[2] || "";
+    const before = entry.top.slice(0, match.index);
+    const after = entry.top.slice(match.index + match[0].length);
+    const head = `${before}${after}`.replace(/[\s:：,，、;；]+$/g, "").replace(/\s{2,}/g, " ").trim();
+    const detail = head || entry.top;
+    const label = entry.nested.length > 0 ? `${detail} · ${entry.nested.join(" · ")}` : detail;
+    cards.push({ value, unit, label });
+  }
+  return { cards, rest: rest.join("\n") };
 }
 
 /** 上/下一个月里最近一天有日报的日期，用于日历翻月。 */
