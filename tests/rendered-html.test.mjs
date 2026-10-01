@@ -19,7 +19,7 @@ import { decideReviewMode } from "../app/_components/review-mode.ts";
 import { PayloadTooLargeError, discardBody, isValidIsoWeek, publicBaseUrl, readBodyWithLimit, shanghaiIso } from "../lib/weekly.ts";
 import { parseDigestMarkdown, stripBodyHeader } from "../scripts/lib/topic-materials.mjs";
 import { buildMirrorData, parseJsonl } from "../scripts/build-mirror.mjs";
-import { categoryCounts, computeStats, decisionEntries, decisionScopes, entriesByCategory, entryDate, entryOwnDate, formatMirrorDate, formatShortDate, monthlyTrend, preferenceGroups, sourceAgent, sourceLine } from "../lib/mirror.ts";
+import { MIRROR_TABS, categoryCounts, computeStats, decisionEntries, decisionScopes, entriesByCategory, entriesForTab, entryDate, entryOwnDate, formatMirrorDate, formatShortDate, mirrorTabCounts, monthlyTrend, preferenceGroups, resolveMirrorTab, sourceAgent, sourceLine } from "../lib/mirror.ts";
 
 test("converts entity-escaped feed HTML before rendering Markdown", () => {
   const markdown = htmlToMarkdown('&lt;img src=&quot;https://cdn.example.com/cover.jpg&quot; alt=&quot;封面&quot;&gt;&lt;p&gt;&lt;strong&gt;最新文字&lt;/strong&gt;&lt;br&gt;正文&lt;/p&gt;');
@@ -2387,8 +2387,9 @@ test("groups mirror entries by category and scope and computes the masthead stat
 });
 
 test("gates the admin-only mirror page and keeps the private feed out of git", async () => {
-  const [page, mirrorData, mirror, css, worker, gitignore, packageJson, nav] = await Promise.all([
+  const [page, deck, mirrorData, mirror, css, worker, gitignore, packageJson, nav] = await Promise.all([
     readFile(new URL("../app/mirror/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/mirror/_components/MirrorDeck.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/mirror-data.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/mirror.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/mirror/mirror.css", import.meta.url), "utf8"),
@@ -2405,50 +2406,53 @@ test("gates the admin-only mirror page and keeps the private feed out of git", a
   assert.match(page, /loadMirrorData\(\)/);
   assert.match(page, /还没有正本数据/);
   assert.match(page, /<SiteAppBar user=\{user\} pathname="\/mirror" \/>/);
-  // 按 scope 筛选走 URL 参数。
-  assert.match(page, /Promise<\{ scope\?: string \}>/);
-  assert.match(page, /\?scope=/);
-  assert.match(page, /decisionScopes\(/);
   // 页面只读汇总后的 json，不直接读仓库外的正本目录。
   assert.doesNotMatch(page, /workspace\/handbook/);
-  // 七个分区标题都在。
-  for (const title of ["我是怎样的人", "我喜欢这样", "我怎么做事", "定过的事", "复盘学到的", "正在调整", "等你确认"]) {
-    assert.match(page, new RegExp(title));
-  }
-  assert.match(page, /computeStats\(/);
-  assert.match(page, /preferenceGroups\(/);
-  assert.match(page, /entryOwnDate\(/);
-  assert.match(page, /已被 \{entry\.supersededBy\} 取代/);
-  assert.match(page, /mirror-a-history/);
-  assert.match(page, /<MiniMarkdown/);
-  // 摘要、去重小标签、可展开的待确认、正在调整的独立样式。
-  assert.match(page, /MirrorSummary/);
-  assert.match(page, /mirror-a-summary/);
-  assert.match(page, /mirror-a-ratio-track/);
-  assert.match(page, /mirror-a-scope-tag/);
-  assert.match(page, /mirror-a-inbox-item/);
-  assert.match(page, /entry\.options\.join/);
-  assert.match(page, /variant="adjustment"/);
-  // 占比条带图例（色块 + 类别 + 条数），段够宽时段内写类别名。
-  assert.match(page, /mirror-a-ratio-legend/);
-  assert.match(page, /mirror-a-ratio-name/);
-  // 只有一两个月时用一行数字说明，超过两个才画柱图。
-  assert.match(page, /mirror-a-trend-line/);
-  assert.match(page, /trend\.length <= 2/);
-  // 画像卡片：grid 跟卡片数取列，展开跨整行且不拉高同行。
-  assert.match(page, /data-count=\{profiles\.length\}/);
-  assert.match(page, /hideDate/);
-  assert.match(page, /tagTone="outline"/);
-  assert.match(css, /align-items: start/);
-  assert.match(css, /mirror-a-profiles \.mirror-a-entry\[open\]/);
-  assert.match(css, /mirror-a-profiles \.mirror-a-entry-body/);
-  assert.match(css, /nth-child\(3n \+ 2\)/);
-  assert.match(css, /mirror-a-tag\.is-outline/);
-  // 空分区（复盘为空）不再单独占一节，靠摘要里的 0 表达。
-  assert.match(page, /reviews\.length > 0 \? \(/);
 
   assert.match(mirrorData, /import\.meta\.glob\(/);
   assert.match(mirrorData, /content\/mirror\/mirror\.json/);
+
+  // 类型标签是链接，服务端按 ?tab 渲染，无 JS 也能看。
+  assert.match(page, /Promise<\{ tab\?: string \}>/);
+  assert.match(page, /resolveMirrorTab\(/);
+  assert.match(page, /mirrorTabCounts\(/);
+  assert.match(page, /entriesForTab\(/);
+  assert.match(page, /href=\{`\/mirror\?tab=\$\{item\.key\}`\}/);
+  assert.match(page, /<MirrorDeck /);
+  assert.match(page, /这个类型还没有记录/);
+  // 老的长列表分区已经拿掉，整页只剩一类卡片带。
+  assert.doesNotMatch(page, /mirror-a-profiles/);
+  assert.doesNotMatch(page, /mirror-a-timeline/);
+  assert.doesNotMatch(page, /mirror-a-inbox-item/);
+  assert.doesNotMatch(page, /preferenceGroups\(/);
+
+  // 卡片带：scroll-snap、箭头、页码、键盘左右键、卡片内滚动、下方详情。
+  assert.match(deck, /"use client"/);
+  assert.match(deck, /mirror-a-track/);
+  assert.match(deck, /scrollTo\(/);
+  assert.match(deck, /onKeyDown/);
+  assert.match(deck, /ArrowRight/);
+  assert.match(deck, /ArrowLeft/);
+  assert.match(deck, /mirror-a-deck-arrow/);
+  assert.match(deck, /mirror-a-deck-count/);
+  assert.match(deck, /className=\{`mirror-a-card is-\$\{variant\}/);
+  for (const variant of ["profile", "preference", "method", "decision", "adjustment"]) {
+    assert.match(deck, new RegExp(`variant === "${variant}"`));
+  }
+  // 已推翻：划线 class + 点回新卡。
+  assert.match(deck, /is-superseded/);
+  assert.match(deck, /entry\.supersededBy/);
+  assert.match(deck, /已被 \{target\} 取代/);
+  // 底部版本号点开在卡片下方看完整正文和历史。
+  assert.match(deck, /mirror-a-card-version/);
+  assert.match(deck, /mirror-a-detail-panel/);
+  assert.match(deck, /mirror-a-history/);
+  assert.match(deck, /<MiniMarkdown/);
+
+  assert.match(mirror, /export const MIRROR_TABS/);
+  assert.match(mirror, /export function resolveMirrorTab/);
+  assert.match(mirror, /export function mirrorTabCounts/);
+  assert.match(mirror, /export function entriesForTab/);
   assert.match(mirror, /export function preferenceGroups/);
   assert.match(mirror, /export function decisionEntries/);
   assert.match(mirror, /export function computeStats/);
@@ -2459,17 +2463,25 @@ test("gates the admin-only mirror page and keeps the private feed out of git", a
   assert.match(mirror, /export function formatShortDate/);
   assert.match(mirror, /export function sourceAgent/);
 
-  // 杂志风：复用令牌，不用渐变、卡片阴影和 emoji。
+  // 杂志风：横向 scroll-snap、六种卡片 class、无渐变无阴影。
   assert.match(css, /\.mirror-a/);
+  assert.match(css, /scroll-snap-type: x mandatory/);
+  assert.match(css, /\.mirror-a-card \{[^}]*height: 340px/);
+  assert.match(css, /flex: 0 0 calc\(\(100% - 40px\) \/ 3\)/);
+  assert.match(css, /\.mirror-a-card\.is-profile/);
+  assert.match(css, /\.mirror-a-card\.is-preference/);
+  assert.match(css, /\.mirror-a-card\.is-method/);
+  assert.match(css, /\.mirror-a-card\.is-decision/);
+  assert.match(css, /\.mirror-a-card\.is-adjustment/);
+  assert.match(css, /\.mirror-a-card\.is-inbox/);
+  assert.match(css, /\.mirror-a-card\.is-superseded/);
   assert.match(css, /var\(--accent\)/);
   assert.match(css, /var\(--font-serif\)/);
-  assert.match(css, /mirror-a-section\.is-adjustment/);
-  assert.match(css, /mirror-a-ratio-seg/);
-  assert.match(css, /mirror-a-month-bar/);
-  assert.match(css, /mirror-a-trend-legend/);
   assert.doesNotMatch(css, /gradient/);
   assert.doesNotMatch(css, /box-shadow/);
   assert.match(css, /@media \(max-width: 640px\)/);
+  // 手机一屏约 1.15 张，露出下一张边缘。
+  assert.match(css, /flex: 0 0 86%/);
 
   assert.match(gitignore, /\/content\/mirror\//);
   assert.match(packageJson, /"mirror:build": "node scripts\/build-mirror\.mjs"/);
@@ -2478,4 +2490,32 @@ test("gates the admin-only mirror page and keeps the private feed out of git", a
 
   assert.equal(sectionForPath("/mirror"), "growth");
   assert.equal(activeTabKey("/mirror"), "mirror");
+});
+
+test("resolves mirror type tabs, counts and superseded links", () => {
+  const handbookDir = fileURLToPath(new URL("fixtures/handbook/", import.meta.url));
+  const data = buildMirrorData({ handbookDir });
+
+  assert.deepEqual(MIRROR_TABS.map((tab) => tab.label), ["画像", "偏好", "方法论", "决策", "正在调整", "等你确认"]);
+  // 未知或缺省都回到画像。
+  assert.equal(resolveMirrorTab(undefined).key, "profile");
+  assert.equal(resolveMirrorTab("").key, "profile");
+  assert.equal(resolveMirrorTab("nope").key, "profile");
+  assert.equal(resolveMirrorTab("decision").label, "决策");
+
+  assert.deepEqual(
+    mirrorTabCounts(data.entries, data.inbox).map((item) => [item.key, item.count]),
+    [["profile", 1], ["preference", 2], ["method", 1], ["decision", 1], ["adjustment", 1], ["inbox", 1]],
+  );
+
+  assert.equal(entriesForTab(data.entries, data.inbox, resolveMirrorTab("preference")).length, 2);
+  assert.equal(entriesForTab(data.entries, data.inbox, resolveMirrorTab("inbox")).length, 1);
+  assert.equal(entriesForTab(data.entries, data.inbox, resolveMirrorTab("method"))[0].title, "样例方法：先写清单");
+  assert.equal(entriesForTab([], [], resolveMirrorTab("profile")).length, 0);
+
+  // 已推翻的偏好仍留在带里，status 和指向的新卡都在。
+  const preference = entriesForTab(data.entries, data.inbox, resolveMirrorTab("preference"));
+  const oldPref = preference.find((entry) => entry.id === "H-PREF-20260901-01");
+  assert.equal(oldPref.status, "已推翻");
+  assert.equal(oldPref.supersededBy, "H-PREF-20260910-01");
 });

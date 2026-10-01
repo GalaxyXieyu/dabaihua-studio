@@ -65,6 +65,51 @@ export type MirrorMonthPoint = { month: string; label: string; added: number; su
 export const CATEGORY_ORDER = ["画像", "待调整", "偏好", "方法论", "决策", "复盘结论"];
 export const PREFERENCE_SCOPES = ["沟通", "内容", "职业", "工作", "工作台"];
 
+/** 页面上的一排类型标签：计数本身就是标签，点了切换下面一类的卡片带。 */
+export type MirrorTabDef = {
+  key: string;
+  label: string;
+  category: string;
+  inbox?: boolean;
+};
+
+export const MIRROR_TABS: MirrorTabDef[] = [
+  { key: "profile", label: "画像", category: "画像" },
+  { key: "preference", label: "偏好", category: "偏好" },
+  { key: "method", label: "方法论", category: "方法论" },
+  { key: "decision", label: "决策", category: "决策" },
+  { key: "adjustment", label: "正在调整", category: "待调整" },
+  { key: "inbox", label: "等你确认", category: "", inbox: true },
+];
+
+export const DEFAULT_MIRROR_TAB = MIRROR_TABS[0].key;
+
+export type MirrorTabCount = { key: string; label: string; count: number };
+
+/** 某个 ?tab= 解析成标签定义；未知或缺省都回到画像。 */
+export function resolveMirrorTab(key?: string | null): MirrorTabDef {
+  return MIRROR_TABS.find((tab) => tab.key === key) ?? MIRROR_TABS[0];
+}
+
+/** 类别名反查标签 key，用来做「取代」跨 tab 链接。 */
+export function tabKeyForCategory(category: string): string {
+  return MIRROR_TABS.find((tab) => !tab.inbox && tab.category === category)?.key ?? "";
+}
+
+/** 当前标签下要展示的条目：收件箱单独一类，其余按类别取。 */
+export function entriesForTab(entries: MirrorEntry[], inbox: MirrorEntry[], tab: MirrorTabDef): MirrorEntry[] {
+  return tab.inbox ? inbox : entries.filter((entry) => entry.category === tab.category);
+}
+
+/** 每个标签的条数，顺序与 MIRROR_TABS 一致。 */
+export function mirrorTabCounts(entries: MirrorEntry[], inbox: MirrorEntry[]): MirrorTabCount[] {
+  return MIRROR_TABS.map((tab) => ({
+    key: tab.key,
+    label: tab.label,
+    count: tab.inbox ? inbox.length : entries.filter((entry) => entry.category === tab.category).length,
+  }));
+}
+
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function isMirrorDate(value: string | null | undefined): boolean {
