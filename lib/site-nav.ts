@@ -26,6 +26,7 @@ const GROWTH_TABS: NavItem[] = [
   { key: "weekly", label: "周报", href: "/weekly" },
   { key: "daily", label: "日报", href: "/daily" },
   { key: "career", label: "职业", href: "/career" },
+  { key: "mirror", label: "照照镜子", href: "/mirror" },
 ];
 
 function isAdmin(role: string | null | undefined): boolean {
@@ -65,7 +66,7 @@ export function sectionForPath(pathname: string): NavSection | null {
   ) {
     return "content";
   }
-  if (hasPrefix(pathname, "/weekly") || hasPrefix(pathname, "/daily") || hasPrefix(pathname, "/career")) return "growth";
+  if (hasPrefix(pathname, "/weekly") || hasPrefix(pathname, "/daily") || hasPrefix(pathname, "/career") || hasPrefix(pathname, "/mirror")) return "growth";
   return null;
 }
 
@@ -78,5 +79,6 @@ export function activeTabKey(pathname: string): string | null {
   if (hasPrefix(pathname, "/weekly")) return "weekly";
   if (hasPrefix(pathname, "/daily")) return "daily";
   if (hasPrefix(pathname, "/career")) return "career";
+  if (hasPrefix(pathname, "/mirror")) return "mirror";
   return null;
 }

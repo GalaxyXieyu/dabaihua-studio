@@ -1,0 +1,1 @@
+{"id":"H-DEC-20260920-01","version":1,"category":"决策","title":"样例决策：周会改到周三","body":"样例数据：周会从周一挪到周三。","scope":["工作"],"sources":[{"agent":"画饼","date":"2026-09-20","ref":"整理"}],"status":"待确认","confirmed_by":"","confirmed_at":"","supersedes":[],"superseded_by":"","review_after":"","reason":"","added_by":"画饼","options":["留在周一","改到周三"],"owner":"画饼","recorded_at":"2026-09-20"}

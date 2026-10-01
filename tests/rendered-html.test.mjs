@@ -18,6 +18,8 @@ import { mergeWeakMaterial } from "../lib/topic-material-merge.ts";
 import { decideReviewMode } from "../app/_components/review-mode.ts";
 import { PayloadTooLargeError, discardBody, isValidIsoWeek, publicBaseUrl, readBodyWithLimit, shanghaiIso } from "../lib/weekly.ts";
 import { parseDigestMarkdown, stripBodyHeader } from "../scripts/lib/topic-materials.mjs";
+import { buildMirrorData, parseJsonl } from "../scripts/build-mirror.mjs";
+import { computeStats, decisionEntries, decisionScopes, entriesByCategory, entryDate, formatMirrorDate, preferenceGroups, sourceLine } from "../lib/mirror.ts";
 
 test("converts entity-escaped feed HTML before rendering Markdown", () => {
   const markdown = htmlToMarkdown('&lt;img src=&quot;https://cdn.example.com/cover.jpg&quot; alt=&quot;封面&quot;&gt;&lt;p&gt;&lt;strong&gt;最新文字&lt;/strong&gt;&lt;br&gt;正文&lt;/p&gt;');
@@ -1671,6 +1673,7 @@ test("classifies public paths for the site-wide login gate", () => {
     "/weekly/2026-W39/",
     "/daily",
     "/career",
+    "/mirror",
     "/loginx",
     "/apix",
   ]) {
@@ -1726,7 +1729,7 @@ test("configures section tabs by section and role", () => {
   assert.deepEqual(sectionTabs("content", "admin").map((item) => item.href), ["/topics/daily", "/discover", "/topics", "/articles", "/strategy"]);
   assert.deepEqual(sectionTabs("content", "admin").map((item) => item.label), ["选题简报", "阅读", "选题", "文章", "策略"]);
   assert.equal(JSON.stringify(sectionTabs("content", "user")).includes("/topics/daily"), false);
-  assert.deepEqual(sectionTabs("growth", "admin").map((item) => item.label), ["周报", "日报", "职业"]);
+  assert.deepEqual(sectionTabs("growth", "admin").map((item) => item.label), ["周报", "日报", "职业", "照照镜子"]);
   assert.deepEqual(sectionTabs("growth", "user"), []);
   assert.deepEqual(sectionTabs("growth", null), []);
   assert.deepEqual(sectionTabs("today", "admin"), []);
@@ -1737,7 +1740,7 @@ test("maps paths to navigation sections and active tabs", () => {
   for (const pathname of ["/reading", "/discover", "/topics", "/topics/daily", "/articles", "/articles/hello", "/review/1", "/strategy", "/annotations", "/leaderboard"]) {
     assert.equal(sectionForPath(pathname), "content", `${pathname} should be content`);
   }
-  for (const pathname of ["/weekly", "/weekly/2026-W39/", "/daily", "/career"]) {
+  for (const pathname of ["/weekly", "/weekly/2026-W39/", "/daily", "/career", "/mirror"]) {
     assert.equal(sectionForPath(pathname), "growth", `${pathname} should be growth`);
   }
   for (const pathname of ["/profile", "/login"]) {
@@ -1754,13 +1757,14 @@ test("maps paths to navigation sections and active tabs", () => {
   assert.equal(activeTabKey("/weekly/2026-W39/"), "weekly");
   assert.equal(activeTabKey("/daily"), "daily");
   assert.equal(activeTabKey("/career"), "career");
+  assert.equal(activeTabKey("/mirror"), "mirror");
   assert.equal(activeTabKey("/profile"), null);
 
   assert.deepEqual(HIDDEN_FROM_NAV, ["/annotations", "/leaderboard"]);
 });
 
 test("mounts the shared site app bar on every content and growth subpage", async () => {
-  const [appBar, userMenu, topics, strategy, articles, weekly, daily, career, articleDetail, review, styles] = await Promise.all([
+  const [appBar, userMenu, topics, strategy, articles, weekly, daily, career, mirror, articleDetail, review, styles] = await Promise.all([
     readFile(new URL("../app/_components/SiteAppBar.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/_components/SiteUserMenu.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/topics/page.tsx", import.meta.url), "utf8"),
@@ -1769,6 +1773,7 @@ test("mounts the shared site app bar on every content and growth subpage", async
     readFile(new URL("../app/weekly/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/daily/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/career/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/mirror/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/articles/[slug]/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/review/[id]/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
@@ -1793,6 +1798,7 @@ test("mounts the shared site app bar on every content and growth subpage", async
     [weekly, "/weekly"],
     [daily, "/daily"],
     [career, "/career"],
+    [mirror, "/mirror"],
   ];
   for (const [page, pathname] of pages) {
     assert.match(page, /<SiteAppBar/);
@@ -2279,4 +2285,136 @@ test("renders the digest 选题素材 source without an avatar proxy or manageme
   // Only rss / x go through the avatar proxy; digest falls back to an initial.
   assert.match(deskApp, /source\.kind === "rss" \|\| source\.kind === "x"\) return `\/api\/source-avatar/);
   assert.match(avatarRoute, /status: 404/);
+});
+
+test("parses handbook JSONL and folds supersede chains for /mirror", () => {
+  const handbookDir = fileURLToPath(new URL("fixtures/handbook/", import.meta.url));
+  const data = buildMirrorData({ handbookDir });
+
+  assert.equal(data.entries.length, 6);
+  assert.equal(data.inbox.length, 1);
+
+  const oldPref = data.entries.find((entry) => entry.id === "H-PREF-20260901-01");
+  const newPref = data.entries.find((entry) => entry.id === "H-PREF-20260910-01");
+  assert.ok(oldPref && newPref);
+  // 最新版本是「已推翻」，并链到新条目；历史两条都保留。
+  assert.equal(oldPref.status, "已推翻");
+  assert.equal(oldPref.supersededBy, "H-PREF-20260910-01");
+  assert.equal(oldPref.history.length, 2);
+  assert.deepEqual(oldPref.history.map((item) => item.status), ["有效", "已推翻"]);
+  assert.equal(oldPref.history[0].version, 1);
+  assert.equal(oldPref.history[1].reason, "Yu 说只要洞察");
+  // 新条目反向记录 supersedes。
+  assert.deepEqual(newPref.supersedes, ["H-PREF-20260901-01"]);
+  assert.equal(newPref.status, "有效");
+
+  // 收件箱只留待确认，字段都带过来。
+  assert.equal(data.inbox[0].id, "H-DEC-20260920-01");
+  assert.equal(data.inbox[0].status, "待确认");
+  assert.deepEqual(data.inbox[0].options, ["留在周一", "改到周三"]);
+  assert.equal(data.inbox[0].owner, "画饼");
+
+  // 坏行只进 warnings，不抛错。
+  const parsed = parseJsonl('{"a":1}\n{bad}\n\n');
+  assert.equal(parsed.records.length, 1);
+  assert.equal(parsed.errors.length, 1);
+  assert.equal(parsed.errors[0].line, 2);
+
+  // 目录不存在时是空状态。
+  const empty = buildMirrorData({ handbookDir: "/nonexistent/handbook" });
+  assert.deepEqual(empty.entries, []);
+  assert.deepEqual(empty.inbox, []);
+});
+
+test("groups mirror entries by category and scope and computes the masthead stats", () => {
+  const handbookDir = fileURLToPath(new URL("fixtures/handbook/", import.meta.url));
+  const data = buildMirrorData({ handbookDir });
+
+  assert.deepEqual(
+    entriesByCategory(data.entries, "偏好").map((entry) => entry.id).sort(),
+    ["H-PREF-20260901-01", "H-PREF-20260910-01"],
+  );
+  assert.deepEqual(entriesByCategory(data.entries, "复盘结论"), []);
+  assert.deepEqual(decisionScopes(data.entries), ["工作台"]);
+  assert.deepEqual(decisionEntries(data.entries).map((entry) => entry.id), ["H-DEC-20260905-01"]);
+  assert.deepEqual(decisionEntries(data.entries, "职业"), []);
+
+  // 一条偏好属于多个 scope 时，每组各出现一次。
+  const groups = preferenceGroups(data.entries);
+  assert.deepEqual(groups.map((group) => group.scope), ["沟通", "内容"]);
+  assert.equal(groups.find((group) => group.scope === "沟通").entries.length, 2);
+  assert.equal(groups.find((group) => group.scope === "内容").entries.length, 1);
+
+  const profile = data.entries.find((entry) => entry.id === "H-PROF-20260901-01");
+  assert.equal(entryDate(profile), "2026-10-02");
+  assert.equal(sourceLine(profile), "福伦 · 2026-09-01");
+  assert.equal(formatMirrorDate("2026-10-02"), "2026 年 10 月 2 日");
+
+  const stats = computeStats(data.entries, data.inbox, new Date("2026-10-15T00:00:00Z"));
+  assert.equal(stats.entryCount, 6);
+  assert.equal(stats.inboxCount, 1);
+  assert.equal(stats.newThisMonth, 1);
+  assert.equal(stats.supersededThisMonth, 1);
+  assert.equal(stats.latestDate, "2026-10-02");
+  assert.equal(stats.monthLabel, "2026-10");
+});
+
+test("gates the admin-only mirror page and keeps the private feed out of git", async () => {
+  const [page, mirrorData, mirror, css, worker, gitignore, packageJson, nav] = await Promise.all([
+    readFile(new URL("../app/mirror/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../lib/mirror-data.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/mirror.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/mirror/mirror.css", import.meta.url), "utf8"),
+    readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
+    readFile(new URL("../.gitignore", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../lib/site-nav.ts", import.meta.url), "utf8"),
+  ]);
+
+  // 未登录跳登录页；已登录非管理员 404。
+  assert.match(page, /redirect\("\/login\?next=\/mirror"\)/);
+  assert.match(page, /if \(user\.role !== "admin"\) notFound\(\)/);
+  assert.match(page, /robots:\s*\{ index: false, follow: false \}/);
+  assert.match(page, /loadMirrorData\(\)/);
+  assert.match(page, /还没有正本数据/);
+  assert.match(page, /<SiteAppBar user=\{user\} pathname="\/mirror" \/>/);
+  // 按 scope 筛选走 URL 参数。
+  assert.match(page, /Promise<\{ scope\?: string \}>/);
+  assert.match(page, /\?scope=/);
+  assert.match(page, /decisionScopes\(/);
+  // 页面只读汇总后的 json，不直接读仓库外的正本目录。
+  assert.doesNotMatch(page, /workspace\/handbook/);
+  // 七个分区标题都在。
+  for (const title of ["我是怎样的人", "我喜欢这样", "我怎么做事", "定过的事", "复盘学到的", "正在调整", "等你确认"]) {
+    assert.match(page, new RegExp(title));
+  }
+  assert.match(page, /computeStats\(/);
+  assert.match(page, /preferenceGroups\(/);
+  assert.match(page, /entryDate\(/);
+  assert.match(page, /已被 \{entry\.supersededBy\} 取代/);
+  assert.match(page, /mirror-a-history/);
+  assert.match(page, /<MiniMarkdown/);
+
+  assert.match(mirrorData, /import\.meta\.glob\(/);
+  assert.match(mirrorData, /content\/mirror\/mirror\.json/);
+  assert.match(mirror, /export function preferenceGroups/);
+  assert.match(mirror, /export function decisionEntries/);
+  assert.match(mirror, /export function computeStats/);
+  assert.match(mirror, /export function entryDate/);
+
+  // 杂志风：复用令牌，不用渐变、卡片阴影和 emoji。
+  assert.match(css, /\.mirror-a/);
+  assert.match(css, /var\(--accent\)/);
+  assert.match(css, /var\(--font-serif\)/);
+  assert.doesNotMatch(css, /gradient/);
+  assert.doesNotMatch(css, /box-shadow/);
+  assert.match(css, /@media \(max-width: 640px\)/);
+
+  assert.match(gitignore, /\/content\/mirror\//);
+  assert.match(packageJson, /"mirror:build": "node scripts\/build-mirror\.mjs"/);
+  assert.match(worker, /url\.pathname === "\/mirror"/);
+  assert.match(nav, /照照镜子/);
+
+  assert.equal(sectionForPath("/mirror"), "growth");
+  assert.equal(activeTabKey("/mirror"), "mirror");
 });

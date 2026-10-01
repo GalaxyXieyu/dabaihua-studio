@@ -63,3 +63,6 @@ next-env.d.ts
 
 # 日报私密数据，由 scripts/build-daily.mjs 生成，只本机构建时读取，不进公开仓库
 /content/daily/
+
+# 照照镜子私密数据，由 scripts/build-mirror.mjs 生成，只本机构建时读取，不进公开仓库
+/content/mirror/
