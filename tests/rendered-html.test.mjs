@@ -97,7 +97,7 @@ test("keeps heart-knot exploration versioned and direction confirmation explicit
     readFile(new URL("../app/api/itches/[id]/explorations/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/itches/[id]/directions/[directionId]/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0012_slim_scarlet_spider.sql", import.meta.url), "utf8"),
-    readFile(new URL("../public/cli/topics", import.meta.url), "utf8"),
+    readFile(new URL("../public/cli/superme", import.meta.url), "utf8"),
   ]);
 
   assert.match(schema, /export const explorations/);
@@ -113,7 +113,7 @@ test("keeps heart-knot exploration versioned and direction confirmation explicit
   assert.match(sensemaking, /status === "confirmed" \? timestamp : null/);
   assert.match(explorationRoute, /requireSessionUser/);
   assert.match(directionRoute, /body\.action === "confirm"/);
-  assert.match(cli, /topics itch confirm <id> --direction/);
+  assert.match(cli, /superme itch confirm <id> --direction/);
   assert.match(cli, /"action": action/);
 });
 
@@ -1646,6 +1646,7 @@ test("classifies public paths for the site-wide login gate", () => {
     "/_vinext/image",
     "/assets/app.css",
     "/cli/topics",
+    "/cli/superme",
     "/favicon.svg",
     "/favicon.ico",
     "/og-community.png",

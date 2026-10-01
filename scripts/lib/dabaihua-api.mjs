@@ -2,7 +2,7 @@
  * dabaihua-api.mjs — 晴儿脚本共用的认证与 base 解析。
  *
  * 认证：DABAIHUA_API_KEY 优先；否则读 ~/.config/topics-cli/config.json 的 token。
- * base：--base > DABAIHUA_BASE_URL > config.endpoint > https://topic.aigalaxy.top。
+ * base：--base > DABAIHUA_BASE_URL > config.endpoint > https://superme.aigalaxy.top。
  * 本模块绝不打印 key。
  */
 
@@ -10,7 +10,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 
-export const DEFAULT_BASE = "https://topic.aigalaxy.top";
+export const DEFAULT_BASE = "https://superme.aigalaxy.top";
 export const CONFIG_DIR = process.env.TOPICS_CONFIG_DIR || path.join(homedir(), ".config", "topics-cli");
 export const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
 

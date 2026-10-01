@@ -7,7 +7,7 @@
  *   node scripts/brief.mjs list
  *
  * 认证：DABAIHUA_API_KEY 优先；否则读 ~/.config/topics-cli/config.json 的 token。
- * base：--base > DABAIHUA_BASE_URL > config.endpoint > https://topic.aigalaxy.top。
+ * base：--base > DABAIHUA_BASE_URL > config.endpoint > https://superme.aigalaxy.top。
  * 本脚本绝不打印 key。
  */
 

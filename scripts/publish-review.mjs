@@ -8,7 +8,7 @@
  * 环境变量覆盖：
  *   PUBLISH_REVIEW_HOST              ssh 主机别名（默认 Aries）
  *   PUBLISH_REVIEW_REMOTE_ARTICLES   远端文章根目录（默认 /home/ubuntu/dabaihua-data/articles）
- *   PUBLISH_REVIEW_BASE_URL          线上站点根地址（默认 https://topic.aigalaxy.top）
+ *   PUBLISH_REVIEW_BASE_URL          线上站点根地址（默认 https://superme.aigalaxy.top）
  *   ARTICLES_DIR                     本地文章根目录（默认 /workspace/projects/articles）
  *
  * 只使用 Node 内置模块。rsync 使用 `--filter 'P review-feedback-*'` 保护服务器上
@@ -25,7 +25,7 @@ const SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$/;
 const LOCAL_ARTICLES_DIR = process.env.ARTICLES_DIR || "/workspace/projects/articles";
 const DEFAULT_HOST = process.env.PUBLISH_REVIEW_HOST || "Aries";
 const REMOTE_ARTICLES = (process.env.PUBLISH_REVIEW_REMOTE_ARTICLES || "/home/ubuntu/dabaihua-data/articles").replace(/\/+$/, "");
-const BASE_URL = (process.env.PUBLISH_REVIEW_BASE_URL || "https://topic.aigalaxy.top").replace(/\/+$/, "");
+const BASE_URL = (process.env.PUBLISH_REVIEW_BASE_URL || "https://superme.aigalaxy.top").replace(/\/+$/, "");
 
 const REMOTE_REPO = "/home/ubuntu/dabaihua-studio";
 const REMOTE_FEEDBACK = "/home/ubuntu/dabaihua-data/feedback";

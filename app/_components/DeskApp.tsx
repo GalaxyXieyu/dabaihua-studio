@@ -1891,13 +1891,13 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
 
           <div className="settings-install">
             <h2>在新设备上安装命令行</h2>
-            <pre><code>{`mkdir -p ~/bin\ncurl -fsSL https://topic.aigalaxy.top:8443/cli/topics -o ~/bin/topics\nchmod +x ~/bin/topics\ntopics login --token <上面生成的密钥>`}</code></pre>
-            <p className="settings-install-note">注意端口 <code>:8443</code>——本站的 443 端口在腾讯云备案接入完成前不可用。GitHub 备用源：<code>curl -fsSL https://raw.githubusercontent.com/GalaxyXieyu/dabaihua-studio/main/public/cli/topics -o ~/bin/topics</code></p>
+            <pre><code>{`mkdir -p ~/bin\ncurl -fsSL https://superme.aigalaxy.top/cli/superme -o ~/bin/superme\nchmod +x ~/bin/superme\nsuperme login --token <上面生成的密钥>`}</code></pre>
+            <p className="settings-install-note">旧命令名 <code>topics</code> 仍可用：<code>ln -sf superme ~/bin/topics</code>。GitHub 备用源：<code>curl -fsSL https://raw.githubusercontent.com/GalaxyXieyu/dabaihua-studio/main/public/cli/superme -o ~/bin/superme</code></p>
           </div>
         </div>}
     </section>}
 
-    {addOpen && <Modal title="收录新来源" onClose={() => setAddOpen(false)} wide><form className="modal-form" onSubmit={addSubscription}><label htmlFor="source-input">作者主页、公众号文章或博客地址</label><input id="source-input" value={sourceInput} onChange={(event) => setSourceInput(event.target.value)} placeholder="粘贴作者主页、公众号文章或博客地址" /><fieldset className="source-category-choice"><legend>内容分类</legend><p>选择这个来源最常发布的主题。</p><div>{SOURCE_CATEGORIES.map((category) => <label className={sourceCategory === category.value ? "selected" : ""} key={category.value}><input type="radio" name="source-category" value={category.value} checked={sourceCategory === category.value} onChange={() => setSourceCategory(category.value)} /><span>{category.label}</span></label>)}</div></fieldset><p>收录成功后会自动关注。系统首次导入最近 20 篇，X 默认每小时更新，其他默认每天更新；可在 topics CLI 用 sources set 调整每源拉取间隔。</p><div className="form-actions"><button type="button" onClick={() => setAddOpen(false)}>取消</button><button className="primary-button" disabled={busy === "source"}>{busy === "source" ? "正在识别" : "收录并关注"}</button></div></form></Modal>}
+    {addOpen && <Modal title="收录新来源" onClose={() => setAddOpen(false)} wide><form className="modal-form" onSubmit={addSubscription}><label htmlFor="source-input">作者主页、公众号文章或博客地址</label><input id="source-input" value={sourceInput} onChange={(event) => setSourceInput(event.target.value)} placeholder="粘贴作者主页、公众号文章或博客地址" /><fieldset className="source-category-choice"><legend>内容分类</legend><p>选择这个来源最常发布的主题。</p><div>{SOURCE_CATEGORIES.map((category) => <label className={sourceCategory === category.value ? "selected" : ""} key={category.value}><input type="radio" name="source-category" value={category.value} checked={sourceCategory === category.value} onChange={() => setSourceCategory(category.value)} /><span>{category.label}</span></label>)}</div></fieldset><p>收录成功后会自动关注。系统首次导入最近 20 篇，X 默认每小时更新，其他默认每天更新；可在 superme CLI 用 sources set 调整每源拉取间隔。</p><div className="form-actions"><button type="button" onClick={() => setAddOpen(false)}>取消</button><button className="primary-button" disabled={busy === "source"}>{busy === "source" ? "正在识别" : "收录并关注"}</button></div></form></Modal>}
 
 
 

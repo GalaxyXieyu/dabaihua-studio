@@ -10,7 +10,7 @@
  * <dir>/.cache/bodies/<sha1(url)>.txt（自动剥离文件头）。
  *
  * 认证与 base 解析和 brief.mjs 一致（DABAIHUA_API_KEY > config.token；
- * --base > DABAIHUA_BASE_URL > config.endpoint > https://topic.aigalaxy.top）。
+ * --base > DABAIHUA_BASE_URL > config.endpoint > https://superme.aigalaxy.top）。
  * 本脚本绝不打印 key。
  */
 

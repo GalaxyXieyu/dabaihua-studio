@@ -1,7 +1,7 @@
 # Aries 部署操作手册
 
 `dabaihua-studio` 通过 ssh 主机别名 `Aries`（用户 `ubuntu`）部署运行，Caddy 终止
-TLS（`https://topic.aigalaxy.top`）并反向代理到 `127.0.0.1:3210`。
+TLS（`https://superme.aigalaxy.top`；旧域名 `topic.aigalaxy.top` 的浏览器页面 302 跳到新域名，`/api/*` 与非 GET/HEAD 请求照常代理）并反向代理到 `127.0.0.1:3210`。
 
 ## 目录布局
 
@@ -17,10 +17,10 @@ TLS（`https://topic.aigalaxy.top`）并反向代理到 `127.0.0.1:3210`。
 
 ```
 IMPORT_TOKEN=...
-DABAIHUA_TRUSTED_PROXY_HOSTS=topic.aigalaxy.top
+DABAIHUA_TRUSTED_PROXY_HOSTS=topic.aigalaxy.top,superme.aigalaxy.top
 DABAIHUA_ALLOW_REGISTER=1
 DABAIHUA_REGISTER_INVITE_CODE=...   # 可选
-DABAIHUA_PUBLIC_BASE_URL=https://topic.aigalaxy.top  # 可选，周报 URL 用
+DABAIHUA_PUBLIC_BASE_URL=https://superme.aigalaxy.top  # 可选，周报 URL 用
 ```
 
 ## systemd 单元
@@ -92,7 +92,7 @@ ssh Aries 'sudo systemctl restart dabaihua-studio'
 
 ## 周报（weekly report）
 
-`topics daily publish` 通过下面的接口把自包含 HTML 周报上传到站点，`/weekly/<week>/`
+`superme daily publish` 通过下面的接口把自包含 HTML 周报上传到站点，`/weekly/<week>/`
 在登录后提供阅读页面。
 
 - `PUT /api/weekly/<YYYY-Www>`：`Authorization: Bearer <topk key>`，`Content-Type: text/html`，
@@ -102,7 +102,7 @@ ssh Aries 'sudo systemctl restart dabaihua-studio'
 - `GET /weekly/<week>/`：需要登录，带 `Cache-Control: private, no-store` 和严格 CSP。
 
 `DABAIHUA_PUBLIC_BASE_URL` 用来拼响应里的周报 URL；不设置时回退到请求的 origin。
-反向代理终止 TLS 时通常应显式设置，例如 `https://topic.aigalaxy.top`。
+反向代理终止 TLS 时通常应显式设置，例如 `https://superme.aigalaxy.top`。
 
 ## 回滚到旧的 qingliu-reader
 
@@ -132,7 +132,7 @@ npm run publish-review -- <slug> [--host Aries] [--dry-run] [--no-wait]
 | --- | --- |
 | `PUBLISH_REVIEW_HOST` | `Aries` |
 | `PUBLISH_REVIEW_REMOTE_ARTICLES` | `/home/ubuntu/dabaihua-data/articles` |
-| `PUBLISH_REVIEW_BASE_URL` | `https://topic.aigalaxy.top` |
+| `PUBLISH_REVIEW_BASE_URL` | `https://superme.aigalaxy.top` |
 | `ARTICLES_DIR`（本地） | `/workspace/projects/articles` |
 
 脚本只使用 Node 内置模块；保护服务器上已有的 `review-feedback-*` 反馈文件不被
