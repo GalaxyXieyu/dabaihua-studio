@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  entryDate,
   entryOwnDate,
   formatMirrorDate,
   formatShortDate,
@@ -16,12 +15,6 @@ export type MirrorCardVariant = "profile" | "preference" | "method" | "decision"
 
 function latestVersion(entry: MirrorEntry): number {
   return entry.history[entry.history.length - 1]?.version || 1;
-}
-
-/** 卡片底部的 `v1 · 10-01`：优先最新版本写入日期，其次来源日期。 */
-function shortDateOf(entry: MirrorEntry): string {
-  const date = entryDate(entry) || entry.recordedAt || entry.history[0]?.recordedAt || "";
-  return formatShortDate(date);
 }
 
 function ScopeTags({ scopes }: { scopes: string[] }) {
@@ -132,7 +125,23 @@ function MirrorCard({
   const href = target ? `/mirror?tab=${targetTab}#card-${target}` : "";
 
   return (
-    <article id={`card-${entry.id}`} className={`mirror-a-card is-${variant}${superseded ? " is-superseded" : ""}`}>
+    <article
+      id={`card-${entry.id}`}
+      className={`mirror-a-card is-${variant}${superseded ? " is-superseded" : ""}`}
+      role="button"
+      tabIndex={0}
+      aria-label={`查看「${entry.title}」的正文和历史`}
+      onClick={(event) => {
+        if ((event.target as HTMLElement).closest("a")) return;
+        onOpen(entry.id);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen(entry.id);
+        }
+      }}
+    >
       <div className="mirror-a-card-body">
         <CardContent entry={entry} variant={variant} index={index} />
       </div>
@@ -143,6 +152,7 @@ function MirrorCard({
             href={href}
             onClick={(event) => {
               event.preventDefault();
+              event.stopPropagation();
               onJump(target);
             }}
           >
@@ -151,31 +161,22 @@ function MirrorCard({
         ) : (
           <span className="mirror-a-card-source">{sourceLine(entry)}</span>
         )}
-        <button
-          type="button"
-          className="mirror-a-card-version"
-          onClick={() => onOpen(entry.id)}
-          aria-label={`查看「${entry.title}」的正文和历史`}
-        >
-          v{latestVersion(entry)} · {shortDateOf(entry)}
-        </button>
+        <span className="mirror-a-card-version">v{latestVersion(entry)}</span>
       </footer>
     </article>
   );
 }
 
-/** 卡片下方详情区：完整正文 + 历史，不另开页面。 */
+/** 卡片下方详情区：完整正文 + 备选 + 来源 + 历史，不重复卡片标题。 */
 function CardDetail({ entry, onClose }: { entry: MirrorEntry; onClose: () => void }) {
+  const ref = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    ref.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, []);
   return (
-    <section className="mirror-a-detail-panel" aria-label={`${entry.title} 详情`}>
+    <section ref={ref} className="mirror-a-detail-panel" aria-label={`${entry.title} 详情`}>
       <header className="mirror-a-detail-head">
-        <div className="mirror-a-detail-heading">
-          <p className="mirror-a-detail-kicker">
-            {entry.category}
-            {entry.scope.length > 0 ? ` · ${entry.scope.join(" / ")}` : ""}
-          </p>
-          <h3 className="mirror-a-detail-title">{entry.title}</h3>
-        </div>
+        <p className="mirror-a-detail-kicker">完整正文</p>
         <button type="button" className="mirror-a-detail-close" onClick={onClose}>
           收起
         </button>
@@ -184,13 +185,13 @@ function CardDetail({ entry, onClose }: { entry: MirrorEntry; onClose: () => voi
         <div className="mirror-a-detail-text">
           <MiniMarkdown text={entry.body} />
           {entry.options.length > 0 ? <p className="mirror-a-detail-line">备选：{entry.options.join("；")}</p> : null}
-          {entry.owner ? <p className="mirror-a-detail-line">负责人：{entry.owner}</p> : null}
           {entry.reason ? <p className="mirror-a-detail-line">说明：{entry.reason}</p> : null}
           {entry.confirmedBy ? (
             <p className="mirror-a-detail-line">
               由 {entry.confirmedBy} 确认{entry.confirmedAt ? ` · ${formatMirrorDate(entry.confirmedAt)}` : ""}
             </p>
           ) : null}
+          <p className="mirror-a-detail-source">来源：{sourceLine(entry)}</p>
         </div>
         <div className="mirror-a-history">
           <p className="mirror-a-history-title">历史</p>
@@ -315,6 +316,11 @@ export function MirrorDeck({
             onJump={jumpTo}
           />
         ))}
+        {entries.length === 1 ? (
+          <p className="mirror-a-deck-note" aria-hidden="true">
+            有新条目会出现在这里
+          </p>
+        ) : null}
       </div>
 
       <div className="mirror-a-deck-controls">
@@ -344,7 +350,7 @@ export function MirrorDeck({
         </p>
       </div>
 
-      {openEntry ? <CardDetail entry={openEntry} onClose={() => setOpenId(null)} /> : null}
+      {openEntry ? <CardDetail key={openEntry.id} entry={openEntry} onClose={() => setOpenId(null)} /> : null}
     </div>
   );
 }

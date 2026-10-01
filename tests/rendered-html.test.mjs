@@ -2445,9 +2445,13 @@ test("gates the admin-only mirror page and keeps the private feed out of git", a
   assert.match(deck, /已被 \{target\} 取代/);
   // 底部版本号点开在卡片下方看完整正文和历史。
   assert.match(deck, /mirror-a-card-version/);
+  assert.match(deck, /mirror-a-card-open|onClick=\{/);
+  assert.match(deck, /onOpen\(entry\.id\)/);
+  assert.match(deck, /scrollIntoView\(\{ block: "nearest"/);
   assert.match(deck, /mirror-a-detail-panel/);
   assert.match(deck, /mirror-a-history/);
   assert.match(deck, /<MiniMarkdown/);
+  assert.match(deck, /mirror-a-deck-note/);
 
   assert.match(mirror, /export const MIRROR_TABS/);
   assert.match(mirror, /export function resolveMirrorTab/);
@@ -2463,11 +2467,12 @@ test("gates the admin-only mirror page and keeps the private feed out of git", a
   assert.match(mirror, /export function formatShortDate/);
   assert.match(mirror, /export function sourceAgent/);
 
-  // 杂志风：横向 scroll-snap、六种卡片 class、无渐变无阴影。
+  // 杂志风：横向 scroll-snap、六种卡片 class、卡片高度跟内容走、无渐变无阴影。
   assert.match(css, /\.mirror-a/);
   assert.match(css, /scroll-snap-type: x mandatory/);
-  assert.match(css, /\.mirror-a-card \{[^}]*height: 340px/);
-  assert.match(css, /flex: 0 0 calc\(\(100% - 40px\) \/ 3\)/);
+  assert.doesNotMatch(css, /\.mirror-a-card \{[^}]*height: 340px/);
+  assert.match(css, /\.mirror-a-card \{[^}]*min-height: 200px/);
+  assert.match(css, /flex: 0 0 calc\(\(100% - 60px\) \/ 3\.2\)/);
   assert.match(css, /\.mirror-a-card\.is-profile/);
   assert.match(css, /\.mirror-a-card\.is-preference/);
   assert.match(css, /\.mirror-a-card\.is-method/);
@@ -2480,8 +2485,12 @@ test("gates the admin-only mirror page and keeps the private feed out of git", a
   assert.doesNotMatch(css, /gradient/);
   assert.doesNotMatch(css, /box-shadow/);
   assert.match(css, /@media \(max-width: 640px\)/);
-  // 手机一屏约 1.15 张，露出下一张边缘。
+  // 手机一屏约 1.15 张，露出下一张边缘；类型标签改成一行横向滚动。
   assert.match(css, /flex: 0 0 86%/);
+  assert.match(css, /overflow-x: auto/);
+  assert.match(css, /\.mirror-a-tab \{[^}]*flex: 0 0 auto/);
+  // 决策卡底部左右内边距避开虚线撕口。
+  assert.match(css, /\.mirror-a-card\.is-decision \.mirror-a-card-foot \{[^}]*padding-left: 42px/);
 
   assert.match(gitignore, /\/content\/mirror\//);
   assert.match(packageJson, /"mirror:build": "node scripts\/build-mirror\.mjs"/);
