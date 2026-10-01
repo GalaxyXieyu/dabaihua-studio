@@ -19,7 +19,7 @@ import { decideReviewMode } from "../app/_components/review-mode.ts";
 import { PayloadTooLargeError, discardBody, isValidIsoWeek, publicBaseUrl, readBodyWithLimit, shanghaiIso } from "../lib/weekly.ts";
 import { parseDigestMarkdown, stripBodyHeader } from "../scripts/lib/topic-materials.mjs";
 import { buildMirrorData, parseJsonl } from "../scripts/build-mirror.mjs";
-import { categoryCounts, computeStats, decisionEntries, decisionScopes, entriesByCategory, entryDate, entryOwnDate, formatMirrorDate, formatShortDate, monthlyTrend, preferenceGroups, sourceLine } from "../lib/mirror.ts";
+import { categoryCounts, computeStats, decisionEntries, decisionScopes, entriesByCategory, entryDate, entryOwnDate, formatMirrorDate, formatShortDate, monthlyTrend, preferenceGroups, sourceAgent, sourceLine } from "../lib/mirror.ts";
 
 test("converts entity-escaped feed HTML before rendering Markdown", () => {
   const markdown = htmlToMarkdown('&lt;img src=&quot;https://cdn.example.com/cover.jpg&quot; alt=&quot;封面&quot;&gt;&lt;p&gt;&lt;strong&gt;最新文字&lt;/strong&gt;&lt;br&gt;正文&lt;/p&gt;');
@@ -2372,6 +2372,8 @@ test("groups mirror entries by category and scope and computes the masthead stat
   assert.equal(entryOwnDate(profile), "2026-09-01");
   assert.equal(entryOwnDate(data.entries.find((entry) => entry.id === "H-DEC-20260905-01")), "2026-09-05");
   assert.equal(sourceLine(profile), "福伦 · 09-01");
+  // 有独立日期列的地方只用作者名，避免日期重复出现。
+  assert.equal(sourceAgent(profile), "福伦");
   assert.equal(formatShortDate("2026-10-02"), "10-02");
   assert.equal(formatMirrorDate("2026-10-02"), "2026 年 10 月 2 日");
 
@@ -2427,6 +2429,21 @@ test("gates the admin-only mirror page and keeps the private feed out of git", a
   assert.match(page, /mirror-a-inbox-item/);
   assert.match(page, /entry\.options\.join/);
   assert.match(page, /variant="adjustment"/);
+  // 占比条带图例（色块 + 类别 + 条数），段够宽时段内写类别名。
+  assert.match(page, /mirror-a-ratio-legend/);
+  assert.match(page, /mirror-a-ratio-name/);
+  // 只有一两个月时用一行数字说明，超过两个才画柱图。
+  assert.match(page, /mirror-a-trend-line/);
+  assert.match(page, /trend\.length <= 2/);
+  // 画像卡片：grid 跟卡片数取列，展开跨整行且不拉高同行。
+  assert.match(page, /data-count=\{profiles\.length\}/);
+  assert.match(page, /hideDate/);
+  assert.match(page, /tagTone="outline"/);
+  assert.match(css, /align-items: start/);
+  assert.match(css, /mirror-a-profiles \.mirror-a-entry\[open\]/);
+  assert.match(css, /mirror-a-profiles \.mirror-a-entry-body/);
+  assert.match(css, /nth-child\(3n \+ 2\)/);
+  assert.match(css, /mirror-a-tag\.is-outline/);
   // 空分区（复盘为空）不再单独占一节，靠摘要里的 0 表达。
   assert.match(page, /reviews\.length > 0 \? \(/);
 
@@ -2440,6 +2457,7 @@ test("gates the admin-only mirror page and keeps the private feed out of git", a
   assert.match(mirror, /export function categoryCounts/);
   assert.match(mirror, /export function monthlyTrend/);
   assert.match(mirror, /export function formatShortDate/);
+  assert.match(mirror, /export function sourceAgent/);
 
   // 杂志风：复用令牌，不用渐变、卡片阴影和 emoji。
   assert.match(css, /\.mirror-a/);

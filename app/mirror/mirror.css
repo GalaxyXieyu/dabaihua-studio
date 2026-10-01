@@ -58,12 +58,12 @@ body:has(.mirror-a) {
 .mirror-a-figures {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
-  border-bottom: 1px solid var(--line);
 }
 
 .mirror-a-figure {
   padding: 16px 12px 14px;
   border-left: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
 }
 
 .mirror-a-figure:first-child {
@@ -94,6 +94,8 @@ body:has(.mirror-a) {
 .mirror-a-summary-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  /* 两块面板各自跟内容走，短的那块不被同行拉出大片空白。 */
+  align-items: start;
 }
 
 .mirror-a-summary-label {
@@ -110,23 +112,69 @@ body:has(.mirror-a) {
 
 .mirror-a-ratio-track {
   display: flex;
-  height: 20px;
+  height: 22px;
   overflow: hidden;
   background: var(--canvas);
   border: 1px solid var(--line-strong);
 }
 
 .mirror-a-ratio-seg {
-  display: block;
+  display: flex;
+  align-items: center;
+  min-width: 0;
   height: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  /* 段自身作为查询容器：够宽才显示段内类别名。 */
+  container-type: inline-size;
 }
 
-.mirror-a-ratio-seg:nth-child(1) { background: var(--ink); }
-.mirror-a-ratio-seg:nth-child(2) { background: var(--accent); }
-.mirror-a-ratio-seg:nth-child(3) { background: var(--muted); }
-.mirror-a-ratio-seg:nth-child(4) { background: var(--faint); }
-.mirror-a-ratio-seg:nth-child(5) { background: var(--line-strong); }
-.mirror-a-ratio-seg:nth-child(6) { background: var(--line); }
+.mirror-a-ratio-seg.is-dark .mirror-a-ratio-name {
+  color: var(--paper);
+}
+
+.mirror-a-ratio-name {
+  display: none;
+  padding: 0 8px;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+@container (min-width: 52px) {
+  .mirror-a-ratio-name {
+    display: block;
+  }
+}
+
+.mirror-a-ratio-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.mirror-a-ratio-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.mirror-a-ratio-legend i {
+  width: 9px;
+  height: 9px;
+  flex: none;
+}
+
+.mirror-a-ratio-legend-count {
+  color: var(--faint);
+  font-variant-numeric: tabular-nums lining-nums;
+}
 
 .mirror-a-trend {
   padding: 16px 20px 20px;
@@ -165,6 +213,17 @@ body:has(.mirror-a) {
 
 .mirror-a-trend-legend i.is-superseded {
   background: var(--accent);
+}
+
+/* 只有一两个月时的数字说明。 */
+.mirror-a-trend-line {
+  margin: 0;
+  padding: 4px 0 2px;
+  color: var(--ink);
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.6;
 }
 
 .mirror-a-months {
@@ -297,6 +356,13 @@ body:has(.mirror-a) {
   border-color: var(--accent);
 }
 
+/* 「调整中」用细边框 + 强调色文字，不用实心红底。 */
+.mirror-a-tag.is-outline {
+  color: var(--accent);
+  background: transparent;
+  border-color: var(--accent);
+}
+
 .mirror-a-entry-meta {
   display: flex;
   flex-wrap: wrap;
@@ -411,19 +477,42 @@ body:has(.mirror-a) {
 /* ── 我是怎样的人：引语卡片网格 ─────────────────────── */
 .mirror-a-profiles {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  /* 展开一张不拉高同行其它卡片。 */
+  align-items: start;
   margin-top: 2px;
   border-top: 1px solid var(--line);
   border-left: 1px solid var(--line);
 }
 
 .mirror-a-profiles .mirror-a-entry {
+  grid-column: span 2;
   border-right: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
 }
 
+/* 最后一行只剩一张时撑满，两张时各占一半，不留空格。 */
+.mirror-a-profiles .mirror-a-entry:where(:last-child):where(:nth-child(3n + 1)) {
+  grid-column: 1 / -1;
+}
+
+.mirror-a-profiles .mirror-a-entry:where(:last-child):where(:nth-child(3n + 2)),
+.mirror-a-profiles .mirror-a-entry:where(:nth-last-child(2)):where(:nth-child(3n + 1)) {
+  grid-column: span 3;
+}
+
+/* 展开的卡片占满整行。 */
+.mirror-a-profiles .mirror-a-entry[open] {
+  grid-column: 1 / -1;
+}
+
 .mirror-a-profiles .mirror-a-entry-summary {
   padding: 20px 20px 18px 54px;
+}
+
+/* 展开后正文和标题同一缩进左对齐。 */
+.mirror-a-profiles .mirror-a-entry-body {
+  padding: 0 20px 16px 54px;
 }
 
 .mirror-a-profiles .mirror-a-entry-title {
@@ -680,8 +769,12 @@ body:has(.mirror-a) {
     border-bottom: 1px solid var(--line);
   }
 
-  .mirror-a-profiles {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .mirror-a-profiles .mirror-a-entry {
+    grid-column: span 3;
+  }
+
+  .mirror-a-profiles .mirror-a-entry:where(:last-child):where(:nth-child(odd)) {
+    grid-column: 1 / -1;
   }
 }
 
@@ -706,10 +799,10 @@ body:has(.mirror-a) {
   }
 
   .mirror-a-figures {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .mirror-a-figure:nth-child(2n + 1) {
+  .mirror-a-figure:nth-child(4n + 1) {
     border-left: 0;
   }
 
@@ -725,12 +818,20 @@ body:has(.mirror-a) {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .mirror-a-profiles .mirror-a-entry {
+    grid-column: 1 / -1;
+  }
+
   .mirror-a-profiles .mirror-a-entry-title {
     font-size: 17px;
   }
 
   .mirror-a-profiles .mirror-a-entry-summary {
     padding: 18px 20px 16px 48px;
+  }
+
+  .mirror-a-profiles .mirror-a-entry-body {
+    padding: 0 20px 16px 48px;
   }
 
   .mirror-a-entry-index {

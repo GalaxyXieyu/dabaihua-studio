@@ -14,6 +14,7 @@ import {
   formatMirrorDate,
   monthlyTrend,
   preferenceGroups,
+  sourceAgent,
   sourceLine,
   type MirrorEntry,
 } from "../../lib/mirror";
@@ -37,6 +38,16 @@ const CATEGORY_SHORT: Record<string, string> = {
 
 const TREND_MAX_HEIGHT = 64;
 
+/** 占比条色板：和分段、图例共用，保证颜色对得上。 */
+const RATIO_COLORS = [
+  { color: "var(--ink)", tone: "dark" },
+  { color: "var(--accent)", tone: "dark" },
+  { color: "var(--muted)", tone: "dark" },
+  { color: "var(--faint)", tone: "light" },
+  { color: "var(--line-strong)", tone: "light" },
+  { color: "var(--line)", tone: "light" },
+] as const;
+
 function caret() {
   return <span className="mirror-a-caret" aria-hidden="true">›</span>;
 }
@@ -46,11 +57,15 @@ function EntryCard({
   entry,
   index,
   tag,
+  tagTone = "accent",
+  hideDate = false,
   extraScopes,
 }: {
   entry: MirrorEntry;
   index?: number;
   tag?: string;
+  tagTone?: "accent" | "outline";
+  hideDate?: boolean;
   extraScopes?: string[];
 }) {
   const superseded = entry.status === "已推翻";
@@ -62,11 +77,11 @@ function EntryCard({
         ) : null}
         <span className="mirror-a-entry-head">
           <span className="mirror-a-entry-title">{entry.title}</span>
-          {tag ? <span className="mirror-a-tag is-accent">{tag}</span> : null}
+          {tag ? <span className={`mirror-a-tag is-${tagTone}`}>{tag}</span> : null}
           {superseded ? <span className="mirror-a-tag">已推翻</span> : null}
         </span>
         <span className="mirror-a-entry-meta">
-          <span className="mirror-a-entry-source">{sourceLine(entry)}</span>
+          <span className="mirror-a-entry-source">{hideDate ? sourceAgent(entry) : sourceLine(entry)}</span>
           {extraScopes && extraScopes.length > 0 ? (
             <span className="mirror-a-scope-tags">
               {extraScopes.map((scope) => (
@@ -116,6 +131,19 @@ function MirrorSummary({ entries, inbox }: { entries: MirrorEntry[]; inbox: Mirr
   const total = entries.length;
   const trend = monthlyTrend(entries);
   const maxTrend = Math.max(1, ...trend.map((point) => Math.max(point.added, point.superseded)));
+  const segments = counts
+    .filter((item) => item.count > 0)
+    .map((item, index) => {
+      const swatch = RATIO_COLORS[index % RATIO_COLORS.length];
+      return {
+        category: item.category,
+        label: CATEGORY_SHORT[item.category] ?? item.category,
+        count: item.count,
+        share: total > 0 ? item.count / total : 0,
+        color: swatch.color,
+        tone: swatch.tone,
+      };
+    });
 
   return (
     <section className="mirror-a-summary" aria-label="资料概况">
@@ -136,30 +164,49 @@ function MirrorSummary({ entries, inbox }: { entries: MirrorEntry[]; inbox: Mirr
         <div className="mirror-a-ratio">
           <p className="mirror-a-summary-label">类别占比</p>
           <div className="mirror-a-ratio-track" role="img" aria-label={`共 ${total} 条`}>
-            {total > 0
-              ? counts
-                  .filter((item) => item.count > 0)
-                  .map((item) => (
-                    <span
-                      key={item.category}
-                      className="mirror-a-ratio-seg"
-                      style={{ width: `${(item.count / total) * 100}%` }}
-                      title={`${CATEGORY_SHORT[item.category] ?? item.category} ${item.count}`}
-                    />
-                  ))
-              : null}
+            {segments.map((segment) => (
+              <span
+                key={segment.category}
+                className={`mirror-a-ratio-seg is-${segment.tone}`}
+                style={{ width: `${segment.share * 100}%`, background: segment.color }}
+                title={`${segment.label} ${segment.count}`}
+              >
+                {/* 段够宽时由 CSS 容器查询直接把类别名写在里面，窄段靠下面的图例。 */}
+                <span className="mirror-a-ratio-name">{segment.label}</span>
+              </span>
+            ))}
           </div>
+          {segments.length > 0 ? (
+            <ul className="mirror-a-ratio-legend">
+              {segments.map((segment) => (
+                <li key={segment.category}>
+                  <i style={{ background: segment.color }} />
+                  <span className="mirror-a-ratio-legend-name">{segment.label}</span>
+                  <span className="mirror-a-ratio-legend-count">{segment.count}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
 
         <div className="mirror-a-trend">
           <div className="mirror-a-trend-head">
             <p className="mirror-a-summary-label">按月新增 / 推翻</p>
-            <span className="mirror-a-trend-legend">
-              <span><i className="is-added" />新增</span>
-              <span><i className="is-superseded" />推翻</span>
-            </span>
+            {trend.length > 2 ? (
+              <span className="mirror-a-trend-legend">
+                <span><i className="is-added" />新增</span>
+                <span><i className="is-superseded" />推翻</span>
+              </span>
+            ) : null}
           </div>
-          {trend.length > 0 ? (
+          {trend.length === 0 ? (
+            <p className="mirror-a-empty-line">还没有按月数据。</p>
+          ) : trend.length <= 2 ? (
+            /* 只有一两个月时柱子没有意义，改成一行数字说明。 */
+            <p className="mirror-a-trend-line">
+              {trend.map((point) => `${point.label}新增 ${point.added} 条，推翻 ${point.superseded} 条`).join("；")}
+            </p>
+          ) : (
             <div className="mirror-a-months">
               {trend.map((point) => (
                 <div className="mirror-a-month" key={point.month}>
@@ -183,8 +230,6 @@ function MirrorSummary({ entries, inbox }: { entries: MirrorEntry[]; inbox: Mirr
                 </div>
               ))}
             </div>
-          ) : (
-            <p className="mirror-a-empty-line">还没有按月数据。</p>
           )}
         </div>
       </div>
@@ -289,7 +334,7 @@ export default async function MirrorPage({ searchParams }: { searchParams: Promi
 
         {profiles.length > 0 ? (
           <Section title="我是怎样的人">
-            <div className="mirror-a-profiles">
+            <div className="mirror-a-profiles" data-count={profiles.length}>
               {profiles.map((entry, index) => (
                 <EntryCard key={entry.id} entry={entry} index={index} />
               ))}
@@ -349,7 +394,7 @@ export default async function MirrorPage({ searchParams }: { searchParams: Promi
                 {decisions.map((entry) => (
                   <li key={entry.id} className="mirror-a-timeline-item">
                     <span className="mirror-a-timeline-date">{formatMirrorDate(entryOwnDate(entry))}</span>
-                    <EntryCard entry={entry} />
+                    <EntryCard entry={entry} hideDate />
                   </li>
                 ))}
               </ol>
@@ -373,7 +418,7 @@ export default async function MirrorPage({ searchParams }: { searchParams: Promi
           <Section title="正在调整" variant="adjustment">
             <div className="mirror-a-list">
               {adjustments.map((entry) => (
-                <EntryCard key={entry.id} entry={entry} tag="调整中" />
+                <EntryCard key={entry.id} entry={entry} tag="调整中" tagTone="outline" />
               ))}
             </div>
           </Section>

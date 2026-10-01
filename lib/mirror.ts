@@ -123,6 +123,11 @@ export function sourceLine(entry: MirrorEntry): string {
   return parts.join(" · ");
 }
 
+/** 只取来源里的作者，用在已经有独立日期列的地方，避免日期重复出现。 */
+export function sourceAgent(entry: MirrorEntry): string {
+  return (entry.sources || [])[0]?.agent || "";
+}
+
 export function entriesByCategory(entries: MirrorEntry[], category: string): MirrorEntry[] {
   return entries.filter((entry) => entry.category === category);
 }
