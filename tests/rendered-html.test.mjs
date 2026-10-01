@@ -4,7 +4,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { htmlToMarkdown } from "../lib/article.ts";
-import { compareToPrevious, firstSentence, formatFullDate, formatNumber, formatSigned, markdownPlainText, monthCells, nearestReportInMonth, parseResultCards, previewText, selectDay, trendPoints, trendWindowLength, weekdayOf } from "../lib/daily.ts";
+import { compareToPrevious, firstSentence, formatFullDate, formatNumber, formatSigned, markdownPlainText, monthCells, monthWeeks, nearestReportInMonth, parseResultCards, previewText, selectDay, trendPoints, trendWindowLength, weekdayOf } from "../lib/daily.ts";
 import { shapeResponse, summarizeResponses, validateBrief } from "../lib/daily-brief-core.ts";
 import { isPublicPath, loginRedirectLocation, loginRedirectResponse } from "../lib/login-gate.ts";
 import { HIDDEN_FROM_NAV, activeTabKey, primaryNavItems, sectionForPath, sectionTabs } from "../lib/site-nav.ts";
@@ -1306,6 +1306,20 @@ test("gates the admin-only daily page and keeps the private feed out of git", as
   assert.match(page, /parseResultCards/);
   assert.match(page, /daily-a-result-grid/);
   assert.match(page, /daily-a-fold-preview/);
+  // 卡片桌面 4 列、手机 2 列，长数值缩小，单张卡片不撑满整行。
+  assert.match(page, /is-long/);
+  assert.match(css, /\.daily-a-result-value\.is-long/);
+  assert.match(css, /grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
+  assert.match(css, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  // 手机端按仓库：数字不小于 12px，放到条形下方一行。
+  assert.match(page, /daily-a-repo-track is-commits/);
+  assert.match(css, /\.daily-a-repo-nums \{[^}]*font-size: 12px/);
+  assert.match(css, /\.daily-a-repo-track\.is-commits \{[^}]*grid-area: commits/);
+  // 手机端收起没有日报的空周，桌面保持完整月历。
+  assert.match(page, /monthWeeks/);
+  assert.match(page, /daily-a-calendar-week/);
+  assert.match(css, /\.daily-a-calendar-week \{[^}]*display: contents/);
+  assert.match(css, /\.daily-a-calendar-week\.is-collapsed \{[^}]*display: none/);
   assert.match(css, /max-width: 1180px/);
   assert.match(css, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(css, /calc\(72px \+ env\(safe-area-inset-bottom\)\)/);
@@ -1413,10 +1427,21 @@ test("formats daily dates, deltas, previews and the monthly calendar", () => {
   assert.equal(formatSigned(-2734), "−2,734");
   assert.equal(formatSigned(0), "0");
 
-  // 预览取正文前 40 个字；Markdown 记号先去掉。
+  // 预览取正文前约 40 个字；Markdown 记号先去掉。
   assert.equal(markdownPlainText("- **第一句。**`code` 第二句。"), "第一句。code 第二句。");
   assert.equal(previewText("短句"), "短句");
   assert.equal(previewText("一二三四五六七八九十", 4), "一二三四…");
+
+  // 截断不能落在英文单词、路径或数字中间，长度尽量保持在 30–44 字。
+  const wordCut = previewText(`更新说明：${"x".repeat(26)} supercalifragilistic`);
+  assert.ok(wordCut.endsWith("…"));
+  assert.ok(wordCut.length >= 30 && wordCut.length <= 44, wordCut);
+  assert.ok(!wordCut.includes("super"), wordCut);
+  const pathCut = previewText("自绘更新进度窗（56b10a1c，0.0.29）和安装器共用 exe/resources");
+  assert.ok(!/resour…$/.test(pathCut), pathCut);
+  assert.ok(pathCut.endsWith("/…") || pathCut.endsWith("…"), pathCut);
+  // 千分位/小数点/时间里的数字不拆开。
+  assert.equal(previewText("金额 11,342 元，实际 3.14 倍，时间 23:33 完成。", 20).includes("11,…"), false);
 
   const days = [
     { date: "2026-03-01", weekday: "周日", summary: "", commits: 7, repos: [], tokensM: 128.5, sections: { overview: null, what: [], blockers: null, results: null, leading: null, unfinished: null }, repoStats: [] },
@@ -1428,19 +1453,33 @@ test("formats daily dates, deltas, previews and the monthly calendar", () => {
   assert.equal(selectDay([], "2026-03-02"), null);
 
   const points = trendPoints(days, "2026-03-02");
-  // 日报跨度不足 7 天时补到 7 天，不再固定铺满 30 格。
-  assert.equal(points.length, 7);
-  assert.equal(points.at(-1).date, "2026-03-02");
-  assert.equal(points[0].date, "2026-02-24");
-  const byDate = new Map(points.map((point) => [point.date, point]));
-  assert.equal(byDate.get("2026-03-01").commits, 7);
-  assert.equal(byDate.get("2026-03-01").tokensM, 128.5);
-  assert.equal(byDate.get("2026-03-02").tokensM, null);
-  assert.equal(byDate.get("2026-02-24").commits, 0);
-  assert.equal(byDate.get("2026-02-24").tokensM, null);
+  // 日报不足 7 天：只画有日报的那几天，不铺空白日期位。
+  assert.equal(points.length, 2);
+  assert.deepEqual(points.map((point) => point.date), ["2026-03-01", "2026-03-02"]);
+  assert.equal(points[0].tokensM, 128.5);
+  assert.equal(points[1].tokensM, null);
+  const sparseAll = trendPoints(days, "2026-04-05");
+  assert.deepEqual(sparseAll.map((point) => point.date), ["2026-03-01", "2026-03-02", "2026-04-05"]);
 
-  // 日报跨度超过 30 天时回落到最近 30 天。
-  assert.equal(trendWindowLength(days, "2026-03-02"), 7);
+  // 够 7 天后回落到连续窗口：缺日报的日子补 0 / null。
+  const manyDays = Array.from({ length: 9 }, (_, index) => ({
+    ...days[0],
+    date: `2026-06-${String(index + 1).padStart(2, "0")}`,
+    commits: index + 1,
+    tokensM: index + 10,
+  }));
+  assert.equal(trendWindowLength(manyDays, "2026-06-09"), 9);
+  const densePoints = trendPoints(manyDays, "2026-06-09");
+  assert.equal(densePoints.length, 9);
+  assert.equal(densePoints[0].date, "2026-06-01");
+  assert.equal(densePoints.at(-1).date, "2026-06-09");
+  const withGap = trendPoints(manyDays.filter((day) => day.date !== "2026-06-05"), "2026-06-09");
+  assert.equal(withGap.length, 9);
+  const gapDay = withGap.find((point) => point.date === "2026-06-05");
+  assert.equal(gapDay.commits, 0);
+  assert.equal(gapDay.tokensM, null);
+
+  // 日报跨度超过 30 天时最近 30 天封顶。
   assert.equal(trendWindowLength(days, "2026-04-05"), 30);
 
   const cells = monthCells(days, "2026-03-02");
@@ -1451,6 +1490,17 @@ test("formats daily dates, deltas, previews and the monthly calendar", () => {
   assert.equal(cells[7].day.date, "2026-03-02");
   assert.equal(cells[8].date, "2026-03-03");
   assert.equal(cells[8].day, null);
+
+  // 按周切分：只有含日报的周和当前周需要保留，其余手机端整行收起。
+  const september = [
+    { ...days[0], date: "2026-09-28", commits: 55, tokensM: 752 },
+    { ...days[0], date: "2026-09-29", commits: 51, tokensM: 806 },
+    { ...days[0], date: "2026-09-30", commits: 18, tokensM: 325.8 },
+  ];
+  const weeks = monthWeeks(september, "2026-09-30");
+  assert.ok(weeks.every((week) => week.cells.length >= 1 && week.cells.length <= 7));
+  assert.ok(weeks.some((week) => week.hasReport && week.isCurrent));
+  assert.ok(weeks.some((week) => !week.hasReport && !week.isCurrent));
   assert.equal(nearestReportInMonth(days, "2026-03-02", 1), "2026-04-05");
   assert.equal(nearestReportInMonth(days, "2026-03-02", -1), null);
 });
@@ -1458,38 +1508,54 @@ test("formats daily dates, deltas, previews and the monthly calendar", () => {
 test("turns result numbers into cards and falls back to a list", () => {
   const { cards, rest } = parseResultCards([
     "- 提交：topics-daily 统计 22 个（不含合并提交），+11,342 / −525 行。",
-    "  - ai-native 16 个，+10,119 / −282。",
+    "  - ai-native 16 个，+10,119 / −282。其中 2 个是 23:27 的 stash 备份，另有 2 个是同一改动在两个分支各提交一次（docReader 修复、忽略打包产物）。",
     "- AI token：325.80M，按 API 列表价估算 $312.55（不是实际花费）。",
     "- 滴答：今天完成 3 项：",
     "  - Windows 端测试（08:39）",
     "  - 权限开通（08:39）",
-    "  - 工作日报 2026-09-30 占位（23:19）",
     "- 自动化覆盖率 82%：本周把核心链路上线。",
     "- 今天没有数字可填。",
   ].join("\n"));
 
-  // 带长细分子列表的「提交」、顶部已有的大数字（提交 / token）都进普通列表。
-  assert.equal(cards.length, 2);
-  assert.equal(cards[0].value, "3");
-  assert.equal(cards[0].unit, "项");
-  assert.match(cards[0].label, /滴答：今天完成/);
-  assert.match(cards[0].label, /Windows 端测试/);
-  assert.equal(cards[1].value, "82");
-  assert.equal(cards[1].unit, "%");
-  assert.equal(cards[1].label, "自动化覆盖率：本周把核心链路上线");
-  assert.match(rest, /提交/);
-  assert.match(rest, /token/);
+  // 提交数、增减行数、token、花费都做成卡片（不再因为和顶部大数字重复被过滤）。
+  assert.equal(cards.length, 6);
+  const commits = cards.find((card) => card.value === "22");
+  assert.equal(commits.unit, "个");
+  assert.match(commits.label, /提交：topics-daily 统计/);
+  const lines = cards.find((card) => card.unit === "行");
+  assert.equal(lines.value, "+11,342 / −525");
+  assert.equal(lines.label, "改动行");
+  const tokens = cards.find((card) => card.value === "325.80");
+  assert.equal(tokens.unit, "M");
+  assert.equal(tokens.label, "AI token");
+  const cost = cards.find((card) => card.value === "$312.55");
+  assert.equal(cost.unit, "");
+  assert.match(cost.label, /按 API 列表价估算/);
+  assert.equal(cards.find((card) => card.value === "3").unit, "项");
+  assert.equal(cards.find((card) => card.value === "82").unit, "%");
+
+  // 细分子列表和没有数字的句子落到卡片下方的列表。
+  assert.match(rest, /ai-native/);
+  assert.match(rest, /Windows 端测试/);
   assert.match(rest, /今天没有数字可填/);
   assert.doesNotMatch(rest, /滴答/);
+  assert.doesNotMatch(rest, /提交：topics-daily/);
 
-  // 单位保留原样；``+2734`` 这类数字补千分位。
+  // 单位保留原样；数字补千分位。
   const unit = parseResultCards("- 峰值 325.80M，按列表价估算。");
   assert.equal(unit.cards[0].value, "325.80");
   assert.equal(unit.cards[0].unit, "M");
-  assert.equal(unit.cards[0].label, "峰值，按列表价估算");
+  assert.equal(unit.cards[0].label, "峰值");
+  assert.match(unit.rest, /按列表价估算/);
   const grouped = parseResultCards("- 新增 11342 行代码。");
   assert.equal(grouped.cards[0].value, "11,342");
   assert.equal(grouped.cards[0].unit, "行");
+  assert.equal(grouped.cards[0].label, "新增代码");
+
+  // 说明超过 80 字的条目退回普通列表。
+  const long = parseResultCards(`- ${"说明很".repeat(45)} 12 个。`);
+  assert.deepEqual(long.cards, []);
+  assert.match(long.rest, /12 个/);
 
   // 完全没有列表时原样返回。
   const plain = parseResultCards("普通一段话");

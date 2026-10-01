@@ -13,7 +13,7 @@ import {
   formatNumber,
   formatSigned,
   markdownPlainText,
-  monthCells,
+  monthWeeks,
   nearestReportInMonth,
   parseResultCards,
   previewText,
@@ -100,7 +100,7 @@ function ResultNumbers({ markdown }: { markdown: string }) {
       <div className="daily-a-result-grid">
         {cards.map((card, index) => (
           <div key={`${index}-${card.value}`} className="daily-a-result-card">
-            <p className="daily-a-result-value tabular-nums">
+            <p className={`daily-a-result-value tabular-nums${card.value.length > 7 ? " is-long" : ""}`}>
               {card.value}
               {card.unit ? <span className="daily-a-result-unit">{card.unit}</span> : null}
             </p>
@@ -189,7 +189,7 @@ export default async function DailyPage({ searchParams }: { searchParams: Promis
   const parts = dateParts(day.date);
   const monthPrefix = parts ? `${parts.year}-${String(parts.month).padStart(2, "0")}-` : "";
   const monthMax = Math.max(1, ...days.filter((item) => item.date.startsWith(monthPrefix)).map((item) => Number(item.commits || 0)));
-  const cells = monthCells(days, day.date);
+  const cells = monthWeeks(days, day.date);
   const prevMonth = nearestReportInMonth(days, day.date, -1);
   const nextMonth = nearestReportInMonth(days, day.date, 1);
 
@@ -250,13 +250,13 @@ export default async function DailyPage({ searchParams }: { searchParams: Promis
               {day.repoStats.map((stat) => (
                 <div key={stat.repo} className="daily-a-repo">
                   <span className="daily-a-repo-name">{stat.repo}</span>
-                  <span className="daily-a-repo-track">
+                  <span className="daily-a-repo-track is-commits">
                     <span
                       className="daily-a-repo-bar is-commits"
                       style={{ width: `${Math.max(2, (stat.commits / maxRepoCommits) * 100)}%` }}
                     />
                   </span>
-                  <span className="daily-a-repo-track">
+                  <span className="daily-a-repo-track is-lines">
                     <span
                       className="daily-a-repo-bar is-lines"
                       style={{ width: `${Math.max(2, ((stat.additions + stat.deletions) / maxRepoLines) * 100)}%` }}
@@ -323,31 +323,38 @@ export default async function DailyPage({ searchParams }: { searchParams: Promis
                 {weekday}
               </span>
             ))}
-            {cells.map((cell, cellIndex) => {
-              if (!cell) return <span key={`empty-${cellIndex}`} className="daily-a-calendar-empty" />;
-              const dayNumber = dateParts(cell.date)?.day ?? "";
-              if (!cell.day) {
-                return (
-                  <span key={cell.date} className="daily-a-calendar-cell is-empty" aria-hidden="true">
-                    {dayNumber}
-                  </span>
-                );
-              }
-              const commits = cell.day.commits;
-              const level = commits == null || commits <= 0 ? 1 : Math.min(4, Math.max(1, Math.ceil((commits / monthMax) * 4)));
-              return (
-                <a
-                  key={cell.date}
-                  href={`/daily?date=${cell.date}`}
-                  className={`daily-a-calendar-cell is-level-${level} ${cell.date === day.date ? "is-selected" : ""}`}
-                  aria-label={`${formatMonthDay(cell.date)}：${commits ?? 0} 个提交`}
-                  aria-current={cell.date === day.date ? "date" : undefined}
-                >
-                  {dayNumber}
-                  {commits != null ? <span className="daily-a-calendar-count">{commits}</span> : null}
-                </a>
-              );
-            })}
+            {cells.map((week) => (
+              <div
+                key={week.index}
+                className={`daily-a-calendar-week${week.hasReport || week.isCurrent ? "" : " is-collapsed"}`}
+              >
+                {week.cells.map((cell, cellIndex) => {
+                  if (!cell) return <span key={`empty-${cellIndex}`} className="daily-a-calendar-empty" />;
+                  const dayNumber = dateParts(cell.date)?.day ?? "";
+                  if (!cell.day) {
+                    return (
+                      <span key={cell.date} className="daily-a-calendar-cell is-empty" aria-hidden="true">
+                        {dayNumber}
+                      </span>
+                    );
+                  }
+                  const commits = cell.day.commits;
+                  const level = commits == null || commits <= 0 ? 1 : Math.min(4, Math.max(1, Math.ceil((commits / monthMax) * 4)));
+                  return (
+                    <a
+                      key={cell.date}
+                      href={`/daily?date=${cell.date}`}
+                      className={`daily-a-calendar-cell is-level-${level} ${cell.date === day.date ? "is-selected" : ""}`}
+                      aria-label={`${formatMonthDay(cell.date)}：${commits ?? 0} 个提交`}
+                      aria-current={cell.date === day.date ? "date" : undefined}
+                    >
+                      {dayNumber}
+                      {commits != null ? <span className="daily-a-calendar-count">{commits}</span> : null}
+                    </a>
+                  );
+                })}
+              </div>
+            ))}
           </div>
         </section>
       </main>

@@ -117,11 +117,56 @@ export function firstSentence(markdown: string): string {
   return sentences.length > 0 ? sentences[0].text : text;
 }
 
-/** 折叠条目的预览：正文前约 `limit` 个字，超出补省略号。 */
+const CN_PUNCT = "，。；：、！？…—·「」『』（）《》〈〉【】“”‘’";
+
+function isCjkChar(ch: string): boolean {
+  return /[\u3400-\u9fff\uf900-\ufaff]/.test(ch);
+}
+
+function isWordChar(ch: string): boolean {
+  return /[0-9A-Za-z_-]/.test(ch);
+}
+
+/** 这个位置能不能当预览截断点：空格、中文标点或中文字符边界，不能落在单词/路径/数字中间。 */
+function canBreakPreview(text: string, index: number): boolean {
+  if (index <= 0 || index >= text.length) return true;
+  const prev = text[index - 1];
+  const next = text[index];
+  if (/\s/.test(prev) || /\s/.test(next)) return true;
+  // 千分位、小数点、时间里的冒号都不是边界，避免把 11,342 / 23:33 截成两半。
+  if (/[,.:：]/.test(prev) && /\d/.test(next) && index >= 2 && /\d/.test(text[index - 2])) return false;
+  if (isCjkChar(prev) || isCjkChar(next)) return true;
+  if (CN_PUNCT.includes(prev) || CN_PUNCT.includes(next)) return true;
+  if (prev === "/" || next === "/" || prev === "／" || next === "／") return true;
+  // 两边都是英文/数字/下划线，说明截在单词或路径中间。
+  if (isWordChar(prev) && isWordChar(next)) return false;
+  return true;
+}
+
+/**
+ * 折叠条目的预览：正文前约 `limit` 个字，回退到最近的空格、中文标点或中文字符边界，
+ * 尽量让预览落在 30–44 字之间，避免把英文单词、路径或数字截成两半。
+ */
 export function previewText(markdown: string | null | undefined, limit = 40): string {
   const text = markdownPlainText(markdown);
   if (text.length <= limit) return text;
-  return `${text.slice(0, limit)}…`;
+  let cut = limit;
+  for (let index = limit; index >= 1; index -= 1) {
+    if (canBreakPreview(text, index)) {
+      cut = index;
+      break;
+    }
+  }
+  // 回退太多（长单词/长路径）时，再往后找一个更接近 40 字的边界。
+  if (cut < Math.min(30, limit)) {
+    for (let index = limit + 1; index <= Math.min(limit + 4, text.length); index += 1) {
+      if (canBreakPreview(text, index)) {
+        cut = index;
+        break;
+      }
+    }
+  }
+  return `${text.slice(0, cut).trimEnd()}…`;
 }
 
 /** 正文不足 60 字就不折叠，直接铺开显示。 */
@@ -150,10 +195,7 @@ function dayOrdinal(date: string): number {
   return Date.UTC(parts.year, parts.month - 1, parts.day) / MS_PER_DAY;
 }
 
-/**
- * 从「第一份日报」到「选中日」的连续天数窗口（含端点），最少 7 天、最多 `limit` 天。
- * 日报很少时不铺满空白的 30 格，柱子直接撑开；日报跨度超过 `limit` 时只取最近 `limit` 天。
- */
+/** 补到 7 天以上的连续窗口；日报不足 7 天时由 `trendPoints` 直接只画有日报的那几天。 */
 export function trendWindowLength(days: DailyDay[], selected: string, limit = 30, min = 7): number {
   const dates = days.map((day) => day.date).filter((date) => dateParts(date));
   if (dates.length === 0) return min;
@@ -163,13 +205,28 @@ export function trendWindowLength(days: DailyDay[], selected: string, limit = 30
   return Math.max(min, Math.min(limit, span));
 }
 
+/** 到选中日为止的日报少到不足以画出连续窗口（不足 7 天）。 */
+export const TREND_SPARSE_THRESHOLD = 7;
+
 /**
- * 以选中日为右端点、从「第一份日报」开始的连续窗口。中间没有日报的日子补成
- * 0 提交、token 为 null；日报太少时至少补到 7 天，避免一大段 x 轴空着。
+ * 以选中日为右端点的趋势点：
+ * - 日报不足 7 天：只画有日报的那几天，不铺空白日期位；
+ * - 够 7 天：从第一份日报起补成连续窗口（缺日报的日子提交为 0、token 为 null），最多 `limit` 天。
  */
 export function trendPoints(days: DailyDay[], selected: string, limit = 30): DailyTrendPoint[] {
-  const byDate = new Map(days.map((day) => [day.date, day]));
-  const length = trendWindowLength(days, selected, limit);
+  const dated = days.filter((day) => dateParts(day.date));
+  const visible = dated.filter((day) => day.date <= selected);
+  if (visible.length === 0) return [];
+  if (visible.length < TREND_SPARSE_THRESHOLD) {
+    return visible.map((day) => ({
+      date: day.date,
+      label: formatMonthDay(day.date),
+      commits: Number(day.commits || 0),
+      tokensM: day.tokensM,
+    }));
+  }
+  const byDate = new Map(dated.map((day) => [day.date, day]));
+  const length = trendWindowLength(dated, selected, limit);
   const points: DailyTrendPoint[] = [];
   for (let offset = length - 1; offset >= 0; offset -= 1) {
     const date = shiftDate(selected, -offset);
@@ -185,6 +242,14 @@ export function trendPoints(days: DailyDay[], selected: string, limit = 30): Dai
 }
 
 export type MonthCell = { date: string; day: DailyDay | null };
+
+/** 一周的日历格（含前导空位），用于手机端整行收起没有日报的空周。 */
+export type CalendarWeek = {
+  index: number;
+  cells: Array<MonthCell | null>;
+  hasReport: boolean;
+  isCurrent: boolean;
+};
 
 /** 选定日期所在月份的日历格（周一开头）：前导空格用 null，其它日期始终带日期。 */
 export function monthCells(days: DailyDay[], selected: string): Array<MonthCell | null> {
@@ -202,75 +267,162 @@ export function monthCells(days: DailyDay[], selected: string): Array<MonthCell 
   return cells;
 }
 
+/**
+ * 按周切分日历格。只有「含日报的周」或「选中日所在周」需要保留，
+ * 手机端把其余整行空周收起，桌面端仍然显示完整月历。
+ */
+export function monthWeeks(days: DailyDay[], selected: string): CalendarWeek[] {
+  const cells = monthCells(days, selected);
+  const weeks: CalendarWeek[] = [];
+  for (let index = 0; index < cells.length; index += 7) {
+    const slice = cells.slice(index, index + 7);
+    weeks.push({
+      index: weeks.length,
+      cells: slice,
+      hasReport: slice.some((cell) => Boolean(cell?.day)),
+      isCurrent: slice.some((cell) => cell?.date === selected),
+    });
+  }
+  return weeks;
+}
+
 export type DailyResultCard = { value: string; unit: string; label: string };
 
-const RESULT_NUMBER_RE = /([+\-−]?\d[\d,]*(?:\.\d+)?)\s*(百万|亿|万|M|K|k|%|个|项|行|次|份|天|小时|分钟|秒)?/;
-/** 顶部大数字已经展示过的指标，不再重复做成卡片。 */
-const RESULT_METRIC_SKIP_RE = /提交|token/i;
 /** 说明太长（多半带细分子列表）时退回普通列表，避免把卡片撑成一块大豆腐。 */
 const RESULT_CARD_LABEL_MAX = 80;
+const RESULT_UNIT = "百万|亿|万|千|[MKk]|%|个|项|行|次|份|条|天|小时|分钟|秒|元|美元|刀";
+const RESULT_NUMBER = "[+\\-−]?\\d[\\d,]*(?:\\.\\d+)?";
+/** 一对增减行数（+11,342 / −525）优先做成一张卡片。 */
+const RESULT_PAIR_RE = new RegExp(`(${RESULT_NUMBER}\\s*[/／]\\s*${RESULT_NUMBER})\\s*(${RESULT_UNIT})?`);
+const RESULT_SINGLE_RE = new RegExp(`([¥$€£]?${RESULT_NUMBER})\\s*(${RESULT_UNIT})?`);
 
-/** 给整数部分加千分位，并清掉原文里已有的逗号，避免出现 `1,,234`。 */
+/** 给每个数字串加千分位，其它字符（含 − 号、货币符号、斜杠）原样保留。 */
 function groupThousands(text: string): string {
-  const [intPart, ...rest] = text.replace(/,/g, "").split(".");
-  const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return rest.length > 0 ? `${grouped}.${rest.join(".")}` : grouped;
+  return text.replace(/\d[\d,]*(?:\.\d+)?/g, (num) => {
+    const [intPart, ...decParts] = num.replace(/,/g, "").split(".");
+    const grouped = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return decParts.length > 0 ? `${grouped}.${decParts.join(".")}` : grouped;
+  });
+}
+
+/** 按顶层标点切句，括号里的逗号不当分隔符，避免把「（不是实际花费，截至 23:33）」拆碎。 */
+function splitResultClauses(text: string): string[] {
+  const opening = "（(【[《「『";
+  const closing = "）)】]》」』";
+  const clauses: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    const ch = text[index];
+    if (opening.includes(ch)) depth += 1;
+    else if (closing.includes(ch)) depth = Math.max(0, depth - 1);
+    else if (depth === 0 && "，。；;".includes(ch)) {
+      clauses.push(text.slice(start, index));
+      start = index + 1;
+    } else if (depth === 0 && ch === "," && !(/\d/.test(text[index - 1] ?? "") && /\d/.test(text[index + 1] ?? ""))) {
+      // 英文逗号只在不是千分位时当分隔符。
+      clauses.push(text.slice(start, index));
+      start = index + 1;
+    }
+  }
+  clauses.push(text.slice(start));
+  return clauses.map((clause) => clause.trim()).filter(Boolean);
+}
+
+function cleanResultLabel(text: string): string {
+  return text
+    .replace(/\s+/g, " ")
+    .replace(/([\u3400-\u9fff])\s+([\u3400-\u9fff])/g, "$1$2")
+    .replace(/\s+([，。；：、）)】（(【])/g, "$1")
+    .replace(/^[\s:：,，、;；。.]+/, "")
+    .replace(/[\s:：,，、;；。.]+$/, "")
+    .trim();
+}
+
+/** 从一句里抠出「数字（或增减行数对）+ 单位 + 短说明」；只有数字没有说明或太长的返回 null。 */
+function resultStatFromClause(clause: string): { value: string; unit: string; label: string } | null {
+  const pair = RESULT_PAIR_RE.exec(clause);
+  const single = RESULT_SINGLE_RE.exec(clause);
+  const match = pair && (!single || pair.index <= single.index) ? pair : single;
+  if (!match) return null;
+  const unit = match[2] || "";
+  // 没有单位也不是货币的裸数字（日期、年份、编号）不做卡片。
+  if (!unit && !/^[¥$€£]/.test(match[1])) return null;
+  const before = clause.slice(0, match.index);
+  const after = clause.slice(match.index + match[0].length);
+  return { value: groupThousands(match[1]), unit, label: cleanResultLabel(`${before}${after}`) };
 }
 
 /**
- * 把「结果数字」那节的列表拆成数字卡片：每条顶层条目取第一个数字做大字，
- * 剩余文本做说明；缺数字、带长细分子列表或与顶部指标重复的条目原样落到 `rest`。
+ * 把「结果数字」那节拆成数字卡片：每条顶层条目按标点切句，凡是有「数字 + 单位 + 短说明」
+ * 的都做一张小卡片（和顶部大数字重复也保留，因为口径不同）；说明超过 80 字、没有单位
+ * 或没有说明的句子落到卡片下方的列表。nested 缩进通常是细分子列表，原样留在列表里。
  */
 export function parseResultCards(markdown: string | null | undefined): { cards: DailyResultCard[]; rest: string } {
   const lines = String(markdown ?? "").replace(/\r\n?/g, "\n").split("\n");
-  const entries: Array<{ top: string; nested: string[]; raw: string[] }> = [];
-  let current: { top: string; nested: string[]; raw: string[] } | null = null;
+  type Item = { own: string; nested: string[]; raw: string[] };
+  const items: Item[] = [];
+  let current: Item | null = null;
   for (const line of lines) {
     const top = /^[-*+]\s+(.*)$/.exec(line);
     if (top) {
-      current = { top: top[1].trim(), nested: [], raw: [line] };
-      entries.push(current);
+      current = { own: top[1].trim(), nested: [], raw: [line] };
+      items.push(current);
       continue;
     }
     const nested = /^\s+[-*+]\s+(.*)$/.exec(line);
     if (nested && current) {
-      current.nested.push(nested[1].trim());
+      current.nested.push(line);
       current.raw.push(line);
       continue;
     }
-    if (current && line.trim()) {
-      current.nested.push(line.trim());
-      current.raw.push(line);
+    if (line.trim()) {
+      if (current) {
+        current.nested.push(line);
+        current.raw.push(line);
+      } else {
+        current = { own: line.trim(), nested: [], raw: [line] };
+        items.push(current);
+      }
     }
   }
-  if (entries.length === 0) return { cards: [], rest: markdown ?? "" };
+  if (items.length === 0) return { cards: [], rest: markdown ?? "" };
 
   const cards: DailyResultCard[] = [];
-  const rest: string[] = [];
-  for (const entry of entries) {
-    const match = RESULT_NUMBER_RE.exec(entry.top);
-    if (!match || RESULT_METRIC_SKIP_RE.test(entry.top)) {
-      rest.push(...entry.raw);
+  const restBlocks: string[][] = [];
+  for (const item of items) {
+    const itemCards: DailyResultCard[] = [];
+    const leftovers: string[] = [];
+    let prefix = "";
+    for (const clause of splitResultClauses(item.own)) {
+      const stat = resultStatFromClause(clause);
+      if (!stat) {
+        // 卡片之前的前缀先攒着，补到第一张卡片的说明里。
+        if (itemCards.length === 0) prefix = prefix ? `${prefix}，${clause}` : clause;
+        else leftovers.push(clause);
+        continue;
+      }
+      const base = stat.label || (stat.unit === "行" ? "改动行" : "");
+      const label = prefix && itemCards.length === 0 && base ? `${prefix} · ${base}` : base;
+      if (!label || label.length > RESULT_CARD_LABEL_MAX) {
+        leftovers.push(clause);
+        continue;
+      }
+      itemCards.push({ value: stat.value, unit: stat.unit, label });
+      if (prefix && itemCards.length === 1) prefix = "";
+    }
+    if (itemCards.length === 0) {
+      restBlocks.push(item.raw);
       continue;
     }
-    const value = groupThousands(match[1].replace(/−/g, "-"));
-    const unit = match[2] || "";
-    const before = entry.top.slice(0, match.index);
-    const after = entry.top.slice(match.index + match[0].length);
-    // 去掉数字后把前后接顺：不留空洞，也不要多余的冒号、逗号。
-    const detail = `${before.trimEnd()}${after.trimStart()}`
-      .replace(/^[\s:：,，、;；。]+/, "")
-      .replace(/[\s:：,，、;；。]+$/, "")
-      .replace(/\s{2,}/g, " ")
-      .trim();
-    const label = entry.nested.length > 0 ? `${detail} · ${entry.nested.join(" · ")}` : detail || entry.top;
-    if (label.length > RESULT_CARD_LABEL_MAX) {
-      rest.push(...entry.raw);
-      continue;
-    }
-    cards.push({ value, unit, label });
+    cards.push(...itemCards);
+    const block: string[] = [];
+    if (prefix) leftovers.unshift(prefix);
+    if (leftovers.length > 0) block.push(`- ${leftovers.join("，")}`);
+    block.push(...item.nested);
+    if (block.length > 0) restBlocks.push(block);
   }
-  return { cards, rest: rest.join("\n") };
+  return { cards, rest: restBlocks.map((block) => block.join("\n")).join("\n\n") };
 }
 
 /** 上/下一个月里最近一天有日报的日期，用于日历翻月。 */

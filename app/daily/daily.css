@@ -461,7 +461,7 @@ body:has(.daily-a) {
 
 .daily-a-result-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1px;
   background: var(--line);
   border: 1px solid var(--line);
@@ -481,6 +481,12 @@ body:has(.daily-a) {
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.01em;
+}
+
+/* 成对的增减行数（+11,342 / −525）比单个数字长，缩小一点避免撑破卡片。 */
+.daily-a-result-value.is-long {
+  font-size: clamp(17px, 4.6vw, 23px);
+  line-height: 1.15;
 }
 
 .daily-a-result-unit {
@@ -553,6 +559,12 @@ body:has(.daily-a) {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 4px;
+}
+
+/* 用 display: contents 把周包层从布局里去掉，桌面仍然是一个完整月历网格；
+   手机端可以整行收起没有日报的空周。 */
+.daily-a-calendar-week {
+  display: contents;
 }
 
 .daily-a-calendar-weekday {
@@ -692,26 +704,64 @@ body:has(.daily-a) {
     font-size: 11px;
   }
 
-  .daily-a-repos-head,
+  /* 表头只留「提交 / 改动行」两个标签，对齐下面的两根条形。 */
+  .daily-a-repos-head {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 12px;
+  }
+
+  .daily-a-repos-head span:nth-child(1),
+  .daily-a-repos-head span:nth-child(4) {
+    display: none;
+  }
+
   .daily-a-repo {
-    grid-template-columns: 76px minmax(0, 1fr) minmax(0, 1fr) auto;
-    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "name name"
+      "commits lines"
+      "nums nums";
+    column-gap: 12px;
+    row-gap: 8px;
+  }
+
+  .daily-a-repo-name {
+    grid-area: name;
+  }
+
+  .daily-a-repo-track.is-commits {
+    grid-area: commits;
+  }
+
+  .daily-a-repo-track.is-lines {
+    grid-area: lines;
   }
 
   .daily-a-repo-nums {
-    font-size: 11px;
+    grid-area: nums;
+    /* 数字放到条形下方一行，字号不小于 12px，和条形至少留 12px 间距。 */
+    margin-top: 4px;
+    font-size: 12px;
   }
 
   .daily-a-calendar-cell {
     min-height: 38px;
   }
 
-  .daily-a-result-grid {
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  /* 只保留有日报的周和当前周，其余整行空周收起。 */
+  .daily-a-calendar-week.is-collapsed {
+    display: none;
   }
 
   .daily-a-result-value {
     font-size: 30px;
+  }
+}
+
+/* ── 平板：结果卡片三列 ──────────────────────── */
+@media (min-width: 640px) {
+  .daily-a-result-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -722,6 +772,11 @@ body:has(.daily-a) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     column-gap: 44px;
     align-items: start;
+  }
+
+  /* 桌面端结果卡片固定四列，单张卡片不会撑满整行。 */
+  .daily-a-result-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   /* 展开的条目跨两栏，另一栏不会被拉长留出大空洞。 */
