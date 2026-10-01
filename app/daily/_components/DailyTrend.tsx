@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 
 export type TrendPoint = { date: string; label: string; commits: number; tokensM: number | null };
 
-const H = 240;
+const H_DESKTOP = 240;
+const H_MOBILE = 160;
 const PAD = { left: 44, right: 44, top: 12, bottom: 34 };
 const MIN_W = 320;
 const DEFAULT_W = 720;
@@ -49,6 +50,9 @@ export function DailyTrend({ points, selected }: { points: TrendPoint[]; selecte
   if (points.length === 0) return null;
 
   const W = width;
+  // 手机首屏：压缩图表高度，底部日期标签不会被固定标签栏盖住。
+  const narrow = W < 520;
+  const H = narrow ? H_MOBILE : H_DESKTOP;
   const plotW = W - PAD.left - PAD.right;
   const plotH = H - PAD.top - PAD.bottom;
   const baseY = PAD.top + plotH;
@@ -82,7 +86,6 @@ export function DailyTrend({ points, selected }: { points: TrendPoint[]; selecte
   });
   if (current.length > 1) lineSegments.push(current.join(" "));
 
-  const narrow = W < 520;
   const active = hover == null ? null : points[hover];
   const hoverX = hover == null ? 0 : dotX(hover);
   const hoverTop = hover == null ? 0 : commitY(points[hover].commits);

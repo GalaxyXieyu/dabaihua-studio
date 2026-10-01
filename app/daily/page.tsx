@@ -23,6 +23,7 @@ import {
   trendPoints,
   weekdayOf,
   type DailyRepoStat,
+  type DailyResultCard,
   type DailyWhatEntry,
 } from "../../lib/daily";
 import { SiteAppBar } from "../_components/SiteAppBar";
@@ -97,32 +98,23 @@ function Fold({ title, markdown }: { title: string; markdown: string }) {
 }
 
 /** 「结果数字」：只把总量做成大号数字卡片，按工具拆分/对比说明落到卡片下的细线列表。 */
-function ResultNumbers({ markdown, excludeValues }: { markdown: string; excludeValues: number[] }) {
-  const { cards, rest } = parseResultCards(markdown, { excludeValues });
-  if (cards.length === 0) return <MiniMarkdown text={markdown} />;
+function ResultCardGrid({ cards }: { cards: DailyResultCard[] }) {
   const scale = resultCardScale(cards);
   return (
-    <div className="daily-a-results">
-      <div
-        className="daily-a-result-grid"
-        data-count={cards.length}
-        style={{ "--result-scale": scale } as CSSProperties}
-      >
-        {cards.map((card, index) => (
-          <div key={`${index}-${card.value}`} className="daily-a-result-card">
-            <p className="daily-a-result-value tabular-nums">
-              {card.value}
-              {card.unit ? <span className="daily-a-result-unit">{card.unit}</span> : null}
-            </p>
-            <p className="daily-a-result-label">{card.label}</p>
-          </div>
-        ))}
-      </div>
-      {rest ? (
-        <div className="daily-a-results-rest">
-          <MiniMarkdown text={rest} />
+    <div
+      className="daily-a-result-grid"
+      data-count={cards.length}
+      style={{ "--result-scale": scale } as CSSProperties}
+    >
+      {cards.map((card, index) => (
+        <div key={`${index}-${card.value}`} className="daily-a-result-card">
+          <p className="daily-a-result-value tabular-nums">
+            {card.value}
+            {card.unit ? <span className="daily-a-result-unit">{card.unit}</span> : null}
+          </p>
+          <p className="daily-a-result-label">{card.label}</p>
         </div>
-      ) : null}
+      ))}
     </div>
   );
 }
@@ -242,6 +234,18 @@ export default async function DailyPage({ searchParams }: { searchParams: Promis
     ["概览", day.sections.overview],
   ];
 
+  const parsedResults = day.sections.results
+    ? parseResultCards(day.sections.results, {
+        excludeValues: [day.commits, day.tokensM, repoCount].filter(
+          (value): value is number => typeof value === "number",
+        ),
+      })
+    : null;
+  const hasFolds = folds.some(([, markdown]) => markdown);
+  const hasResultRest = Boolean(
+    parsedResults && (parsedResults.cards.length === 0 ? day.sections.results : parsedResults.rest),
+  );
+
   return (
     <div className="daily-a">
       <SiteAppBar user={user} pathname="/daily" />
@@ -318,21 +322,25 @@ export default async function DailyPage({ searchParams }: { searchParams: Promis
             </section>
           ) : null}
 
-          {day.sections.results || folds.some(([, markdown]) => markdown) ? (
+          {parsedResults || hasFolds ? (
             <section className="daily-a-section is-pair">
+              {parsedResults ? <h2 className="daily-a-heading">结果数字</h2> : null}
+              {parsedResults && parsedResults.cards.length > 0 ? (
+                <div className="daily-a-results">
+                  <ResultCardGrid cards={parsedResults.cards} />
+                </div>
+              ) : null}
               <div className="daily-a-pair">
-                {day.sections.results ? (
+                {hasResultRest ? (
                   <div className="daily-a-pair-col is-results">
-                    <h2 className="daily-a-heading">结果数字</h2>
-                    <ResultNumbers
-                      markdown={day.sections.results}
-                      excludeValues={[day.commits, day.tokensM, repoCount].filter(
-                        (value): value is number => typeof value === "number",
-                      )}
-                    />
+                    <div className="daily-a-results-rest">
+                      <MiniMarkdown
+                        text={parsedResults && parsedResults.cards.length > 0 ? parsedResults.rest : day.sections.results || ""}
+                      />
+                    </div>
                   </div>
                 ) : null}
-                {folds.some(([, markdown]) => markdown) ? (
+                {hasFolds ? (
                   <div className="daily-a-pair-col is-folds">
                     <div className="daily-a-folds">
                       {folds.map(([title, markdown]) =>

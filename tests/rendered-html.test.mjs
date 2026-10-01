@@ -1351,9 +1351,10 @@ test("gates the admin-only daily page and keeps the private feed out of git", as
   assert.match(css, /\.daily-a-metric-delta\.is-up \{[^}]*color: var\(--daily-up\)/);
   assert.match(css, /\.daily-a-metric-delta\.is-down \{[^}]*color: var\(--danger\)/);
   assert.match(css, /\.daily-a-metric-delta\.is-flat \{[^}]*font-weight: 500/);
-  // 趋势图不再固定 30 格，日报少时撑开；柱子最小 6px。
+  // 趋势图不再固定 30 格，日报少时撑开；柱子最小 6px；手机压低高度，日期标签不被底部标签栏盖住。
   assert.doesNotMatch(trend, /SLOTS/);
   assert.match(trend, /Math\.max\(6, column \* 0\.54\)/);
+  assert.match(trend, /H_MOBILE = 160/);
   assert.match(page, /trendHeading/);
   // 折叠块共用一个容器，只用一条细线。
   assert.match(css, /\.daily-a-folds \{[^}]*border-top: 1px solid var\(--line\)/);
@@ -1363,11 +1364,18 @@ test("gates the admin-only daily page and keeps the private feed out of git", as
   // 「做了什么」预览固定一行，超出省略。
   assert.match(css, /\.daily-a-what-preview,[^}]*white-space: nowrap/);
   assert.match(css, /\.daily-a-what-preview,[^}]*text-overflow: ellipsis/);
-  // 桌面「结果数字」和折叠块并排两栏，半栏里长数值卡片改回两列。
+  // 折叠块不再被 nowrap 预览撑破（手机 320/360/390 无横向溢出）。
+  assert.match(css, /\.daily-a-folds,[^}]*min-width: 0/);
+  assert.match(css, /\.daily-a-fold,[\s\S]*?min-width: 0/);
+  // 桌面：结果卡片通栏放上面，下面结果列表和折叠块两栏。
   assert.match(page, /daily-a-pair/);
+  assert.match(page, /ResultCardGrid/);
   assert.match(css, /\.daily-a-pair \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(css, /\.daily-a-pair > \.daily-a-pair-col:only-child \{[^}]*grid-column: 1 \/ -1/);
-  assert.match(css, /\.daily-a-pair \.daily-a-result-grid\[data-count="3"\]/);
+  // 3 张就一行 3 列，字号整组统一。
+  assert.match(css, /\.daily-a-result-grid\[data-count="3"\] \{[^}]*--result-cols: 3/);
+  assert.match(css, /\.daily-a-result-grid\[data-count="4"\] \{[^}]*--result-cols: 4/);
+  assert.doesNotMatch(css, /--result-value-size: clamp\(14px/);
   // 宽屏月历进右侧窄栏；手机仍收起空周。
   assert.match(page, /daily-a-rail/);
   assert.match(css, /\.daily-a-body \{[^}]*grid-template-columns: minmax\(0, 1fr\) 300px/);

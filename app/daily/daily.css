@@ -407,6 +407,20 @@ body:has(.daily-a) {
   padding: 0 0 16px;
 }
 
+/* 折叠块在窄屏会被 nowrap 预览撑破：统一收起自动最小宽度，允许缩到容器内。 */
+.daily-a-pair,
+.daily-a-pair-col,
+.daily-a-folds,
+.daily-a-fold,
+.daily-a-fold-summary,
+.daily-a-fold-body,
+.daily-a-what,
+.daily-a-what-summary {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
 /* ── 折叠块 ─────────────────────────────────────────── */
 .daily-a-folds {
   display: grid;
@@ -415,10 +429,11 @@ body:has(.daily-a) {
   border-top: 1px solid var(--line);
 }
 
-/* 「结果数字」和折叠块在桌面并排两栏；单边存在时自己占满整行。 */
+/* 结果卡片通栏放上面，下方结果列表和折叠块两栏；单边存在时自己占满整行。 */
 .daily-a-pair {
   display: grid;
   gap: 20px;
+  margin-top: 16px;
 }
 
 .daily-a-pair-col {
@@ -789,7 +804,12 @@ body:has(.daily-a) {
   }
 
   .daily-a-masthead-wrap {
-    padding-top: 28px;
+    padding-top: 22px;
+  }
+
+  /* 首屏更紧凑一点，趋势图连同日期标签能完整露在固定底部标签栏上方。 */
+  .daily-a-section {
+    margin-top: 28px;
   }
 
   .daily-a .daily-a-main {
@@ -914,20 +934,6 @@ body:has(.daily-a) {
 
   .daily-a-pair > .daily-a-pair-col:only-child {
     grid-column: 1 / -1;
-  }
-
-  /* 半栏里 3/4 张卡片换成两列，长数值不会被 nowrap 顶出卡片；字号和内边距也收一点。 */
-  .daily-a-pair .daily-a-result-grid {
-    --result-value-size: clamp(14px, 3vw, 24px);
-  }
-
-  .daily-a-pair .daily-a-result-card {
-    padding: 14px 14px 12px;
-  }
-
-  .daily-a-pair .daily-a-result-grid[data-count="3"],
-  .daily-a-pair .daily-a-result-grid[data-count="4"] {
-    --result-cols: 2;
   }
 }
 
