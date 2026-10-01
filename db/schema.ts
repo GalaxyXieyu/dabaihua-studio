@@ -442,3 +442,44 @@ export const dailyBriefResponses = sqliteTable("daily_brief_responses", {
   index("daily_brief_responses_updated_idx").on(table.updatedAt),
   index("daily_brief_responses_date_idx").on(table.date),
 ]);
+
+export const cards = sqliteTable("cards", {
+  id: text("id").primaryKey(),
+  kind: text("kind").notNull().default("mirror"),
+  category: text("category").notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  scopeJson: text("scope_json").notNull().default("[]"),
+  sourcesJson: text("sources_json").notNull().default("[]"),
+  optionsJson: text("options_json").notNull().default("[]"),
+  supersedesJson: text("supersedes_json").notNull().default("[]"),
+  owner: text("owner").notNull().default(""),
+  supersededBy: text("superseded_by").notNull().default(""),
+  reviewAfter: text("review_after").notNull().default(""),
+  status: text("status").notNull(),
+  reason: text("reason").notNull().default(""),
+  version: integer("version").notNull().default(1),
+  confirmedBy: text("confirmed_by").notNull().default(""),
+  confirmedAt: text("confirmed_at").notNull().default(""),
+  createdBy: text("created_by").notNull(),
+  updatedBy: text("updated_by").notNull(),
+  recordedAt: text("recorded_at").notNull().default(""),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+  deletedAt: text("deleted_at"),
+  deletedBy: text("deleted_by"),
+  deleteReason: text("delete_reason"),
+}, (table) => [
+  index("cards_kind_status_idx").on(table.kind, table.status, table.deletedAt),
+  index("cards_kind_category_idx").on(table.kind, table.category),
+]);
+
+export const cardRevisions = sqliteTable("card_revisions", {
+  cardId: text("card_id").notNull(),
+  version: integer("version").notNull(),
+  action: text("action").notNull(),
+  snapshotJson: text("snapshot_json").notNull(),
+  reason: text("reason").notNull().default(""),
+  actor: text("actor").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (table) => [primaryKey({ columns: [table.cardId, table.version] })]);

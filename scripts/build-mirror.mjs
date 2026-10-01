@@ -1,4 +1,9 @@
 /**
+ * 已停用，页面改为读库；保留 parseJsonl / buildMirrorData 等解析函数给测试。
+ *
+ * 新的写入路径是 `npm run cards:import`（scripts/cards-import-handbook.mjs）
+ * 把 entries.jsonl / inbox.jsonl 导入 D1 cards，/mirror 页面直接读库。
+ *
  * build-mirror.mjs — 把本机私密正本汇总成站点可读的 content/mirror/mirror.json。
  *
  * 输入（只读，仓库之外）：

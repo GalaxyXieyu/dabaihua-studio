@@ -21,6 +21,7 @@ DABAIHUA_TRUSTED_PROXY_HOSTS=topic.aigalaxy.top,superme.aigalaxy.top
 DABAIHUA_ALLOW_REGISTER=1
 DABAIHUA_REGISTER_INVITE_CODE=...   # 可选
 DABAIHUA_PUBLIC_BASE_URL=https://superme.aigalaxy.top  # 可选，周报 URL 用
+DABAIHUA_CARDS_ASSISTANT_TOKEN=...  # 可选，照照镜子助手 token
 ```
 
 ## systemd 单元
@@ -103,6 +104,17 @@ ssh Aries 'sudo systemctl restart dabaihua-studio'
 
 `DABAIHUA_PUBLIC_BASE_URL` 用来拼响应里的周报 URL；不设置时回退到请求的 origin。
 反向代理终止 TLS 时通常应显式设置，例如 `https://superme.aigalaxy.top`。
+
+## 照照镜子 /api/cards
+
+`DABAIHUA_CARDS_ASSISTANT_TOKEN` 给助手用一个 Bearer token：助手只能 `GET /api/cards*`
+和 `POST /api/cards`（只能写成「待确认」）。确认 / 拒绝 / 编辑 / 替换 / 过期 / 删除 /
+恢复只认 Yu 的 admin 会话或 `topk_` key。写请求带 `expectedVersion`，版本不对返回 `409`。
+
+- `GET /api/cards?kind=mirror&category=&status=&deleted=1`：列出卡片。
+- `GET /api/cards/:id`、`GET /api/cards/:id/history`：单卡与历史。
+- `POST /api/cards`、`PATCH /api/cards/:id`：新增 / 直接改。
+- `POST /api/cards/:id/supersede|expire|restore|confirm|reject`、`DELETE /api/cards/:id`（软删）。
 
 ## 回滚到旧的 qingliu-reader
 

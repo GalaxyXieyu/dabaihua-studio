@@ -1,4 +1,5 @@
 import { discoverFeedLinks, feedTitle, isFeedDocument, parseFeed, type FeedEntry } from "./feed";
+import { CARDS_SCHEMA_STATEMENTS } from "./cards-core";
 import { fetchPublicText, publicHttpUrl } from "./safe-fetch";
 import { extractArticle, htmlToMarkdown, readHtmlMeta } from "./article";
 import { inferSourceCategory, isSourceCategory, type SourceCategory } from "./source-category";
@@ -8,7 +9,7 @@ import { readXArticles, readXPost, readXProfile, xPostAddress, xProfileAddress }
 export type AppEnv = { DB: D1Database; AI?: { run: (model: string, input: unknown) => Promise<unknown> } };
 const now = () => new Date().toISOString();
 const day = () => new Date().toISOString().slice(0, 10);
-const SCHEMA_VERSION = "2026-09-30.1";
+const SCHEMA_VERSION = "2026-10-01.1";
 const schemaReady = new WeakMap<object, Promise<void>>();
 
 async function initializeSchema(db: D1Database) {
@@ -81,6 +82,7 @@ async function initializeSchema(db: D1Database) {
     db.prepare("CREATE TABLE IF NOT EXISTS daily_brief_responses (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, topic_id TEXT NOT NULL, user_id INTEGER NOT NULL REFERENCES users(id), rating INTEGER, rating_comment TEXT NOT NULL DEFAULT '', decision TEXT, scenario_index INTEGER, scenario_text TEXT NOT NULL DEFAULT '', answers_json TEXT NOT NULL DEFAULT '[]', reject_reason TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(date, topic_id, user_id))"),
     db.prepare("CREATE INDEX IF NOT EXISTS daily_brief_responses_updated_idx ON daily_brief_responses(updated_at)"),
     db.prepare("CREATE INDEX IF NOT EXISTS daily_brief_responses_date_idx ON daily_brief_responses(date)"),
+    ...CARDS_SCHEMA_STATEMENTS.map((sql) => db.prepare(sql)),
   ]);
   const legacyFollowCleanupKey = "legacy_source_follow_seed_cleanup_v1";
   const legacyFollowCleanup = await db.prepare("SELECT value FROM app_meta WHERE key = ?").bind(legacyFollowCleanupKey).first<{ value: string }>();

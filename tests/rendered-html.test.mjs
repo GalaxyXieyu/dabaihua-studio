@@ -762,7 +762,7 @@ test("keeps the article review backend, asset route, and sync script wired to th
   assert.match(store, /CREATE TABLE IF NOT EXISTS article_versions/);
   assert.match(store, /CREATE TABLE IF NOT EXISTS review_marks/);
   assert.match(store, /CREATE TABLE IF NOT EXISTS review_rounds/);
-  assert.match(store, /SCHEMA_VERSION = "2026-09-30\.1"/);
+  assert.match(store, /SCHEMA_VERSION = "2026-10-01\.1"/);
   assert.match(schema, /export const articles/);
   assert.match(schema, /export const articleAssets/);
   assert.match(schema, /export const articleVersions/);
@@ -2494,7 +2494,8 @@ test("gates the admin-only mirror page and keeps the private feed out of git", a
   assert.match(css, /\.mirror-a-card\.is-decision \.mirror-a-card-foot \{[^}]*padding-left: 42px/);
 
   assert.match(gitignore, /\/content\/mirror\//);
-  assert.match(packageJson, /"mirror:build": "node scripts\/build-mirror\.mjs"/);
+  assert.match(packageJson, /"cards:import": "node scripts\/cards-import-handbook\.mjs"/);
+  assert.doesNotMatch(packageJson, /"mirror:build"/);
   assert.match(worker, /url\.pathname === "\/mirror"/);
   assert.match(nav, /照照镜子/);
 
