@@ -135,4 +135,4 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.wechat-collector.syn
 | SSH 隧道 | ✅ 运行中 | localhost:3210 |
 | 每日选题自动化 | ✅ 已设置 | 每天 10:00，明天首跑 |
 | 飞书推送 | ✅ 已配置 | lark-cli → ou_e259415b8f68b3007c23920aa2f80ca2 |
-| 管理员账号 | admin / Xieyu120807!!! | xieyu, galaxyxieyu 也是 admin |
+| 管理员账号 | admin（密码不写进仓库） | xieyu, galaxyxieyu 也是 admin |
