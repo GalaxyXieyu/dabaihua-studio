@@ -1,5 +1,6 @@
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
+import type { CSSProperties } from "react";
 import { env } from "cloudflare:workers";
 import { getSessionUser } from "../../lib/auth";
 import { requestOrigin } from "../../lib/request-origin";
@@ -17,6 +18,7 @@ import {
   nearestReportInMonth,
   parseResultCards,
   previewText,
+  resultCardScale,
   selectDay,
   trendPoints,
   weekdayOf,
@@ -95,12 +97,17 @@ function Fold({ title, markdown }: { title: string; markdown: string }) {
 function ResultNumbers({ markdown, excludeValues }: { markdown: string; excludeValues: number[] }) {
   const { cards, rest } = parseResultCards(markdown, { excludeValues });
   if (cards.length === 0) return <MiniMarkdown text={markdown} />;
+  const scale = resultCardScale(cards);
   return (
     <div className="daily-a-results">
-      <div className="daily-a-result-grid">
+      <div
+        className="daily-a-result-grid"
+        data-count={cards.length}
+        style={{ "--result-scale": scale } as CSSProperties}
+      >
         {cards.map((card, index) => (
           <div key={`${index}-${card.value}`} className="daily-a-result-card">
-            <p className={`daily-a-result-value tabular-nums${card.value.length > 5 ? " is-long" : ""}`}>
+            <p className="daily-a-result-value tabular-nums">
               {card.value}
               {card.unit ? <span className="daily-a-result-unit">{card.unit}</span> : null}
             </p>

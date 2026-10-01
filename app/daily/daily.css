@@ -462,8 +462,20 @@ body:has(.daily-a) {
 .daily-a-result-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* 卡组共用同一个字号 clamp，长数值整体缩到能放下。 */
+  --result-value-size: clamp(15px, 4.6vw, 30px);
   border-top: 1px solid var(--line);
   border-left: 1px solid var(--line);
+}
+
+/* 列数跟卡片数走：只有一张时撑满，避免多出一个空格。 */
+.daily-a-result-grid[data-count="1"] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* 四张卡片列多、格子窄，字号收一些。 */
+.daily-a-result-grid[data-count="4"] {
+  --result-value-size: clamp(13px, 3.6vw, 26px);
 }
 
 .daily-a-result-card {
@@ -479,31 +491,21 @@ body:has(.daily-a) {
 .daily-a-result-value {
   margin: 0;
   font-family: var(--font-serif);
-  font-size: clamp(22px, 7.6vw, 38px);
+  font-size: calc(var(--result-value-size) * var(--result-scale, 1));
   font-weight: 700;
   line-height: 1.05;
   letter-spacing: -0.01em;
   white-space: nowrap;
 }
 
-/* 成对的增减行数（+11,342 / −525）比单个数字长，缩小一点并保持不换行。 */
-.daily-a-result-value.is-long {
-  font-size: clamp(12px, 3.8vw, 22px);
-  line-height: 1.25;
-}
-
 .daily-a-result-unit {
   margin-left: 4px;
   color: var(--accent);
   font-family: var(--font-sans);
-  font-size: 15px;
+  font-size: 0.44em;
   font-weight: 600;
   letter-spacing: 0.04em;
   white-space: nowrap;
-}
-
-.daily-a-result-value.is-long .daily-a-result-unit {
-  font-size: 11px;
 }
 
 /* 卡片下的列表：细线分隔的紧凑样式，和杂志风一致，不用圆点。 */
@@ -531,10 +533,12 @@ body:has(.daily-a) {
   content: "";
   position: absolute;
   left: 0;
-  top: 17px;
+  /* 短横标记跟第一行文字垂直居中，颜色跟正文统一用弱化色。 */
+  top: calc(10px + 0.825em);
+  transform: translateY(-50%);
   width: 6px;
   height: 1px;
-  background: var(--accent);
+  background: var(--muted);
 }
 
 /* 细分子列表缩进展示，不重复画分隔线。 */
@@ -809,12 +813,30 @@ body:has(.daily-a) {
   .daily-a-calendar-week.is-collapsed {
     display: none;
   }
+
+  /* 手机三张：第一张占满一行，后两张并排，不留空格。 */
+  .daily-a-result-grid[data-count="3"] .daily-a-result-card:first-child {
+    grid-column: 1 / -1;
+  }
 }
 
-/* ── 平板：结果卡片三列 ──────────────────────── */
+/* ── 平板：结果卡片列数跟卡片数走 ──────────────── */
 @media (min-width: 640px) {
   .daily-a-result-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    --result-cols: 2;
+    grid-template-columns: repeat(var(--result-cols), minmax(0, 1fr));
+  }
+
+  .daily-a-result-grid[data-count="1"] {
+    --result-cols: 1;
+  }
+
+  .daily-a-result-grid[data-count="3"] {
+    --result-cols: 3;
+  }
+
+  .daily-a-result-grid[data-count="4"] {
+    --result-cols: 4;
   }
 }
 
@@ -825,11 +847,6 @@ body:has(.daily-a) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     column-gap: 44px;
     align-items: start;
-  }
-
-  /* 桌面端结果卡片固定四列，单张卡片不会撑满整行。 */
-  .daily-a-result-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   /* 展开的条目跨两栏，另一栏不会被拉长留出大空洞。 */

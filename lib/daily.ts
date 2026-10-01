@@ -283,6 +283,27 @@ export function monthWeeks(days: DailyDay[], selected: string): CalendarWeek[] {
 
 export type DailyResultCard = { value: string; unit: string; label: string };
 
+/** 估算一段文字的相对宽度：中文按 1，西文数字按 0.55。 */
+function resultCharWidth(text: string): number {
+  let width = 0;
+  for (const ch of text) width += /[\u2E80-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF]/.test(ch) ? 1 : 0.55;
+  return width;
+}
+
+/** 结果卡片里数字的相对宽度，单位以小字号展示，按 0.45 折算。 */
+export function resultValueWidth(card: DailyResultCard): number {
+  return resultCharWidth(card.value) + (card.unit ? resultCharWidth(card.unit) * 0.45 : 0);
+}
+
+/**
+ * 结果卡片共用的字号缩放：由卡组里最长的一张决定，整组用同一个缩放值，
+ * 这样同一行（乃至整组）卡片的数字一样大，长的数值整体缩到能放下。
+ */
+export function resultCardScale(cards: DailyResultCard[], reference = 12): number {
+  const widest = Math.max(1, ...cards.map(resultValueWidth));
+  return Math.max(0.55, Math.min(1, reference / widest));
+}
+
 /** 说明太长（多半带细分子列表）时退回普通列表，避免把卡片撑成一块大豆腐。 */
 const RESULT_CARD_LABEL_MAX = 80;
 const RESULT_UNIT = "百万|亿|万|千|[MKk]|%|个|项|行|次|份|条|天|小时|分钟|秒|元|美元|刀";

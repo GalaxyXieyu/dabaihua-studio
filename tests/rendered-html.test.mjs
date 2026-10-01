@@ -4,7 +4,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { htmlToMarkdown } from "../lib/article.ts";
-import { compareToPrevious, firstSentence, formatFullDate, formatNumber, formatSigned, markdownPlainText, monthCells, monthWeeks, nearestReportInMonth, parseResultCards, previewText, selectDay, trendPoints, trendWindowLength, weekdayOf } from "../lib/daily.ts";
+import { compareToPrevious, firstSentence, formatFullDate, formatNumber, formatSigned, markdownPlainText, monthCells, monthWeeks, nearestReportInMonth, parseResultCards, previewText, resultCardScale, selectDay, trendPoints, trendWindowLength, weekdayOf } from "../lib/daily.ts";
 import { shapeResponse, summarizeResponses, validateBrief } from "../lib/daily-brief-core.ts";
 import { isPublicPath, loginRedirectLocation, loginRedirectResponse } from "../lib/login-gate.ts";
 import { HIDDEN_FROM_NAV, activeTabKey, primaryNavItems, sectionForPath, sectionTabs } from "../lib/site-nav.ts";
@@ -1306,19 +1306,26 @@ test("gates the admin-only daily page and keeps the private feed out of git", as
   assert.match(page, /parseResultCards/);
   assert.match(page, /daily-a-result-grid/);
   assert.match(page, /daily-a-fold-preview/);
-  // 卡片桌面 4 列、手机 2 列，长数值缩小且不换行，单张卡片不撑满整行。
-  assert.match(page, /is-long/);
+  // 卡片列数跟卡片数走，长数值整组同字号缩小且不换行，单张卡片不撑满整行。
+  assert.doesNotMatch(page, /is-long/);
+  assert.match(page, /resultCardScale/);
+  assert.match(page, /data-count/);
   assert.match(page, /excludeValues/);
-  assert.match(css, /\.daily-a-result-value\.is-long/);
   assert.match(css, /\.daily-a-result-value \{[^}]*white-space: nowrap/);
-  assert.match(css, /grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
-  assert.match(css, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /--result-value-size: clamp\(15px, 4\.6vw, 30px\)/);
+  assert.match(css, /font-size: calc\(var\(--result-value-size\) \* var\(--result-scale, 1\)\)/);
+  // 三张时第一张占满手机一行，平板/桌面按卡片数取列。
+  assert.match(css, /\.daily-a-result-grid\[data-count="3"\] \.daily-a-result-card:first-child/);
+  assert.match(css, /grid-template-columns: repeat\(var\(--result-cols\), minmax\(0, 1fr\)\)/);
+  assert.match(css, /\.daily-a-result-grid\[data-count="4"\] \{[^}]*--result-cols: 4/);
   // 网格不再用底色填充，避免多出来的格子看起来像占位块。
   assert.match(css, /\.daily-a-result-grid \{[^}]*border-top: 1px solid var\(--line\)/);
   assert.doesNotMatch(css, /\.daily-a-result-grid \{[^}]*background: var\(--line\)/);
-  // 卡片下的列表用细线分隔，不用圆点。
+  // 卡片下的列表用细线分隔，不用圆点；短横跟首行垂直居中、用弱化色。
   assert.match(page, /daily-a-results-rest/);
   assert.match(css, /\.daily-a-results-rest \.db-md > \.db-md-list > li/);
+  assert.match(css, /\.daily-a-results-rest \.db-md > \.db-md-list > li::before[^}]*translateY\(-50%\)/);
+  assert.match(css, /\.daily-a-results-rest \.db-md > \.db-md-list > li::before[^}]*background: var\(--muted\)/);
   // 手机端按仓库：数字不小于 12px，放到条形下方一行。
   assert.match(page, /daily-a-repo-track is-commits/);
   assert.match(css, /\.daily-a-repo-nums \{[^}]*font-size: 12px/);
@@ -1584,6 +1591,18 @@ test("turns result numbers into a few total cards and falls back to a list", () 
   const plain = parseResultCards("普通一段话");
   assert.deepEqual(plain.cards, []);
   assert.equal(plain.rest, "普通一段话");
+
+  // 结果卡片整组共用一个缩放：短数值不缩放，长数值整体缩小。
+  assert.equal(resultCardScale([{ value: "22", unit: "个", label: "x" }]), 1);
+  const longCards = [
+    { value: "22", unit: "个", label: "x" },
+    { value: "+11,342 / −525", unit: "行", label: "y" },
+    { value: "$312.55", unit: "", label: "z" },
+  ];
+  const sharedScale = resultCardScale(longCards);
+  assert.ok(sharedScale <= 1 && sharedScale >= 0.55);
+  const huge = resultCardScale([{ value: "+11,342,222 / −5,525,333", unit: "行", label: "x" }]);
+  assert.ok(huge < sharedScale);
 });
 
 test("classifies public paths for the site-wide login gate", () => {
