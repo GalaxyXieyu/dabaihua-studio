@@ -5,11 +5,11 @@ import { useEffect, useRef, useState } from "react";
 export type TrendPoint = { date: string; label: string; commits: number; tokensM: number | null };
 
 const H = 240;
-const SLOTS = 30;
-const PAD = { left: 44, right: 44, top: 72, bottom: 34 };
+const PAD = { left: 44, right: 44, top: 12, bottom: 34 };
 const MIN_W = 320;
 const DEFAULT_W = 720;
 const TOOLTIP_H = 76;
+const LABEL_MIN_GAP = 34;
 
 function formatToken(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return "—";
@@ -52,9 +52,10 @@ export function DailyTrend({ points, selected }: { points: TrendPoint[]; selecte
   const plotW = W - PAD.left - PAD.right;
   const plotH = H - PAD.top - PAD.bottom;
   const baseY = PAD.top + plotH;
-  const slots = Math.max(SLOTS, points.length);
+  // 柱子数量就是实际天数，日报少时也撑满整幅图，不留一大段空轴。
+  const slots = Math.max(1, points.length);
   const column = plotW / slots;
-  const barWidth = Math.max(2, column * 0.54);
+  const barWidth = Math.max(6, column * 0.54);
   const maxCommits = Math.max(1, ...points.map((point) => point.commits));
   const tokenValues = points
     .map((point) => point.tokensM)
@@ -89,6 +90,24 @@ export function DailyTrend({ points, selected }: { points: TrendPoint[]; selecte
   const tooltipLeft = Math.min(Math.max(hoverX, tooltipHalf), Math.max(tooltipHalf, W - tooltipHalf));
   const tooltipTop = Math.max(0, hoverTop - TOOLTIP_H - 8);
 
+  // 日期标签按可用宽度抽稀：保首尾、当前选中和固定间隔，窄屏也不重叠。
+  const labelBudget = Math.max(2, Math.floor(plotW / (narrow ? 40 : 52)));
+  const labelStep = Math.max(1, Math.ceil(points.length / labelBudget));
+  const showLabel = new Array<boolean>(points.length).fill(false);
+  const keptX: number[] = [];
+  const claimLabel = (index: number) => {
+    if (index < 0 || index >= points.length || showLabel[index]) return;
+    const x = dotX(index);
+    if (keptX.every((kept) => Math.abs(kept - x) >= LABEL_MIN_GAP)) {
+      showLabel[index] = true;
+      keptX.push(x);
+    }
+  };
+  claimLabel(points.length - 1);
+  claimLabel(points.findIndex((point) => point.date === selected));
+  claimLabel(0);
+  for (let index = 0; index < points.length; index += labelStep) claimLabel(index);
+
   return (
     <div className="daily-a-trend">
       <div className="daily-a-legend" aria-hidden="true">
@@ -100,7 +119,7 @@ export function DailyTrend({ points, selected }: { points: TrendPoint[]; selecte
         </span>
       </div>
       <div className="daily-a-trend-plot" ref={plotRef} onMouseLeave={() => setHover(null)}>
-        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="最近 30 天的提交数与 token 趋势">
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`最近 ${points.length} 天的提交数与 token 趋势`}>
           <line x1={PAD.left} y1={baseY} x2={W - PAD.right} y2={baseY} className="daily-a-axis" />
           <text x={PAD.left - 8} y={PAD.top + 4} textAnchor="end" className="daily-a-axis-label">
             {maxCommits}
@@ -140,7 +159,7 @@ export function DailyTrend({ points, selected }: { points: TrendPoint[]; selecte
                     onMouseEnter={() => setHover(index)}
                   />
                 </a>
-                {index === 0 || index === points.length - 1 || isSelected || (!narrow && index % 6 === 0) || (narrow && index % 7 === 0) ? (
+                {showLabel[index] ? (
                   <text x={x} y={H - 12} textAnchor="middle" className={`daily-a-axis-label ${isSelected ? "is-selected" : ""}`}>
                     {formatDay(point.date).replace(" 月 ", "/").replace(" 日", "")}
                   </text>

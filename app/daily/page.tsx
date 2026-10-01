@@ -7,14 +7,16 @@ import { loadDailyData } from "../../lib/daily-data";
 import {
   compareToPrevious,
   dateParts,
-  firstSentence,
+  FOLD_MIN_LENGTH,
   formatFullDate,
   formatMonthDay,
   formatNumber,
   formatSigned,
+  markdownPlainText,
   monthCells,
   nearestReportInMonth,
   parseResultCards,
+  previewText,
   selectDay,
   trendPoints,
   weekdayOf,
@@ -36,7 +38,18 @@ function caret() {
 }
 
 function WhatEntry({ entry }: { entry: DailyWhatEntry }) {
-  const preview = firstSentence(entry.body);
+  // 正文太短就不折叠，直接把全文铺出来。
+  if (markdownPlainText(entry.body).length < FOLD_MIN_LENGTH) {
+    return (
+      <div className="daily-a-what is-static">
+        <p className="daily-a-what-title">{entry.title}</p>
+        <div className="daily-a-what-body">
+          <MiniMarkdown text={entry.body} />
+        </div>
+      </div>
+    );
+  }
+  const preview = previewText(entry.body);
   return (
     <details className="daily-a-what">
       <summary className="daily-a-what-summary">
@@ -52,7 +65,18 @@ function WhatEntry({ entry }: { entry: DailyWhatEntry }) {
 }
 
 function Fold({ title, markdown }: { title: string; markdown: string }) {
-  const preview = firstSentence(markdown);
+  // 正文太短就不折叠，直接把全文铺出来。
+  if (markdownPlainText(markdown).length < FOLD_MIN_LENGTH) {
+    return (
+      <div className="daily-a-fold is-static">
+        <p className="daily-a-fold-title">{title}</p>
+        <div className="daily-a-fold-body">
+          <MiniMarkdown text={markdown} />
+        </div>
+      </div>
+    );
+  }
+  const preview = previewText(markdown);
   return (
     <details className="daily-a-fold">
       <summary className="daily-a-fold-summary">
@@ -169,10 +193,14 @@ export default async function DailyPage({ searchParams }: { searchParams: Promis
   const prevMonth = nearestReportInMonth(days, day.date, -1);
   const nextMonth = nearestReportInMonth(days, day.date, 1);
 
+  const trend = trendPoints(days, day.date);
+  const trendHeading = trend.length >= 30 ? "近 30 天" : `近 ${trend.length} 天`;
+
   const folds: Array<[string, string | null]> = [
     ["卡点和返工", day.sections.blockers],
     ["未完成", day.sections.unfinished],
     ["牵头和带人", day.sections.leading],
+    ["概览", day.sections.overview],
   ];
 
   return (
@@ -205,8 +233,8 @@ export default async function DailyPage({ searchParams }: { searchParams: Promis
         </section>
 
         <section className="daily-a-section">
-          <h2 className="daily-a-heading">近 30 天</h2>
-          <DailyTrend points={trendPoints(days, day.date)} selected={day.date} />
+          <h2 className="daily-a-heading">{trendHeading}</h2>
+          <DailyTrend points={trend} selected={day.date} />
         </section>
 
         {day.repoStats.length > 0 ? (
@@ -235,7 +263,7 @@ export default async function DailyPage({ searchParams }: { searchParams: Promis
                     />
                   </span>
                   <span className="daily-a-repo-nums tabular-nums">
-                    {stat.commits} 个 · {formatSigned(stat.additions)} / {formatSigned(-stat.deletions)}
+                    {formatNumber(stat.commits)} 个 · {formatSigned(stat.additions)} / {formatSigned(-stat.deletions)}
                   </span>
                 </div>
               ))}
@@ -266,12 +294,6 @@ export default async function DailyPage({ searchParams }: { searchParams: Promis
             <div className="daily-a-folds">
               {folds.map(([title, markdown]) => (markdown ? <Fold key={title} title={title} markdown={markdown} /> : null))}
             </div>
-          </section>
-        ) : null}
-
-        {day.sections.overview ? (
-          <section className="daily-a-section">
-            <Fold title="概览" markdown={day.sections.overview} />
           </section>
         ) : null}
 

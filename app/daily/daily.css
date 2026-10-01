@@ -1,6 +1,8 @@
 /* 方向 A：杂志风 日报页。所有选择器都挂在根类名 .daily-a 下。 */
 
 .daily-a {
+  /* 涨跌三色：涨用墨绿、跌用危险红、持平用灰且不加粗，三色能明显区分。 */
+  --daily-up: #2F6B4F;
   min-height: 100dvh;
   background: var(--canvas);
   color: var(--ink);
@@ -89,7 +91,7 @@ body:has(.daily-a) {
 }
 
 .daily-a-metric-delta.is-up {
-  color: var(--accent);
+  color: var(--daily-up);
 }
 
 .daily-a-metric-delta.is-down {
@@ -98,6 +100,7 @@ body:has(.daily-a) {
 
 .daily-a-metric-delta.is-flat {
   color: var(--muted);
+  font-weight: 500;
 }
 
 /* ── 分区 ────────────────────────────────────────────── */
@@ -371,14 +374,17 @@ body:has(.daily-a) {
 .daily-a-folds {
   display: grid;
   margin-top: 12px;
+  /* 卡点、未完成、牵头、概览共用一个容器，只用一条细线分隔。 */
+  border-top: 1px solid var(--line);
 }
 
 .daily-a-fold {
   border-bottom: 1px solid var(--line);
 }
 
-.daily-a-fold:first-child {
-  border-top: 1px solid var(--line);
+.daily-a-fold.is-static,
+.daily-a-what.is-static {
+  padding-top: 14px;
 }
 
 .daily-a-fold-title {
@@ -463,6 +469,8 @@ body:has(.daily-a) {
 
 .daily-a-result-card {
   padding: 18px 18px 16px;
+  display: flex;
+  flex-direction: column;
   background: var(--canvas);
 }
 
@@ -486,6 +494,7 @@ body:has(.daily-a) {
 
 .daily-a-result-label {
   margin: 10px 0 0;
+  flex: 1 1 auto;
   color: var(--muted);
   font-size: 13px;
   line-height: 1.65;
@@ -704,10 +713,6 @@ body:has(.daily-a) {
   .daily-a-result-value {
     font-size: 30px;
   }
-
-  .daily-a-calendar {
-    max-width: none;
-  }
 }
 
 /* ── 宽屏：杂志式两栏 ────────────────────────────── */
@@ -716,10 +721,11 @@ body:has(.daily-a) {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     column-gap: 44px;
+    align-items: start;
   }
 
-  .daily-a-calendar-head,
-  .daily-a-calendar {
-    max-width: 760px;
+  /* 展开的条目跨两栏，另一栏不会被拉长留出大空洞。 */
+  .daily-a-what[open] {
+    grid-column: 1 / -1;
   }
 }

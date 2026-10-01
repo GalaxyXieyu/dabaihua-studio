@@ -4,7 +4,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { htmlToMarkdown } from "../lib/article.ts";
-import { compareToPrevious, firstSentence, formatFullDate, monthCells, nearestReportInMonth, parseResultCards, selectDay, trendPoints, weekdayOf } from "../lib/daily.ts";
+import { compareToPrevious, firstSentence, formatFullDate, formatNumber, formatSigned, markdownPlainText, monthCells, nearestReportInMonth, parseResultCards, previewText, selectDay, trendPoints, trendWindowLength, weekdayOf } from "../lib/daily.ts";
 import { shapeResponse, summarizeResponses, validateBrief } from "../lib/daily-brief-core.ts";
 import { isPublicPath, loginRedirectLocation, loginRedirectResponse } from "../lib/login-gate.ts";
 import { HIDDEN_FROM_NAV, activeTabKey, primaryNavItems, sectionForPath, sectionTabs } from "../lib/site-nav.ts";
@@ -1312,6 +1312,25 @@ test("gates the admin-only daily page and keeps the private feed out of git", as
   assert.match(css, /\.daily-a-tooltip \{[^}]*z-index: 5/);
   assert.match(css, /@media \(min-width: 1024px\)/);
   assert.match(css, /\.daily-a/);
+  // 涨跌持平三色能区分，持平不加粗。
+  assert.match(css, /--daily-up:/);
+  assert.match(css, /\.daily-a-metric-delta\.is-up \{[^}]*color: var\(--daily-up\)/);
+  assert.match(css, /\.daily-a-metric-delta\.is-down \{[^}]*color: var\(--danger\)/);
+  assert.match(css, /\.daily-a-metric-delta\.is-flat \{[^}]*font-weight: 500/);
+  // 趋势图不再固定 30 格，日报少时撑开；柱子最小 6px。
+  assert.doesNotMatch(trend, /SLOTS/);
+  assert.match(trend, /Math\.max\(6, column \* 0\.54\)/);
+  assert.match(page, /trendHeading/);
+  // 折叠块共用一个容器，只用一条细线。
+  assert.match(css, /\.daily-a-folds \{[^}]*border-top: 1px solid var\(--line\)/);
+  assert.doesNotMatch(css, /\.daily-a-fold:first-child/);
+  assert.match(page, /markdownPlainText\([^)]*\)\.length < FOLD_MIN_LENGTH/);
+  assert.match(page, /previewText\(/);
+  // 两栏 + 展开跨栏，不留大空洞。
+  assert.match(css, /align-items: start/);
+  assert.match(css, /\.daily-a-what\[open\] \{[^}]*grid-column: 1 \/ -1/);
+  // 日历撑满内容区，不再被 760px 卡住。
+  assert.doesNotMatch(css, /max-width: 760px/);
   assert.match(gitignore, /\/content\/daily\//);
   assert.match(packageJson, /"daily:build": "node scripts\/build-daily\.mjs"/);
   assert.match(worker, /url\.pathname === "\/daily" \|\| url\.pathname\.startsWith\("\/daily\/"\)/);
@@ -1386,6 +1405,19 @@ test("formats daily dates, deltas, previews and the monthly calendar", () => {
   assert.equal(firstSentence("只有一句没有标点"), "只有一句没有标点");
   assert.equal(firstSentence("   "), "");
 
+  // 数字统一加千分位，单位小数位保留。
+  assert.equal(formatNumber(2734), "2,734");
+  assert.equal(formatNumber(325.8, 1), "325.8");
+  assert.equal(formatNumber(11342), "11,342");
+  assert.equal(formatSigned(2734), "+2,734");
+  assert.equal(formatSigned(-2734), "−2,734");
+  assert.equal(formatSigned(0), "0");
+
+  // 预览取正文前 40 个字；Markdown 记号先去掉。
+  assert.equal(markdownPlainText("- **第一句。**`code` 第二句。"), "第一句。code 第二句。");
+  assert.equal(previewText("短句"), "短句");
+  assert.equal(previewText("一二三四五六七八九十", 4), "一二三四…");
+
   const days = [
     { date: "2026-03-01", weekday: "周日", summary: "", commits: 7, repos: [], tokensM: 128.5, sections: { overview: null, what: [], blockers: null, results: null, leading: null, unfinished: null }, repoStats: [] },
     { date: "2026-03-02", weekday: "周一", summary: "", commits: 3, repos: [], tokensM: null, sections: { overview: null, what: [], blockers: null, results: null, leading: null, unfinished: null }, repoStats: [] },
@@ -1396,15 +1428,20 @@ test("formats daily dates, deltas, previews and the monthly calendar", () => {
   assert.equal(selectDay([], "2026-03-02"), null);
 
   const points = trendPoints(days, "2026-03-02");
-  assert.equal(points.length, 30);
+  // 日报跨度不足 7 天时补到 7 天，不再固定铺满 30 格。
+  assert.equal(points.length, 7);
   assert.equal(points.at(-1).date, "2026-03-02");
-  assert.equal(points[0].date, "2026-02-01");
+  assert.equal(points[0].date, "2026-02-24");
   const byDate = new Map(points.map((point) => [point.date, point]));
   assert.equal(byDate.get("2026-03-01").commits, 7);
   assert.equal(byDate.get("2026-03-01").tokensM, 128.5);
   assert.equal(byDate.get("2026-03-02").tokensM, null);
-  assert.equal(byDate.get("2026-02-15").commits, 0);
-  assert.equal(byDate.get("2026-02-15").tokensM, null);
+  assert.equal(byDate.get("2026-02-24").commits, 0);
+  assert.equal(byDate.get("2026-02-24").tokensM, null);
+
+  // 日报跨度超过 30 天时回落到最近 30 天。
+  assert.equal(trendWindowLength(days, "2026-03-02"), 7);
+  assert.equal(trendWindowLength(days, "2026-04-05"), 30);
 
   const cells = monthCells(days, "2026-03-02");
   assert.equal(cells.length, 6 + 31); // 周一开头，2026-03-01 是周日
@@ -1423,18 +1460,36 @@ test("turns result numbers into cards and falls back to a list", () => {
     "- 提交：topics-daily 统计 22 个（不含合并提交），+11,342 / −525 行。",
     "  - ai-native 16 个，+10,119 / −282。",
     "- AI token：325.80M，按 API 列表价估算 $312.55（不是实际花费）。",
+    "- 滴答：今天完成 3 项：",
+    "  - Windows 端测试（08:39）",
+    "  - 权限开通（08:39）",
+    "  - 工作日报 2026-09-30 占位（23:19）",
+    "- 自动化覆盖率 82%：本周把核心链路上线。",
     "- 今天没有数字可填。",
   ].join("\n"));
 
+  // 带长细分子列表的「提交」、顶部已有的大数字（提交 / token）都进普通列表。
   assert.equal(cards.length, 2);
-  assert.deepEqual(cards[0].value, "22");
-  assert.equal(cards[0].unit, "个");
-  assert.match(cards[0].label, /提交/);
-  assert.match(cards[0].label, /ai-native 16 个/);
-  assert.equal(cards[1].value, "325.80");
-  assert.equal(cards[1].unit, "M");
-  assert.match(cards[1].label, /AI token/);
+  assert.equal(cards[0].value, "3");
+  assert.equal(cards[0].unit, "项");
+  assert.match(cards[0].label, /滴答：今天完成/);
+  assert.match(cards[0].label, /Windows 端测试/);
+  assert.equal(cards[1].value, "82");
+  assert.equal(cards[1].unit, "%");
+  assert.equal(cards[1].label, "自动化覆盖率：本周把核心链路上线");
+  assert.match(rest, /提交/);
+  assert.match(rest, /token/);
   assert.match(rest, /今天没有数字可填/);
+  assert.doesNotMatch(rest, /滴答/);
+
+  // 单位保留原样；``+2734`` 这类数字补千分位。
+  const unit = parseResultCards("- 峰值 325.80M，按列表价估算。");
+  assert.equal(unit.cards[0].value, "325.80");
+  assert.equal(unit.cards[0].unit, "M");
+  assert.equal(unit.cards[0].label, "峰值，按列表价估算");
+  const grouped = parseResultCards("- 新增 11342 行代码。");
+  assert.equal(grouped.cards[0].value, "11,342");
+  assert.equal(grouped.cards[0].unit, "行");
 
   // 完全没有列表时原样返回。
   const plain = parseResultCards("普通一段话");
