@@ -170,7 +170,7 @@ export async function listCards(
   }
   const order = options.deleted === true
     ? "ORDER BY deleted_at DESC, id"
-    : `ORDER BY CASE category ${CATEGORIES.map((category, index) => `WHEN '${category}' THEN ${index}`).join(" ")} ELSE 99 END, created_at ASC, id ASC`;
+    : `ORDER BY CASE category ${CATEGORIES.map((category, index) => `WHEN '${category}' THEN ${index}`).join(" ")} ELSE 99 END, created_at DESC, id ASC`;
   const rows = await db.prepare(`SELECT * FROM cards WHERE ${clauses.join(" AND ")} ${order}`).bind(...params).all<Record<string, unknown>>();
   return (rows.results || []).map(rowToCard);
 }

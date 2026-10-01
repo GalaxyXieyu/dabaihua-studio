@@ -3,18 +3,14 @@ import { notFound, redirect } from "next/navigation";
 import { env } from "cloudflare:workers";
 import { getSessionUser } from "../../lib/auth";
 import { requestOrigin } from "../../lib/request-origin";
-import { loadMirrorData } from "../../lib/mirror-data";
-import {
-  computeStats,
-  entriesForTab,
-  formatMirrorDate,
-  mirrorTabCounts,
-  resolveMirrorTab,
-  tabKeyForCategory,
-} from "../../lib/mirror";
+import { listAllHistory, listCards } from "../../lib/cards";
+import { resolveMirrorTab } from "../../lib/mirror";
+import { ensureSchema } from "../../lib/store";
 import { SiteAppBar } from "../_components/SiteAppBar";
-import { MirrorDeck, type MirrorCardVariant } from "./_components/MirrorDeck";
+import { MirrorBoard } from "./_components/MirrorBoard";
+import type { Card, CardRevision } from "../../lib/cards-core";
 import "./mirror.css";
+import "./card-editing.css";
 
 export const dynamic = "force-dynamic";
 export const viewport = { width: "device-width", initialScale: 1 };
@@ -35,7 +31,9 @@ function EmptyState({ user }: { user: Awaited<ReturnType<typeof getSessionUser>>
         <div className="mirror-a-empty">
           <h2>还没有正本数据</h2>
           <p>
-            运行 <code>npm run mirror:build</code> 汇总本机正本后再刷新。
+            运行{" "}
+            <code>npm run cards:import -- --entries &lt;正本.jsonl&gt; --inbox &lt;收件箱.jsonl&gt;</code>{" "}
+            导入后刷新。
           </p>
         </div>
       </main>
@@ -43,8 +41,12 @@ function EmptyState({ user }: { user: Awaited<ReturnType<typeof getSessionUser>>
   );
 }
 
-export default async function MirrorPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
-  const { tab: requestedTab } = await searchParams;
+export default async function MirrorPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string; view?: string }>;
+}) {
+  const { tab: requestedTab, view } = await searchParams;
 
   const requestHeaders = await headers();
   const user = await getSessionUser(
@@ -59,73 +61,30 @@ export default async function MirrorPage({ searchParams }: { searchParams: Promi
   if (!user) redirect("/login?next=/mirror");
   if (user.role !== "admin") notFound();
 
-  const data = loadMirrorData();
-  if (!data || data.entries.length === 0) return <EmptyState user={user} />;
+  await ensureSchema(env.DB);
 
-  const stats = computeStats(data.entries, data.inbox, new Date(data.generatedAt));
-  const tab = resolveMirrorTab(requestedTab);
-  const entries = entriesForTab(data.entries, data.inbox, tab);
-  const counts = mirrorTabCounts(data.entries, data.inbox);
+  const [canonicalCards, deletedCards, historyMap] = await Promise.all([
+    listCards(env.DB, { kind: "mirror" }),
+    listCards(env.DB, { kind: "mirror", deleted: true }),
+    listAllHistory(env.DB, "mirror"),
+  ]);
 
-  // 「已被 H-xxx 取代」要跳到新卡，先记下每个条目属于哪个 tab。
-  const tabByEntryId: Record<string, string> = {};
-  for (const entry of data.entries) {
-    const key = tabKeyForCategory(entry.category);
-    if (key) tabByEntryId[entry.id] = key;
-  }
-  for (const entry of data.inbox) {
-    tabByEntryId[entry.id] = "inbox";
-  }
+  const cards: Card[] = [...canonicalCards, ...deletedCards];
+  if (cards.length === 0) return <EmptyState user={user} />;
+
+  // Map 不能直接传给客户端组件，序列化成普通对象。
+  const history: Record<string, CardRevision[]> = {};
+  for (const [id, revisions] of historyMap.entries()) history[id] = revisions;
 
   return (
     <div className="mirror-a">
       <SiteAppBar user={user} pathname="/mirror" />
-
-      <div className="mirror-a-masthead-wrap">
-        <header className="mirror-a-masthead">
-          <p className="page-kicker">成长 · 照照镜子</p>
-          <h1 className="page-title">照照镜子</h1>
-          <p className="page-sub">
-            共 {stats.entryCount} 条
-            {stats.latestDate ? ` · 最近更新 ${formatMirrorDate(stats.latestDate)}` : ""}
-          </p>
-        </header>
-        <div className="double-rule" />
-      </div>
-
-      <main className="mirror-a-main">
-        {/* 计数本身就是类型标签；标签是链接，无 JS 时服务端按 ?tab 直接渲染。 */}
-        <nav className="mirror-a-tabs" aria-label="按类型查看">
-          {counts.map((item) => {
-            const active = item.key === tab.key;
-            return (
-              <a
-                key={item.key}
-                className={`mirror-a-tab${active ? " is-active" : ""}${item.key === "inbox" ? " is-inbox" : ""}`}
-                href={`/mirror?tab=${item.key}`}
-                aria-current={active ? "page" : undefined}
-              >
-                <span className="mirror-a-tab-num">{item.count}</span>
-                <span className="mirror-a-tab-label">{item.label}</span>
-              </a>
-            );
-          })}
-        </nav>
-
-        <section className="mirror-a-deck-section">
-          <div className="mirror-a-deck-head">
-            <h2 className="mirror-a-heading">{tab.label}</h2>
-            <p className="mirror-a-deck-hint">
-              {tab.inbox ? "只用来展示，确认都在对话里做。" : `${entries.length} 条 · 左右滑动或点箭头`}
-            </p>
-          </div>
-          {entries.length > 0 ? (
-            <MirrorDeck entries={entries} variant={tab.key as MirrorCardVariant} tabByEntryId={tabByEntryId} />
-          ) : (
-            <p className="mirror-a-empty-line">这个类型还没有记录。</p>
-          )}
-        </section>
-      </main>
+      <MirrorBoard
+        initialCards={cards}
+        initialHistory={history}
+        initialTab={resolveMirrorTab(requestedTab).key}
+        initialView={view === "trash" ? "trash" : "deck"}
+      />
     </div>
   );
 }

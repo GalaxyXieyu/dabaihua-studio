@@ -19,7 +19,7 @@ import { decideReviewMode } from "../app/_components/review-mode.ts";
 import { PayloadTooLargeError, discardBody, isValidIsoWeek, publicBaseUrl, readBodyWithLimit, shanghaiIso } from "../lib/weekly.ts";
 import { parseDigestMarkdown, stripBodyHeader } from "../scripts/lib/topic-materials.mjs";
 import { buildMirrorData, parseJsonl } from "../scripts/build-mirror.mjs";
-import { MIRROR_TABS, categoryCounts, computeStats, decisionEntries, decisionScopes, entriesByCategory, entriesForTab, entryDate, entryOwnDate, formatMirrorDate, formatShortDate, mirrorTabCounts, monthlyTrend, preferenceGroups, resolveMirrorTab, sourceAgent, sourceLine } from "../lib/mirror.ts";
+import { MIRROR_TABS, cardsToMirrorEntries, categoryCounts, computeStats, decisionEntries, decisionScopes, entriesByCategory, entriesForTab, entryDate, entryOwnDate, formatMirrorDate, formatShortDate, isMirrorCanonical, isMirrorDeleted, isMirrorInbox, mirrorTabCounts, monthlyTrend, preferenceGroups, resolveMirrorTab, sourceAgent, sourceLine } from "../lib/mirror.ts";
 
 test("converts entity-escaped feed HTML before rendering Markdown", () => {
   const markdown = htmlToMarkdown('&lt;img src=&quot;https://cdn.example.com/cover.jpg&quot; alt=&quot;封面&quot;&gt;&lt;p&gt;&lt;strong&gt;最新文字&lt;/strong&gt;&lt;br&gt;正文&lt;/p&gt;');
@@ -2388,12 +2388,13 @@ test("groups mirror entries by category and scope and computes the masthead stat
 });
 
 test("gates the admin-only mirror page and keeps the private feed out of git", async () => {
-  const [page, deck, mirrorData, mirror, css, worker, gitignore, packageJson, nav] = await Promise.all([
+  const [page, board, deck, mirror, css, cardEditing, worker, gitignore, packageJson, nav] = await Promise.all([
     readFile(new URL("../app/mirror/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/mirror/_components/MirrorBoard.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/mirror/_components/MirrorDeck.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../lib/mirror-data.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/mirror.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/mirror/mirror.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/mirror/card-editing.css", import.meta.url), "utf8"),
     readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
     readFile(new URL("../.gitignore", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
@@ -2404,28 +2405,53 @@ test("gates the admin-only mirror page and keeps the private feed out of git", a
   assert.match(page, /redirect\("\/login\?next=\/mirror"\)/);
   assert.match(page, /if \(user\.role !== "admin"\) notFound\(\)/);
   assert.match(page, /robots:\s*\{ index: false, follow: false \}/);
-  assert.match(page, /loadMirrorData\(\)/);
-  assert.match(page, /还没有正本数据/);
   assert.match(page, /<SiteAppBar user=\{user\} pathname="\/mirror" \/>/);
-  // 页面只读汇总后的 json，不直接读仓库外的正本目录。
+  assert.match(page, /还没有正本数据/);
+  // 页面读库：ensureSchema + listCards / listAllHistory，不再读汇总 json。
+  assert.match(page, /await ensureSchema\(env\.DB\)/);
+  assert.match(page, /listCards\(env\.DB/);
+  assert.match(page, /listAllHistory\(env\.DB/);
+  assert.match(page, /<MirrorBoard/);
+  assert.match(page, /cards:import/);
+  assert.doesNotMatch(page, /mirror-data/);
+  assert.doesNotMatch(page, /loadMirrorData/);
+  assert.doesNotMatch(page, /mirror\.json/);
   assert.doesNotMatch(page, /workspace\/handbook/);
 
-  assert.match(mirrorData, /import\.meta\.glob\(/);
-  assert.match(mirrorData, /content\/mirror\/mirror\.json/);
-
-  // 类型标签是链接，服务端按 ?tab 渲染，无 JS 也能看。
-  assert.match(page, /Promise<\{ tab\?: string \}>/);
+  // 服务端仍按 ?tab / ?view=trash 渲染，标签还是链接（无 JS 也能看）。
+  assert.match(page, /Promise<\{ tab\?: string; view\?: string \}>/);
   assert.match(page, /resolveMirrorTab\(/);
-  assert.match(page, /mirrorTabCounts\(/);
-  assert.match(page, /entriesForTab\(/);
-  assert.match(page, /href=\{`\/mirror\?tab=\$\{item\.key\}`\}/);
-  assert.match(page, /<MirrorDeck /);
-  assert.match(page, /这个类型还没有记录/);
-  // 老的长列表分区已经拿掉，整页只剩一类卡片带。
+  assert.match(page, /view === "trash"/);
   assert.doesNotMatch(page, /mirror-a-profiles/);
   assert.doesNotMatch(page, /mirror-a-timeline/);
   assert.doesNotMatch(page, /mirror-a-inbox-item/);
   assert.doesNotMatch(page, /preferenceGroups\(/);
+
+  // 客户端板：写操作全走 /api/cards 并带 expectedVersion；切 tab 用 pushState，不整页刷新。
+  assert.match(board, /"use client"/);
+  assert.match(board, /\/api\/cards/);
+  assert.match(board, /expectedVersion/);
+  assert.match(board, /cardsToMirrorEntries\(/);
+  assert.match(board, /isMirrorCanonical\)/);
+  assert.match(board, /isMirrorInbox\)/);
+  assert.match(board, /isMirrorDeleted\)/);
+  assert.match(board, /history\.pushState\(/);
+  assert.match(board, /ce-acts/);
+  assert.match(board, /ce-action-sheet/);
+  assert.match(board, /ce-history/);
+  assert.match(board, /ce-supersede/);
+  assert.match(board, /ce-toast/);
+  assert.match(board, /ce-card-done/);
+  assert.match(board, /最近删除/);
+  assert.match(board, /先改再确认/);
+  assert.match(board, /替换为新版本/);
+  assert.match(board, /撤销/);
+  // 增删改查的动作齐了。
+  assert.match(board, /supersede/);
+  assert.match(board, /\/expire/);
+  assert.match(board, /restore/);
+  assert.match(board, /confirm/);
+  assert.match(board, /reject/);
 
   // 卡片带：scroll-snap、箭头、页码、键盘左右键、卡片内滚动、下方详情。
   assert.match(deck, /"use client"/);
@@ -2444,9 +2470,16 @@ test("gates the admin-only mirror page and keeps the private feed out of git", a
   assert.match(deck, /is-superseded/);
   assert.match(deck, /entry\.supersededBy/);
   assert.match(deck, /已被 \{target\} 取代/);
+  // 悬停操作条 + 已过期 + 手机长按 + 最近删除 + 收件箱确认。
+  assert.match(deck, /ce-has-acts/);
+  assert.match(deck, /ce-acts/);
+  assert.match(deck, /is-expired/);
+  assert.match(deck, /onPointerDown/);
+  assert.match(deck, /onLongPress/);
+  assert.match(deck, /ce-deleted/);
+  assert.match(deck, /ce-decide/);
   // 底部版本号点开在卡片下方看完整正文和历史。
   assert.match(deck, /mirror-a-card-version/);
-  assert.match(deck, /mirror-a-card-open|onClick=\{/);
   assert.match(deck, /onOpen\(entry\.id\)/);
   assert.match(deck, /scrollIntoView\(\{ block: "nearest"/);
   assert.match(deck, /mirror-a-detail-panel/);
@@ -2454,6 +2487,12 @@ test("gates the admin-only mirror page and keeps the private feed out of git", a
   assert.match(deck, /<MiniMarkdown/);
   assert.match(deck, /mirror-a-deck-note/);
 
+  // lib/mirror.ts：新的读库转换 + 分组，旧展示助手还在。
+  assert.match(mirror, /export function cardsToMirrorEntries/);
+  assert.match(mirror, /export function isMirrorCanonical/);
+  assert.match(mirror, /export function isMirrorInbox/);
+  assert.match(mirror, /export function isMirrorDeleted/);
+  assert.match(mirror, /revisionSummary/);
   assert.match(mirror, /export const MIRROR_TABS/);
   assert.match(mirror, /export function resolveMirrorTab/);
   assert.match(mirror, /export function mirrorTabCounts/);
@@ -2468,6 +2507,14 @@ test("gates the admin-only mirror page and keeps the private feed out of git", a
   assert.match(mirror, /export function formatShortDate/);
   assert.match(mirror, /export function sourceAgent/);
 
+  // card-editing.css：遮罩/动作单/提示条改成 fixed（整页覆盖，不受 .mirror-a 影响）。
+  assert.match(cardEditing, /\.ce-scrim \{[^}]*position:\s*fixed/);
+  assert.match(cardEditing, /\.ce-action-sheet \{[^}]*position:\s*fixed/);
+  assert.match(cardEditing, /\.ce-toast \{[^}]*position:\s*fixed/);
+  assert.match(cardEditing, /\.mirror-a-trash/);
+  assert.match(cardEditing, /\.mirror-a-deck-tools/);
+  assert.match(cardEditing, /\.mirror-a-tab\.is-dim \.mirror-a-tab-num/);
+
   // 杂志风：横向 scroll-snap、六种卡片 class、卡片高度跟内容走、无渐变无阴影。
   assert.match(css, /\.mirror-a/);
   assert.match(css, /scroll-snap-type: x mandatory/);
@@ -2481,16 +2528,15 @@ test("gates the admin-only mirror page and keeps the private feed out of git", a
   assert.match(css, /\.mirror-a-card\.is-adjustment/);
   assert.match(css, /\.mirror-a-card\.is-inbox/);
   assert.match(css, /\.mirror-a-card\.is-superseded/);
+  assert.match(css, /\.mirror-a-card\.is-expired/);
   assert.match(css, /var\(--accent\)/);
   assert.match(css, /var\(--font-serif\)/);
   assert.doesNotMatch(css, /gradient/);
   assert.doesNotMatch(css, /box-shadow/);
   assert.match(css, /@media \(max-width: 640px\)/);
-  // 手机一屏约 1.15 张，露出下一张边缘；类型标签改成一行横向滚动。
   assert.match(css, /flex: 0 0 86%/);
   assert.match(css, /overflow-x: auto/);
   assert.match(css, /\.mirror-a-tab \{[^}]*flex: 0 0 auto/);
-  // 决策卡底部左右内边距避开虚线撕口。
   assert.match(css, /\.mirror-a-card\.is-decision \.mirror-a-card-foot \{[^}]*padding-left: 42px/);
 
   assert.match(gitignore, /\/content\/mirror\//);
@@ -2529,4 +2575,103 @@ test("resolves mirror type tabs, counts and superseded links", () => {
   const oldPref = preference.find((entry) => entry.id === "H-PREF-20260901-01");
   assert.equal(oldPref.status, "已推翻");
   assert.equal(oldPref.supersededBy, "H-PREF-20260910-01");
+});
+
+function fakeCard(overrides = {}) {
+  return {
+    id: "H-PREF-20261001-01",
+    kind: "mirror",
+    version: 1,
+    category: "偏好",
+    title: "样例偏好：先写清单",
+    body: "开工前先列清单，再动手。",
+    scope: ["工作台"],
+    sources: [{ agent: "Yu", date: "2026-10-01", ref: "样例出处" }],
+    status: "有效",
+    confirmed_by: "Yu",
+    confirmed_at: "2026-10-01",
+    supersedes: [],
+    superseded_by: "",
+    review_after: "",
+    reason: "",
+    added_by: "Yu",
+    options: [],
+    owner: "",
+    recorded_at: "2026-10-01",
+    created_by: "Yu",
+    updated_by: "Yu",
+    created_at: "2026-10-01T00:00:00.000Z",
+    updated_at: "2026-10-01T00:00:00.000Z",
+    deleted_at: null,
+    deleted_by: null,
+    delete_reason: null,
+    ...overrides,
+  };
+}
+
+function fakeRevision(card, action, actor, overrides = {}) {
+  return {
+    card_id: card.id,
+    version: card.version,
+    action,
+    snapshot: card,
+    reason: "",
+    actor,
+    created_at: "2026-10-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+test("maps cards and revisions into mirror entries grouped by canonical / inbox / trash", () => {
+  const canonicalCard = fakeCard();
+  const inboxCard = fakeCard({
+    id: "H-DEC-20261001-01",
+    category: "决策",
+    status: "待确认",
+    confirmed_by: "",
+    confirmed_at: "",
+  });
+  const removedCard = fakeCard({
+    id: "H-METH-20261001-01",
+    category: "方法论",
+    deleted_at: "2026-10-02T04:00:00.000Z",
+    deleted_by: "Yu",
+    delete_reason: "",
+  });
+
+  const historyById = {
+    [canonicalCard.id]: [fakeRevision(canonicalCard, "add", "Yu")],
+    [inboxCard.id]: [fakeRevision(inboxCard, "add", "秃头")],
+    [removedCard.id]: [fakeRevision(removedCard, "delete", "Yu", { created_at: "2026-10-02T04:00:00.000Z" })],
+  };
+
+  const entries = cardsToMirrorEntries([canonicalCard, inboxCard, removedCard], historyById);
+  assert.equal(entries.length, 3);
+
+  const [canonical, inbox, removed] = entries;
+  // 正本：version 带过来，history 用 revisionSummary 生成一行小字。
+  assert.equal(canonical.version, 1);
+  assert.equal(canonical.deletedAt, "");
+  assert.equal(canonical.history.length, 1);
+  assert.equal(canonical.history[0].summary, "Yu 新增");
+  assert.equal(canonical.history[0].recordedAt, "2026-10-01");
+  assert.equal(canonical.history[0].action, "add");
+  assert.equal(canonical.history[0].actor, "Yu");
+  assert.equal(isMirrorCanonical(canonical), true);
+  assert.equal(isMirrorInbox(canonical), false);
+  assert.equal(isMirrorDeleted(canonical), false);
+
+  // 收件箱：待确认 + confirmed_at 为空。
+  assert.equal(isMirrorInbox(inbox), true);
+  assert.equal(isMirrorCanonical(inbox), false);
+  assert.equal(inbox.history[0].summary, "秃头 提出，待确认");
+
+  // 最近删除：只要 deleted_at 非空，删除人和时间带过来。
+  assert.equal(isMirrorDeleted(removed), true);
+  assert.equal(removed.deletedBy, "Yu");
+  assert.equal(removed.history[0].summary, "Yu 删除");
+
+  // historyById 也接受 Map（服务端 listAllHistory 的返回）。
+  const viaMap = cardsToMirrorEntries([canonicalCard], new Map([[canonicalCard.id, historyById[canonicalCard.id]]]));
+  assert.equal(viaMap[0].history.length, 1);
 });

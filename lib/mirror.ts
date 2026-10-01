@@ -1,13 +1,18 @@
 /**
- * 照照镜子页的纯数据类型与展示助手。数据来自 scripts/build-mirror.mjs 生成的
- * content/mirror/mirror.json（由 lib/mirror-data.ts 载入）。这里不引入任何
- * 运行时依赖，方便 node 的类型擦除测试直接 import。
+ * 照照镜子页的纯数据类型与展示助手。数据来自 D1 cards / card_revisions
+ * （lib/cards.ts 读取），cardsToMirrorEntries 负责把卡片转成页面形状。
+ * 这里不引入运行时依赖，方便 node 的类型擦除测试直接 import。
  */
+
+import { revisionSummary, shanghaiDate, type Card, type CardRevision } from "./cards-core.ts";
 
 export type MirrorSource = { agent: string; date: string; ref: string };
 
 export type MirrorHistoryItem = {
   version: number;
+  action: string;
+  actor: string;
+  summary: string;
   title: string;
   body: string;
   status: string;
@@ -35,8 +40,75 @@ export type MirrorEntry = {
   options: string[];
   owner: string;
   recordedAt: string;
+  version: number;
+  deletedAt: string;
+  deletedBy: string;
+  deleteReason: string;
   history: MirrorHistoryItem[];
 };
+
+/** 卡片 API 形状 → 页面条目；historyById 支持 Map（服务端）或普通对象（客户端 props）。 */
+export function cardsToMirrorEntries(
+  cards: Card[],
+  historyById: Map<string, CardRevision[]> | Record<string, CardRevision[]>,
+): MirrorEntry[] {
+  const lookup = (id: string): CardRevision[] => {
+    if (historyById instanceof Map) return historyById.get(id) || [];
+    return historyById[id] || [];
+  };
+  return cards.map((card) => ({
+    id: card.id,
+    category: card.category,
+    title: card.title,
+    body: card.body,
+    scope: card.scope || [],
+    sources: card.sources || [],
+    status: card.status,
+    confirmedBy: card.confirmed_by || "",
+    confirmedAt: card.confirmed_at || "",
+    decidedAt: card.confirmed_at || "",
+    supersedes: card.supersedes || [],
+    supersededBy: card.superseded_by || "",
+    reviewAfter: card.review_after || "",
+    reason: card.reason || "",
+    addedBy: card.added_by || "",
+    options: card.options || [],
+    owner: card.owner || "",
+    recordedAt: card.recorded_at || "",
+    version: card.version,
+    deletedAt: card.deleted_at || "",
+    deletedBy: card.deleted_by || "",
+    deleteReason: card.delete_reason || "",
+    history: lookup(card.id).map((revision) => ({
+      version: revision.version,
+      action: revision.action,
+      actor: revision.actor,
+      summary: revisionSummary(revision),
+      title: revision.snapshot.title,
+      body: revision.snapshot.body,
+      status: revision.snapshot.status,
+      reason: revision.reason || "",
+      // 上海日期：快照里的 recorded_at 优先，没有再从 created_at 换算。
+      recordedAt: revision.snapshot.recorded_at || (revision.created_at ? shanghaiDate(new Date(revision.created_at)) : ""),
+      supersededBy: revision.snapshot.superseded_by || "",
+    })),
+  }));
+}
+
+/** 进过正本且没被删除：正本 tab 的成员。 */
+export function isMirrorCanonical(entry: MirrorEntry): boolean {
+  return entry.deletedAt === "" && entry.status !== "待确认" && entry.confirmedAt !== "";
+}
+
+/** 收件箱（等你确认）：待确认且未删除。 */
+export function isMirrorInbox(entry: MirrorEntry): boolean {
+  return entry.deletedAt === "" && entry.status === "待确认";
+}
+
+/** 最近删除：只要 deleted_at 非空，不论状态。 */
+export function isMirrorDeleted(entry: MirrorEntry): boolean {
+  return entry.deletedAt !== "";
+}
 
 export type MirrorStats = {
   entryCount: number;

@@ -475,8 +475,30 @@ body:has(.mirror-a) {
 
 /* ── 等你确认：草稿卡，虚线边框 + 待确认标签 ─────────── */
 .mirror-a-card.is-inbox {
+  position: relative;
   background: var(--canvas);
   border: 1px dashed var(--line-strong);
+}
+
+/* ── 已过期：整卡灰下来，但仍留在页面上 ──────────────── */
+.mirror-a-card.is-expired .mirror-a-card-title,
+.mirror-a-card.is-expired .mirror-a-card-quote,
+.mirror-a-card.is-expired .mirror-a-card-aphorism,
+.mirror-a-card.is-expired .mirror-a-card-text,
+.mirror-a-card.is-expired .mirror-a-card-explain,
+.mirror-a-card.is-expired .mirror-a-card-date,
+.mirror-a-card.is-expired .mirror-a-card-index {
+  color: var(--faint);
+}
+
+.mirror-a-card.is-expired {
+  background: var(--canvas);
+  border-top-color: var(--line-strong);
+}
+
+.mirror-a-card.is-expired .mirror-a-card-body {
+  filter: grayscale(1);
+  opacity: 0.72;
 }
 
 .mirror-a-card.is-inbox .mirror-a-card-body > .mirror-a-tag {
