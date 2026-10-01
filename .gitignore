@@ -58,5 +58,8 @@ next-env.d.ts
 /.mcp.json
 /.codex/config.toml
 
+# topic-kb 的本地依赖（用 npm run kb:install 安装）
+/scripts/topic-kb/node_modules/
+
 # 职业私密数据，由 career-site/build_data.py 生成，只随 rsync 部署，不进公开仓库
 /content/career/career.json

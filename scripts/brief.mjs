@@ -2,10 +2,12 @@
 /**
  * brief.mjs — 每日选题简报命令行。
  *
- *   node scripts/brief.mjs push <file.json> [--base URL]
+ *   node scripts/brief.mjs validate <file.json>
+ *   node scripts/brief.mjs push <file.json> [--dry-run] [--base URL]
  *   node scripts/brief.mjs responses [--date D | --since ISO | --latest] [--json] [--base URL]
  *   node scripts/brief.mjs list
  *
+ * validate 与 push --dry-run 在本地校验，不联网、不需要 token。
  * 认证：DABAIHUA_API_KEY 优先；否则读 ~/.config/topics-cli/config.json 的 token。
  * base：--base > DABAIHUA_BASE_URL > config.endpoint > https://topic.aigalaxy.top。
  * 本脚本绝不打印 key。
@@ -18,7 +20,8 @@ function usage() {
   process.stdout.write(
     [
       "用法：",
-      "  node scripts/brief.mjs push <file.json> [--base URL]",
+      "  node scripts/brief.mjs validate <file.json>",
+      "  node scripts/brief.mjs push <file.json> [--dry-run] [--base URL]",
       "  node scripts/brief.mjs responses [--date D | --since ISO | --latest] [--json] [--base URL]",
       "  node scripts/brief.mjs list",
       "",
@@ -31,11 +34,43 @@ function parseArgs(argv) {
   const flags = {};
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === "--json" || arg === "--latest") flags[arg.slice(2)] = true;
+    if (arg === "--json" || arg === "--latest" || arg === "--dry-run") flags[arg.slice(2)] = true;
     else if (arg === "--base" || arg === "--date" || arg === "--since") flags[arg.slice(2)] = argv[(index += 1)];
     else positional.push(arg);
   }
   return { positional, flags };
+}
+
+async function cmdValidate(positional) {
+  const file = positional[0];
+  if (!file) throw new Error("用法：node scripts/brief.mjs validate <file.json>");
+  let buf;
+  try {
+    buf = readFileSync(file);
+  } catch (error) {
+    throw new Error(`读不了这个文件：${error.message}`);
+  }
+  const core = await import("../lib/daily-brief-core.ts");
+  if (buf.length > core.BRIEF_MAX_BYTES) {
+    process.stderr.write(`简报超过 ${core.BRIEF_MAX_BYTES} 字节上限（当前 ${buf.length}）\n`);
+    process.exitCode = 1;
+    return false;
+  }
+  let raw;
+  try {
+    raw = JSON.parse(buf.toString("utf8"));
+  } catch (error) {
+    throw new Error(`不是合法 JSON：${error.message}`);
+  }
+  const result = core.validateBrief(raw);
+  if (!result.ok) {
+    for (const error of result.errors) process.stderr.write(`${error}\n`);
+    process.exitCode = 1;
+    return false;
+  }
+  const ids = result.brief.topics.map((topic) => topic.id).join(", ");
+  process.stdout.write(`格式正确：${result.brief.date}，${result.brief.topics.length} 个选题（${ids}）\n`);
+  return true;
 }
 
 async function cmdPush(positional, flags, base, token) {
@@ -108,12 +143,31 @@ async function main() {
     return;
   }
   const { positional, flags } = parseArgs(argv);
+
+  // validate 与 push --dry-run 只做本地校验，不读 token、不联网。
+  if (command === "validate") {
+    await cmdValidate(positional);
+    return;
+  }
+
   const base = resolveBase(flags.base);
+
+  if (command === "push") {
+    if (flags["dry-run"]) {
+      await cmdValidate(positional);
+      process.stdout.write("dry-run：没有发送\n");
+      return;
+    }
+    const token = resolveKey();
+    if (!token) throw new Error("请设置 DABAIHUA_API_KEY 或先运行 topics login");
+    await cmdPush(positional, flags, base, token);
+    return;
+  }
+
   const token = resolveKey();
   if (!token) throw new Error("请设置 DABAIHUA_API_KEY 或先运行 topics login");
 
-  if (command === "push") await cmdPush(positional, flags, base, token);
-  else if (command === "responses") await cmdResponses(flags, base, token);
+  if (command === "responses") await cmdResponses(flags, base, token);
   else if (command === "list") await cmdList(base, token);
   else throw new Error(`未知命令：${command}`);
 }
