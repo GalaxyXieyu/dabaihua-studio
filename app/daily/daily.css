@@ -429,7 +429,7 @@ body:has(.daily-a) {
   border-top: 1px solid var(--line);
 }
 
-/* 结果卡片通栏放上面，下方结果列表和折叠块两栏；单边存在时自己占满整行。 */
+/* 结果列表和折叠块不再并排，统一通栏自上而下堆叠。 */
 .daily-a-pair {
   display: grid;
   gap: 20px;
@@ -911,60 +911,35 @@ body:has(.daily-a) {
   }
 }
 
-/* ── 宽屏：杂志式两栏 ────────────────────────────── */
+/* ── 桌面：只保留「趋势图 + 月历」一处并排，其余通栏单列 ── */
 @media (min-width: 1024px) {
-  .daily-a-whats {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 44px;
-    align-items: start;
-  }
-
-  /* 展开的条目跨两栏，另一栏不会被拉长留出大空洞。 */
-  .daily-a-what[open] {
-    grid-column: 1 / -1;
-  }
-
-  /* 「结果数字」和折叠块并排，压缩纵向长度；单边存在时自己占满整行。 */
-  .daily-a-pair {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 44px;
-    align-items: start;
-  }
-
-  .daily-a-pair > .daily-a-pair-col:only-child {
-    grid-column: 1 / -1;
-  }
-}
-
-/* ── 宽屏：月历进右侧窄栏，页面少一屏半 ────────── */
-@media (min-width: 1200px) {
   .daily-a-body {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 300px;
     column-gap: 40px;
-    align-items: start;
+    /* 同一行的两块等高对齐，月历不再是贯穿全页的 sticky 右栏。 */
+    align-items: stretch;
   }
 
-  /* 趋势和仓库排在左栏，月历独占右侧窄栏；下面两节通栏，不跟着被压窄。 */
-  .daily-a-body > .daily-a-section {
+  /* 第一行只有趋势图和月历。 */
+  .daily-a-body > .is-trend {
     grid-column: 1;
+    grid-row: 1;
   }
 
+  .daily-a-rail {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  /* 其余分区一律通栏，从并排行下面自上而下单列排。 */
+  .daily-a-body > .is-repos,
   .daily-a-body > .is-what,
   .daily-a-body > .is-pair {
     grid-column: 1 / -1;
   }
 
-  .daily-a-rail {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-    align-self: start;
-    position: sticky;
-    top: 24px;
-  }
-
-  /* 窄栏里把格子和间距收一点，整月仍能一眼看完。 */
+  /* 右侧窄栏里把格子和间距收一点，整月仍能一眼看完。 */
   .daily-a-calendar {
     gap: 3px;
   }

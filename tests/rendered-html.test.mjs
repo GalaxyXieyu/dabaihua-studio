@@ -1367,22 +1367,25 @@ test("gates the admin-only daily page and keeps the private feed out of git", as
   // 折叠块不再被 nowrap 预览撑破（手机 320/360/390 无横向溢出）。
   assert.match(css, /\.daily-a-folds,[^}]*min-width: 0/);
   assert.match(css, /\.daily-a-fold,[\s\S]*?min-width: 0/);
-  // 桌面：结果卡片通栏放上面，下面结果列表和折叠块两栏。
+  // 桌面：结果卡片通栏放上面，结果列表和折叠块不再并排，一律单列往下。
   assert.match(page, /daily-a-pair/);
   assert.match(page, /ResultCardGrid/);
-  assert.match(css, /\.daily-a-pair \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
-  assert.match(css, /\.daily-a-pair > \.daily-a-pair-col:only-child \{[^}]*grid-column: 1 \/ -1/);
+  assert.doesNotMatch(css, /\.daily-a-pair \{[^}]*grid-template-columns/);
   // 3 张就一行 3 列，字号整组统一。
   assert.match(css, /\.daily-a-result-grid\[data-count="3"\] \{[^}]*--result-cols: 3/);
   assert.match(css, /\.daily-a-result-grid\[data-count="4"\] \{[^}]*--result-cols: 4/);
   assert.doesNotMatch(css, /--result-value-size: clamp\(14px/);
-  // 宽屏月历进右侧窄栏；手机仍收起空周。
+  // 桌面只保留一处并排：趋势图在左、月历在右，同一行等高；其余分区通栏单列。
   assert.match(page, /daily-a-rail/);
   assert.match(css, /\.daily-a-body \{[^}]*grid-template-columns: minmax\(0, 1fr\) 300px/);
-  assert.match(css, /@media \(min-width: 1200px\)/);
-  // 两栏 + 展开跨栏，不留大空洞。
-  assert.match(css, /align-items: start/);
-  assert.match(css, /\.daily-a-what\[open\] \{[^}]*grid-column: 1 \/ -1/);
+  assert.match(css, /@media \(min-width: 1024px\)/);
+  assert.match(css, /\.daily-a-body > \.is-trend \{[^}]*grid-row: 1/);
+  assert.match(css, /\.daily-a-rail \{[^}]*grid-row: 1/);
+  assert.match(css, /\.daily-a-body > \.is-repos,[\s\S]*?\.daily-a-body > \.is-pair \{[^}]*grid-column: 1 \/ -1/);
+  // 「做了什么」不再并排两栏，展开项也不再跨栏。
+  assert.doesNotMatch(css, /\.daily-a-whats \{[^}]*grid-template-columns/);
+  // 月历不再贯穿全页 sticky 右栏。
+  assert.doesNotMatch(css, /position: sticky/);
   // 日历撑满内容区，不再被 760px 卡住。
   assert.doesNotMatch(css, /max-width: 760px/);
   assert.match(gitignore, /\/content\/daily\//);
