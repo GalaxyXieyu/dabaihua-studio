@@ -24,7 +24,13 @@
     "publish:draft": "node scripts/publish-draft.mjs",
     "publish-review": "node scripts/publish-review.mjs",
     "brief": "node scripts/brief.mjs",
-    "materials": "node scripts/materials.mjs"
+    "materials": "node scripts/materials.mjs",
+    "kb:install": "npm --prefix scripts/topic-kb install",
+    "kb:ingest": "node --no-warnings scripts/topic-kb/ingest.mjs",
+    "kb:related": "node --no-warnings scripts/topic-kb/related.mjs",
+    "kb:merge": "node --no-warnings scripts/topic-kb/merge.mjs",
+    "kb:brief": "node --no-warnings scripts/topic-kb/to-brief.mjs",
+    "topics:daily": "node --no-warnings scripts/topic-kb/daily.mjs"
   },
   "dependencies": {
     "@fontsource-variable/newsreader": "^5.3.0",

@@ -14,17 +14,20 @@
  *   npm run digest            # 或: node scripts/daily-ai-digest.mjs [flags]
  *
  * flags：--date YYYY-MM-DD  --refresh  --force  --dry-run  --no-board  --no-push
+ *        --no-kb（或 DIGEST_KB_INGEST=0，跳过知识库入库）
  *        --no-summaries（或 DIGEST_SUMMARIES=0，跳过正文抓取与摘要）
  *        --out <path>（把 markdown 写到指定路径，便于试跑）
  *        --resummarize（忽略摘要缓存，强制重算）
  *
  * 环境变量：OPENCODE_API_KEY（可选，缺失时读本机密钥库）、DIGEST_MODEL、PI_BIN、
  *          DIGEST_OUT_DIR、DIGEST_D1_PATH、GITHUB_TOKEN（可选）、DIGEST_SUMMARIES、
+ *          DIGEST_VENDOR_CAP、DIGEST_KB_INGEST=0（关闭知识库入库）、
  *          DIGEST_PUSH_MATERIALS=0（关闭素材推送）、DABAIHUA_API_KEY / DABAIHUA_BASE_URL。
  * 注意：本脚本不会打印任何密钥或完整环境变量。
  */
 
 import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync, existsSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
@@ -50,6 +53,8 @@ import {
   SUMMARY_CONCURRENCY,
 } from "./lib/digest-fetch.mjs";
 import { runPi, loadPiKey, resolveModel } from "./lib/digest-pi.mjs";
+import { VENDOR_CAP, vendorOf, capByVendor } from "./lib/vendor.mjs";
+import { archiveCandidates } from "./lib/candidates-archive.mjs";
 import { resolveBase, resolveKey } from "./lib/dabaihua-api.mjs";
 import { pushDate } from "./materials.mjs";
 
@@ -422,6 +427,7 @@ function buildPrompt(materials) {
     '{"items":[{"id":"M12","title":"中文标题","summary":"2-3句中文干货摘要，说清楚是什么、为什么对企业重要","tag":"Agent|RAG|企业落地|AI Native|工具|模型"}],',
     ' "topics":[{"title":"公众号选题标题（大白话、有钩子）","core":"核心观点（一两句判断）","case":"贯穿全文的一个案例","benefit":"读者收益","refs":["M12","M3"]}]}',
     "要求：items 6-10 条，topics 3-5 个；refs 只能使用上面列表里出现过的编号；不要编造任何编号或链接。",
+    `同一家厂商（按链接域名算，GitHub 按仓库账号算）items 最多 ${VENDOR_CAP} 条。`,
     "",
     "素材列表：",
     ...lines,
@@ -459,6 +465,19 @@ function sanitizeText(value, allowedUrls) {
   )).replace(/\s{2,}/g, " ").trim();
 }
 
+function applyVendorCap(items, byId) {
+  return capByVendor(items, (item) => {
+    const material = byId.get(String(item?.id || ""));
+    return material ? vendorOf(material.url, material.source) : "";
+  });
+}
+
+function reportDropped(prefix, dropped) {
+  if (!dropped.length) return;
+  const detail = dropped.map(({ item, vendor }) => `${item?.id}(${vendor})`).join("、");
+  warn(`${prefix}厂商上限（每家最多 ${VENDOR_CAP} 条）截掉：${detail}`);
+}
+
 function validateResult(result, materials) {
   const byId = new Map(materials.map((m) => [m.id, m]));
   const allowedUrls = new Set(materials.map((m) => normalizeUrl(m.url)));
@@ -474,6 +493,10 @@ function validateResult(result, materials) {
     });
     if (items.length >= 10) break;
   }
+  // 同一家厂商每天最多 VENDOR_CAP 条，超出的按原顺序截掉。
+  const capped = applyVendorCap(items, byId);
+  reportDropped("", capped.dropped);
+  capped.kept.sort((a, b) => materials.findIndex((m) => m.id === a.id) - materials.findIndex((m) => m.id === b.id));
   const topics = [];
   for (const topic of Array.isArray(result.topics) ? result.topics : []) {
     const refs = (Array.isArray(topic?.refs) ? topic.refs : [])
@@ -489,8 +512,7 @@ function validateResult(result, materials) {
     });
     if (topics.length >= 5) break;
   }
-  items.sort((a, b) => materials.findIndex((m) => m.id === a.id) - materials.findIndex((m) => m.id === b.id));
-  return { items, topics };
+  return { items: capped.kept, topics };
 }
 
 // ---------- 正文摘要 ----------
@@ -788,7 +810,7 @@ function writeCache(outDir, date, payload) {
 function parseArgs(argv) {
   const options = {
     date: "", refresh: false, force: false, dryRun: false, noBoard: false,
-    noSummaries: false, out: "", resummarize: false, noPush: false,
+    noSummaries: false, out: "", resummarize: false, noPush: false, noKb: false,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -803,6 +825,7 @@ function parseArgs(argv) {
     else if (arg === "--dry-run") options.dryRun = true;
     else if (arg === "--no-board") options.noBoard = true;
     else if (arg === "--no-push") options.noPush = true;
+    else if (arg === "--no-kb") options.noKb = true;
     else if (arg === "--no-summaries") options.noSummaries = true;
     else if (arg === "--resummarize") options.resummarize = true;
     else if (arg !== "") warn(`忽略未知参数：${arg}`);
@@ -815,6 +838,27 @@ function parseArgs(argv) {
 
 function elapsedSeconds(startedAt) {
   return Math.round((Date.now() - startedAt) / 1000);
+}
+
+/** digest 结束后自动把当天素材入本地知识库；失败只 warn，不影响退出码。 */
+function runKbIngest(date) {
+  const transformers = path.join(REPO_ROOT, "scripts/topic-kb/node_modules/@huggingface/transformers");
+  if (!existsSync(transformers)) {
+    warn("未安装 topic-kb 依赖，跳过知识库入库；先运行 npm run kb:install");
+    return;
+  }
+  const script = path.join(REPO_ROOT, "scripts/topic-kb/ingest.mjs");
+  try {
+    const child = spawnSync(process.execPath, ["--no-warnings", script, "--until", date], {
+      stdio: ["ignore", "inherit", "inherit"],
+      timeout: 10 * 60 * 1000,
+    });
+    if (child.error) warn(`知识库入库失败：${child.error.message}`);
+    else if (child.status !== 0) warn(`知识库入库退出码 ${child.status}`);
+    else log("知识库入库完成");
+  } catch (error) {
+    warn(`知识库入库失败：${error.message}`);
+  }
 }
 
 // ---------- 主流程 ----------
@@ -838,6 +882,19 @@ async function main() {
     result = cached.llmResult;
     stats = cached.stats || { counts: {}, failed: [] };
     log("命中当日缓存，跳过抓取与 LLM");
+    // 缓存是旧规则下生成的，这里再按厂商上限过一遍。
+    const byId = new Map(materials.map((m) => [m.id, m]));
+    const capped = applyVendorCap(result.items, byId);
+    reportDropped("", capped.dropped);
+    result = { ...result, items: capped.kept };
+    if (!options.dryRun) {
+      try {
+        // 用缓存里的生成时间，重复跑同一天不会在 runs 里多记一次
+        archiveCandidates(outDir, date, { materials, llmResult: result, stats, generatedAt: cached.generatedAt || generatedAt });
+      } catch (error) {
+        warn(`候选归档失败：${error.message}`);
+      }
+    }
   } else {
     if (!loadPiKey()) {
       log("错误：未找到 OPENCODE_API_KEY（环境变量或 /home/box/agent-data/box-secrets.json 的 card.OPENCODE_API_KEY），无法调用 pi。");
@@ -857,7 +914,14 @@ async function main() {
     if (result.items.length < 6) warn(`有效干货仅 ${result.items.length} 条（少于 6）`);
     if (result.topics.length < 3) warn(`有效选题仅 ${result.topics.length} 个（少于 3）`);
     log(`校验后：干货 ${result.items.length} 条，选题 ${result.topics.length} 个`);
-    if (!options.dryRun) writeCache(outDir, date, { materials, llmResult: result, stats, generatedAt });
+    if (!options.dryRun) {
+      writeCache(outDir, date, { materials, llmResult: result, stats, generatedAt });
+      try {
+        archiveCandidates(outDir, date, { materials, llmResult: result, stats, generatedAt });
+      } catch (error) {
+        warn(`候选归档失败：${error.message}`);
+      }
+    }
   }
 
   let summaries = null;
@@ -912,6 +976,11 @@ async function main() {
         warn(`选题板写入失败（markdown 已保留）：${error.message}`);
       }
     }
+  }
+
+  if (!options.noKb && process.env.DIGEST_KB_INGEST !== "0" && !options.dryRun) {
+    log("开始把当天素材入库 topic-kb……");
+    runKbIngest(date);
   }
 
   if (!options.noPush && process.env.DIGEST_PUSH_MATERIALS !== "0") {

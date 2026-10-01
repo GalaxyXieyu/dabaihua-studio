@@ -1,0 +1,14 @@
+{
+  "name": "dabaihua-topic-kb",
+  "private": true,
+  "type": "module",
+  "description": "选题素材知识库（SQLite FTS5 + 本地嵌入 + 实体共现），供每日选题流程使用",
+  "scripts": {
+    "ingest": "node --no-warnings ingest.mjs",
+    "related": "node --no-warnings related.mjs",
+    "merge": "node --no-warnings merge.mjs"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "4.3.0"
+  }
+}
