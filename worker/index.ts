@@ -64,7 +64,7 @@ const worker = {
     }
 
     const response = secure(await handler.fetch(request, env, ctx));
-    if (url.pathname === "/career" || url.pathname.startsWith("/career/")) {
+    if (url.pathname === "/career" || url.pathname.startsWith("/career/") || url.pathname === "/daily" || url.pathname.startsWith("/daily/")) {
       const noindexed = new Response(response.body, response);
       noindexed.headers.set("x-robots-tag", "noindex, nofollow");
       noindexed.headers.set("cache-control", "private, no-store");

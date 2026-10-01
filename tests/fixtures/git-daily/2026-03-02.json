@@ -1,0 +1,12 @@
+{
+  "schema": "git-daily-json/1",
+  "date": "2026-03-02",
+  "stats": {
+    "by_repo": { "alpha-app": { "total": 3, "noise": 0, "net": 3 } }
+  },
+  "commits": [
+    { "repo": "alpha-app", "noise": false, "additions": 120, "deletions": 30 },
+    { "repo": "alpha-app", "noise": false, "additions": 60, "deletions": 5 },
+    { "repo": "alpha-app", "noise": false, "additions": 30, "deletions": 5 }
+  ]
+}

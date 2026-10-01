@@ -60,3 +60,6 @@ next-env.d.ts
 
 # 职业私密数据，由 career-site/build_data.py 生成，只随 rsync 部署，不进公开仓库
 /content/career/career.json
+
+# 日报私密数据，由 scripts/build-daily.mjs 生成，只本机构建时读取，不进公开仓库
+/content/daily/

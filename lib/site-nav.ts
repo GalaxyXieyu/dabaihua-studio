@@ -24,6 +24,7 @@ const BRIEF_TAB: NavItem = { key: "brief", label: "选题简报", href: "/topics
 
 const GROWTH_TABS: NavItem[] = [
   { key: "weekly", label: "周报", href: "/weekly" },
+  { key: "daily", label: "日报", href: "/daily" },
   { key: "career", label: "职业", href: "/career" },
 ];
 
@@ -64,7 +65,7 @@ export function sectionForPath(pathname: string): NavSection | null {
   ) {
     return "content";
   }
-  if (hasPrefix(pathname, "/weekly") || hasPrefix(pathname, "/career")) return "growth";
+  if (hasPrefix(pathname, "/weekly") || hasPrefix(pathname, "/daily") || hasPrefix(pathname, "/career")) return "growth";
   return null;
 }
 
@@ -75,6 +76,7 @@ export function activeTabKey(pathname: string): string | null {
   if (hasPrefix(pathname, "/articles") || hasPrefix(pathname, "/review")) return "articles";
   if (hasPrefix(pathname, "/strategy")) return "strategy";
   if (hasPrefix(pathname, "/weekly")) return "weekly";
+  if (hasPrefix(pathname, "/daily")) return "daily";
   if (hasPrefix(pathname, "/career")) return "career";
   return null;
 }

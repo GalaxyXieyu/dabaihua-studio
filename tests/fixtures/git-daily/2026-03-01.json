@@ -1,0 +1,30 @@
+{
+  "schema": "git-daily-json/1",
+  "date": "2026-03-01",
+  "tz": "Asia/Shanghai",
+  "generated_at": "2026-03-02T00:10:00+08:00",
+  "stats": {
+    "total": 8,
+    "noise": 1,
+    "net": 7,
+    "by_repo": {
+      "alpha-app": { "total": 6, "noise": 1, "net": 5 },
+      "beta-svc": { "total": 2, "noise": 0, "net": 2 }
+    },
+    "by_noise_reason": { "merge": 1 },
+    "additions": 830,
+    "deletions": 140,
+    "net_additions": 820,
+    "net_deletions": 134
+  },
+  "commits": [
+    { "repo": "alpha-app", "noise": false, "additions": 300, "deletions": 40 },
+    { "repo": "alpha-app", "noise": false, "additions": 200, "deletions": 30 },
+    { "repo": "alpha-app", "noise": false, "additions": 150, "deletions": 20 },
+    { "repo": "alpha-app", "noise": false, "additions": 100, "deletions": 10 },
+    { "repo": "alpha-app", "noise": false, "additions": 50, "deletions": 20 },
+    { "repo": "alpha-app", "noise": true, "noise_reason": "merge", "additions": 10, "deletions": 6 },
+    { "repo": "beta-svc", "noise": false, "additions": 15, "deletions": 10 },
+    { "repo": "beta-svc", "noise": false, "additions": 5, "deletions": 4 }
+  ]
+}

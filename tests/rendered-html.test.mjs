@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import { readFile, readdir } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { htmlToMarkdown } from "../lib/article.ts";
+import { compareToPrevious, firstSentence, formatFullDate, monthCells, nearestReportInMonth, selectDay, trendPoints, weekdayOf } from "../lib/daily.ts";
 import { shapeResponse, summarizeResponses, validateBrief } from "../lib/daily-brief-core.ts";
 import { isPublicPath, loginRedirectLocation, loginRedirectResponse } from "../lib/login-gate.ts";
 import { HIDDEN_FROM_NAV, activeTabKey, primaryNavItems, sectionForPath, sectionTabs } from "../lib/site-nav.ts";
@@ -1254,6 +1256,126 @@ test("gates the admin-only career page and keeps raw result fields out of the da
   }
 });
 
+test("gates the admin-only daily page and keeps the private feed out of git", async () => {
+  const [page, worker, dailyData, gitignore, packageJson, trend, css] = await Promise.all([
+    readFile(new URL("../app/daily/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/daily-data.ts", import.meta.url), "utf8"),
+    readFile(new URL("../.gitignore", import.meta.url), "utf8"),
+    readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../app/daily/_components/DailyTrend.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/daily/daily.css", import.meta.url), "utf8"),
+  ]);
+
+  // 未登录跳登录页；已登录非管理员 404。
+  assert.match(page, /redirect\("\/login\?next=\/daily"\)/);
+  assert.match(page, /if \(user\.role !== "admin"\) notFound\(\)/);
+  assert.match(page, /robots:\s*\{ index: false, follow: false \}/);
+  assert.match(page, /loadDailyData\(\)/);
+  assert.match(page, /还没有日报数据/);
+  assert.match(page, /<SiteAppBar user=\{user\} pathname="\/daily" \/>/);
+  // 日期选择走 URL 参数，默认最新一天。
+  assert.match(page, /Promise<\{ date\?: string \}>/);
+  assert.match(page, /selectDay\(days, requested\)/);
+  assert.match(page, /\?date=/);
+  // 页面只读汇总后的 json，不直接读仓库外的日报目录。
+  assert.doesNotMatch(page, /workspace\/(daily|career)/);
+
+  assert.match(dailyData, /import\.meta\.glob\(/);
+  assert.match(dailyData, /content\/daily\/daily\.json/);
+  assert.match(trend, /"use client"/);
+  assert.match(trend, /<svg/);
+  assert.match(trend, /<polyline/);
+  assert.match(css, /\.daily-a/);
+  assert.match(gitignore, /\/content\/daily\//);
+  assert.match(packageJson, /"daily:build": "node scripts\/build-daily\.mjs"/);
+  assert.match(worker, /url\.pathname === "\/daily" \|\| url\.pathname\.startsWith\("\/daily\/"\)/);
+});
+
+test("summarizes sample daily markdown and git commits for /daily", async () => {
+  const { parseFrontMatter, parseDailyMarkdown, summarizeCommitRepos, buildDailyData } = await import("../scripts/build-daily.mjs");
+  const fixturesDir = new URL("../tests/fixtures/", import.meta.url);
+  const dailyDir = fileURLToPath(new URL("daily/", fixturesDir));
+  const gitDailyDir = fileURLToPath(new URL("git-daily/", fixturesDir));
+
+  const text = await readFile(new URL("daily/2026-03-01.md", fixturesDir), "utf8");
+  const { fields } = parseFrontMatter(text);
+  assert.equal(fields.date, "2026-03-01");
+  assert.equal(fields.tokens_m, "128.5");
+
+  const day = parseDailyMarkdown(text, "2026-03-01.md");
+  assert.equal(day.date, "2026-03-01");
+  assert.equal(day.weekday, "周日");
+  assert.equal(day.commits, 7);
+  assert.deepEqual(day.repos, ["alpha-app", "beta-svc"]);
+  assert.equal(day.tokensM, 128.5);
+  assert.equal(day.sections.what.length, 2);
+  assert.equal(day.sections.what[0].title, "1. 同步链路重做（上午）");
+  assert.match(day.sections.what[0].body, /按游标续传/);
+  assert.match(day.sections.blockers, /回退后改成追加写/);
+  assert.match(day.sections.results, /\+820/);
+  assert.match(day.sections.leading, /带小张/);
+  assert.match(day.sections.unfinished, /灰度开关还没接完/);
+
+  // 缺失的小节是 null，tokens_m 允许为 null。
+  const sparse = parseDailyMarkdown(await readFile(new URL("daily/2026-03-02.md", fixturesDir), "utf8"), "2026-03-02.md");
+  assert.equal(sparse.tokensM, null);
+  assert.equal(sparse.sections.blockers, null);
+  assert.equal(sparse.sections.leading, null);
+  assert.equal(sparse.sections.unfinished, null);
+
+  // git 明细只算非噪声提交。
+  const gitJson = JSON.parse(await readFile(new URL("git-daily/2026-03-01.json", fixturesDir), "utf8"));
+  const repos = summarizeCommitRepos(gitJson);
+  assert.deepEqual(repos, [
+    { repo: "alpha-app", commits: 5, additions: 800, deletions: 120 },
+    { repo: "beta-svc", commits: 2, additions: 20, deletions: 14 },
+  ]);
+
+  // 整体汇总：跳过 *.partial 和 backup-* 目录，按日期升序。
+  const data = buildDailyData({ dailyDir, gitDailyDir });
+  assert.deepEqual(data.days.map((item) => item.date), ["2026-03-01", "2026-03-02"]);
+  assert.equal(data.days[0].repoStats.length, 2);
+  assert.equal(data.days[1].tokensM, null);
+  assert.equal(data.days[1].repoStats[0].commits, 3);
+});
+
+test("formats daily dates, deltas, previews and the monthly calendar", () => {
+  assert.equal(weekdayOf("2026-03-01"), "周日");
+  assert.equal(formatFullDate("2026-03-01"), "2026 年 3 月 1 日");
+  assert.deepEqual(compareToPrevious(10, 7), { text: "↑3", direction: "up" });
+  assert.deepEqual(compareToPrevious(7, 10), { text: "↓3", direction: "down" });
+  assert.deepEqual(compareToPrevious(7, 7), { text: "持平", direction: "flat" });
+  assert.equal(compareToPrevious(7, null), null);
+  assert.equal(compareToPrevious(null, 7), null);
+  assert.deepEqual(compareToPrevious(10.5, 10, 1), { text: "↑0.5", direction: "up" });
+
+  assert.equal(firstSentence("- **第一句。**第二句。"), "第一句。");
+  assert.equal(firstSentence("只有一句没有标点"), "只有一句没有标点");
+  assert.equal(firstSentence("   "), "");
+
+  const days = [
+    { date: "2026-03-01", weekday: "周日", summary: "", commits: 7, repos: [], tokensM: 128.5, sections: { overview: null, what: [], blockers: null, results: null, leading: null, unfinished: null }, repoStats: [] },
+    { date: "2026-03-02", weekday: "周一", summary: "", commits: 3, repos: [], tokensM: null, sections: { overview: null, what: [], blockers: null, results: null, leading: null, unfinished: null }, repoStats: [] },
+    { date: "2026-04-05", weekday: "周日", summary: "", commits: 9, repos: [], tokensM: 50, sections: { overview: null, what: [], blockers: null, results: null, leading: null, unfinished: null }, repoStats: [] },
+  ];
+  assert.equal(selectDay(days, "2026-03-02").date, "2026-03-02");
+  assert.equal(selectDay(days, "2026-03-09").date, "2026-04-05");
+  assert.equal(selectDay([], "2026-03-02"), null);
+
+  const points = trendPoints(days, "2026-03-02");
+  assert.deepEqual(points.map((point) => point.date), ["2026-03-01", "2026-03-02"]);
+  assert.equal(points[1].tokensM, null);
+
+  const cells = monthCells(days, "2026-03-02");
+  assert.equal(cells.length, 6 + 31); // 周一开头，2026-03-01 是周日
+  assert.equal(cells[6].date, "2026-03-01");
+  assert.equal(cells[7].date, "2026-03-02");
+  assert.equal(cells[8], null);
+  assert.equal(nearestReportInMonth(days, "2026-03-02", 1), "2026-04-05");
+  assert.equal(nearestReportInMonth(days, "2026-03-02", -1), null);
+});
+
 test("classifies public paths for the site-wide login gate", () => {
   for (const pathname of [
     "/login",
@@ -1290,6 +1412,7 @@ test("classifies public paths for the site-wide login gate", () => {
     "/profile",
     "/weekly",
     "/weekly/2026-W39/",
+    "/daily",
     "/career",
     "/loginx",
     "/apix",
@@ -1346,7 +1469,7 @@ test("configures section tabs by section and role", () => {
   assert.deepEqual(sectionTabs("content", "admin").map((item) => item.href), ["/topics/daily", "/discover", "/topics", "/articles", "/strategy"]);
   assert.deepEqual(sectionTabs("content", "admin").map((item) => item.label), ["选题简报", "阅读", "选题", "文章", "策略"]);
   assert.equal(JSON.stringify(sectionTabs("content", "user")).includes("/topics/daily"), false);
-  assert.deepEqual(sectionTabs("growth", "admin").map((item) => item.label), ["周报", "职业"]);
+  assert.deepEqual(sectionTabs("growth", "admin").map((item) => item.label), ["周报", "日报", "职业"]);
   assert.deepEqual(sectionTabs("growth", "user"), []);
   assert.deepEqual(sectionTabs("growth", null), []);
   assert.deepEqual(sectionTabs("today", "admin"), []);
@@ -1357,7 +1480,7 @@ test("maps paths to navigation sections and active tabs", () => {
   for (const pathname of ["/reading", "/discover", "/topics", "/topics/daily", "/articles", "/articles/hello", "/review/1", "/strategy", "/annotations", "/leaderboard"]) {
     assert.equal(sectionForPath(pathname), "content", `${pathname} should be content`);
   }
-  for (const pathname of ["/weekly", "/weekly/2026-W39/", "/career"]) {
+  for (const pathname of ["/weekly", "/weekly/2026-W39/", "/daily", "/career"]) {
     assert.equal(sectionForPath(pathname), "growth", `${pathname} should be growth`);
   }
   for (const pathname of ["/profile", "/login"]) {
@@ -1372,6 +1495,7 @@ test("maps paths to navigation sections and active tabs", () => {
   assert.equal(activeTabKey("/review/1"), "articles");
   assert.equal(activeTabKey("/strategy"), "strategy");
   assert.equal(activeTabKey("/weekly/2026-W39/"), "weekly");
+  assert.equal(activeTabKey("/daily"), "daily");
   assert.equal(activeTabKey("/career"), "career");
   assert.equal(activeTabKey("/profile"), null);
 
@@ -1379,13 +1503,14 @@ test("maps paths to navigation sections and active tabs", () => {
 });
 
 test("mounts the shared site app bar on every content and growth subpage", async () => {
-  const [appBar, userMenu, topics, strategy, articles, weekly, career, articleDetail, review, styles] = await Promise.all([
+  const [appBar, userMenu, topics, strategy, articles, weekly, daily, career, articleDetail, review, styles] = await Promise.all([
     readFile(new URL("../app/_components/SiteAppBar.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/_components/SiteUserMenu.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/topics/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/strategy/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/articles/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/weekly/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/daily/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/career/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/articles/[slug]/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/review/[id]/page.tsx", import.meta.url), "utf8"),
@@ -1409,6 +1534,7 @@ test("mounts the shared site app bar on every content and growth subpage", async
     [strategy, "/strategy"],
     [articles, "/articles"],
     [weekly, "/weekly"],
+    [daily, "/daily"],
     [career, "/career"],
   ];
   for (const [page, pathname] of pages) {

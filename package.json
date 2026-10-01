@@ -16,6 +16,7 @@
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "digest": "node scripts/daily-ai-digest.mjs",
+    "daily:build": "node scripts/build-daily.mjs",
     "draft": "node scripts/draft-article.mjs",
     "articles:sync": "node scripts/sync-articles.mjs",
     "articles:watch": "node scripts/sync-articles.mjs --watch",
