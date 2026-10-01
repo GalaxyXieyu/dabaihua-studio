@@ -119,53 +119,48 @@ export function firstSentence(markdown: string): string {
 
 const CN_PUNCT = "，。；：、！？…—·「」『』（）《》〈〉【】“”‘’";
 
-function isCjkChar(ch: string): boolean {
-  return /[\u3400-\u9fff\uf900-\ufaff]/.test(ch);
-}
-
 function isWordChar(ch: string): boolean {
   return /[0-9A-Za-z_-]/.test(ch);
 }
 
-/** 这个位置能不能当预览截断点：空格、中文标点或中文字符边界，不能落在单词/路径/数字中间。 */
-function canBreakPreview(text: string, index: number): boolean {
+/** 优先截断点：空格或中文标点。中文长句优先断在这些位置，不切在词中间。 */
+function isPreferredBreak(text: string, index: number): boolean {
   if (index <= 0 || index >= text.length) return true;
   const prev = text[index - 1];
   const next = text[index];
   if (/\s/.test(prev) || /\s/.test(next)) return true;
+  return CN_PUNCT.includes(prev) || CN_PUNCT.includes(next);
+}
+
+/** 没有标点/空格时的兜底：这个位置不能把英文单词、路径或数字截成两半。 */
+function isWordSafeBreak(text: string, index: number): boolean {
+  if (index <= 0 || index >= text.length) return true;
+  const prev = text[index - 1];
+  const next = text[index];
   // 千分位、小数点、时间里的冒号都不是边界，避免把 11,342 / 23:33 截成两半。
   if (/[,.:：]/.test(prev) && /\d/.test(next) && index >= 2 && /\d/.test(text[index - 2])) return false;
-  if (isCjkChar(prev) || isCjkChar(next)) return true;
-  if (CN_PUNCT.includes(prev) || CN_PUNCT.includes(next)) return true;
-  if (prev === "/" || next === "/" || prev === "／" || next === "／") return true;
   // 两边都是英文/数字/下划线，说明截在单词或路径中间。
   if (isWordChar(prev) && isWordChar(next)) return false;
   return true;
 }
 
+/** 找不到标点/空格时，硬截断的目标长度（约 36 字）。 */
+const PREVIEW_FALLBACK = 36;
+
 /**
- * 折叠条目的预览：正文前约 `limit` 个字，回退到最近的空格、中文标点或中文字符边界，
- * 尽量让预览落在 30–44 字之间，避免把英文单词、路径或数字截成两半。
+ * 折叠条目的预览：正文前约 `limit` 个字。中文优先回退到最近的空格或中文标点，
+ * 找不到就在约 36 字处截断，且不把英文单词、路径或数字截成两半，宁可短一点。
  */
 export function previewText(markdown: string | null | undefined, limit = 40): string {
   const text = markdownPlainText(markdown);
   if (text.length <= limit) return text;
-  let cut = limit;
+  // 1. 优先回退到中文标点或空格。
   for (let index = limit; index >= 1; index -= 1) {
-    if (canBreakPreview(text, index)) {
-      cut = index;
-      break;
-    }
+    if (isPreferredBreak(text, index)) return `${text.slice(0, index).trimEnd()}…`;
   }
-  // 回退太多（长单词/长路径）时，再往后找一个更接近 40 字的边界。
-  if (cut < Math.min(30, limit)) {
-    for (let index = limit + 1; index <= Math.min(limit + 4, text.length); index += 1) {
-      if (canBreakPreview(text, index)) {
-        cut = index;
-        break;
-      }
-    }
-  }
+  // 2. 通篇没有标点/空格（长中文串、长路径）：约 36 字处截断，退到不切开单词的位置。
+  let cut = Math.min(PREVIEW_FALLBACK, limit, text.length);
+  while (cut > 1 && !isWordSafeBreak(text, cut)) cut -= 1;
   return `${text.slice(0, cut).trimEnd()}…`;
 }
 
@@ -353,12 +348,53 @@ function resultStatFromClause(clause: string): { value: string; unit: string; la
   return { value: groupThousands(match[1]), unit, label: cleanResultLabel(`${before}${after}`) };
 }
 
+/** 结果卡片只保留这几类「总量」，每类最多一张，总量之外的分到卡片下方列表。 */
+const RESULT_KIND_ORDER = ["commits", "lines", "tokens", "cost"] as const;
+type ResultCardKind = (typeof RESULT_KIND_ORDER)[number];
+const RESULT_MAX_CARDS = RESULT_KIND_ORDER.length;
+
+/** 「前一天是…」「较前一日…」这类对比说明不做卡片。 */
+const RESULT_COMPARE_RE = /(前一天|前一日|昨日|昨天|较前|环比|同比|相比|对比)/;
+/** 只有明确写着 token/总量的才算「token 总量」，其余 M 值是按工具的拆分。 */
+const RESULT_TOKEN_TOTAL_RE = /(token|令牌|总量|总计|合计|全部|所有)/i;
+/** 按工具拆分的 token（Cursor/Codex/CodeBuddy 等）不做卡片。 */
+const RESULT_TOOL_RE = /(cursor|codex|codebuddy|code buddy|claude|copilot|gemini|windsurf|cline|aider|continue|qwen|deepseek|kimi|chatgpt|gpt-?\d+|\bpi\b|mac\s*mini)/i;
+const RESULT_TOKEN_UNIT_RE = /^(M|K|k|百万|亿|万|千)$/;
+
+/** 判断一张卡片属于哪类总量；不属于（工具拆分、对比说明、普通计数）返回 null。 */
+function resultCardKind(unit: string, value: string, label: string): ResultCardKind | null {
+  if (RESULT_COMPARE_RE.test(label)) return null;
+  if (/^[¥$€£]/.test(value) || /(花费|成本|费用|价格|估价|估算|美元|美金|人民币)/.test(label)) return "cost";
+  if (unit === "行") return "lines";
+  if (RESULT_TOKEN_UNIT_RE.test(unit) || /(token|令牌)/i.test(label)) {
+    if (RESULT_TOOL_RE.test(label)) return null;
+    if (!RESULT_TOKEN_TOTAL_RE.test(label) && !RESULT_TOKEN_UNIT_RE.test(unit)) return null;
+    return "tokens";
+  }
+  if (/(提交|commit)/i.test(label)) return "commits";
+  return null;
+}
+
+/** 取出数值里的第一个数字，用于和顶部大数字去重。 */
+function statNumericValue(value: string): number | null {
+  const match = /[+\-−]?\d[\d,]*(?:\.\d+)?/.exec(value);
+  if (!match) return null;
+  const parsed = Number(match[0].replace(/,/g, "").replace("−", "-"));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 /**
- * 把「结果数字」那节拆成数字卡片：每条顶层条目按标点切句，凡是有「数字 + 单位 + 短说明」
- * 的都做一张小卡片（和顶部大数字重复也保留，因为口径不同）；说明超过 80 字、没有单位
- * 或没有说明的句子落到卡片下方的列表。nested 缩进通常是细分子列表，原样留在列表里。
+ * 把「结果数字」那节拆成数字卡片：每条顶层条目按标点切句，只把「提交数、改动行、token 总量、
+ * 花费」这类总量做成卡片，每类最多一张、总共最多 4 张；按工具拆分的 token、「前一天是…」
+ * 这类对比说明、以及和顶部大数字完全相同的数值都落到卡片下方的列表。说明超过 80 字、
+ * 没有单位或没有说明的句子同样留在列表。nested 缩进通常是细分子列表，原样留在列表里。
  */
-export function parseResultCards(markdown: string | null | undefined): { cards: DailyResultCard[]; rest: string } {
+export function parseResultCards(
+  markdown: string | null | undefined,
+  options: { excludeValues?: number[]; maxCards?: number } = {},
+): { cards: DailyResultCard[]; rest: string } {
+  const maxCards = options.maxCards ?? RESULT_MAX_CARDS;
+  const excludeValues = (options.excludeValues ?? []).filter((value) => Number.isFinite(value));
   const lines = String(markdown ?? "").replace(/\r\n?/g, "\n").split("\n");
   type Item = { own: string; nested: string[]; raw: string[] };
   const items: Item[] = [];
@@ -389,6 +425,7 @@ export function parseResultCards(markdown: string | null | undefined): { cards: 
   if (items.length === 0) return { cards: [], rest: markdown ?? "" };
 
   const cards: DailyResultCard[] = [];
+  const usedKinds = new Set<ResultCardKind>();
   const restBlocks: string[][] = [];
   for (const item of items) {
     const itemCards: DailyResultCard[] = [];
@@ -404,10 +441,21 @@ export function parseResultCards(markdown: string | null | undefined): { cards: 
       }
       const base = stat.label || (stat.unit === "行" ? "改动行" : "");
       const label = prefix && itemCards.length === 0 && base ? `${prefix} · ${base}` : base;
-      if (!label || label.length > RESULT_CARD_LABEL_MAX) {
+      const kind = label && label.length <= RESULT_CARD_LABEL_MAX ? resultCardKind(stat.unit, stat.value, label) : null;
+      const numeric = statNumericValue(stat.value);
+      const duplicated = numeric != null && excludeValues.some((value) => Math.abs(value - numeric) < 1e-9);
+      if (
+        !label ||
+        label.length > RESULT_CARD_LABEL_MAX ||
+        !kind ||
+        usedKinds.has(kind) ||
+        cards.length + itemCards.length >= maxCards ||
+        duplicated
+      ) {
         leftovers.push(clause);
         continue;
       }
+      usedKinds.add(kind);
       itemCards.push({ value: stat.value, unit: stat.unit, label });
       if (prefix && itemCards.length === 1) prefix = "";
     }

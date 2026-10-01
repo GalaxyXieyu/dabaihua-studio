@@ -1306,11 +1306,19 @@ test("gates the admin-only daily page and keeps the private feed out of git", as
   assert.match(page, /parseResultCards/);
   assert.match(page, /daily-a-result-grid/);
   assert.match(page, /daily-a-fold-preview/);
-  // 卡片桌面 4 列、手机 2 列，长数值缩小，单张卡片不撑满整行。
+  // 卡片桌面 4 列、手机 2 列，长数值缩小且不换行，单张卡片不撑满整行。
   assert.match(page, /is-long/);
+  assert.match(page, /excludeValues/);
   assert.match(css, /\.daily-a-result-value\.is-long/);
+  assert.match(css, /\.daily-a-result-value \{[^}]*white-space: nowrap/);
   assert.match(css, /grid-template-columns: repeat\(4, minmax\(0, 1fr\)\)/);
   assert.match(css, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
+  // 网格不再用底色填充，避免多出来的格子看起来像占位块。
+  assert.match(css, /\.daily-a-result-grid \{[^}]*border-top: 1px solid var\(--line\)/);
+  assert.doesNotMatch(css, /\.daily-a-result-grid \{[^}]*background: var\(--line\)/);
+  // 卡片下的列表用细线分隔，不用圆点。
+  assert.match(page, /daily-a-results-rest/);
+  assert.match(css, /\.daily-a-results-rest \.db-md > \.db-md-list > li/);
   // 手机端按仓库：数字不小于 12px，放到条形下方一行。
   assert.match(page, /daily-a-repo-track is-commits/);
   assert.match(css, /\.daily-a-repo-nums \{[^}]*font-size: 12px/);
@@ -1440,6 +1448,11 @@ test("formats daily dates, deltas, previews and the monthly calendar", () => {
   const pathCut = previewText("自绘更新进度窗（56b10a1c，0.0.29）和安装器共用 exe/resources");
   assert.ok(!/resour…$/.test(pathCut), pathCut);
   assert.ok(pathCut.endsWith("/…") || pathCut.endsWith("…"), pathCut);
+  // 中文优先断在标点或空格，不把路径/英文单词切一半。
+  assert.equal(pathCut, "自绘更新进度窗（56b10a1c，0.0.29）和安装器共用…");
+  const hardCut = previewText("这是一个没有标点也没有空格的很长的中文句子用来测试兜底截断的行为看看能不能在三十六字左右停下");
+  assert.ok(hardCut.length <= 38, hardCut);
+  assert.ok(!hardCut.includes(" "), hardCut);
   // 千分位/小数点/时间里的数字不拆开。
   assert.equal(previewText("金额 11,342 元，实际 3.14 倍，时间 23:33 完成。", 20).includes("11,…"), false);
 
@@ -1505,11 +1518,12 @@ test("formats daily dates, deltas, previews and the monthly calendar", () => {
   assert.equal(nearestReportInMonth(days, "2026-03-02", -1), null);
 });
 
-test("turns result numbers into cards and falls back to a list", () => {
+test("turns result numbers into a few total cards and falls back to a list", () => {
   const { cards, rest } = parseResultCards([
     "- 提交：topics-daily 统计 22 个（不含合并提交），+11,342 / −525 行。",
-    "  - ai-native 16 个，+10,119 / −282。其中 2 个是 23:27 的 stash 备份，另有 2 个是同一改动在两个分支各提交一次（docReader 修复、忽略打包产物）。",
-    "- AI token：325.80M，按 API 列表价估算 $312.55（不是实际花费）。",
+    "  - ai-native 16 个，+10,119 / −282。其中 2 个是 23:27 的 stash 备份（054b98a6、43fc5192），另有 2 个是同一改动在两个分支各提交一次（docReader 修复、忽略打包产物）。",
+    "- 去掉 stash 和重复后，实际改动 18 个提交，+3,957 / −520 行。",
+    "- AI token：325.80M，按 API 列表价估算 $312.55（不是实际花费，截至 23:33）。Cursor 281.05M，Codex 34.55M，CodeBuddy 10.19M，Mac mini 上的 pi 0。前一天是 858.84M。",
     "- 滴答：今天完成 3 项：",
     "  - Windows 端测试（08:39）",
     "  - 权限开通（08:39）",
@@ -1517,10 +1531,10 @@ test("turns result numbers into cards and falls back to a list", () => {
     "- 今天没有数字可填。",
   ].join("\n"));
 
-  // 提交数、增减行数、token、花费都做成卡片（不再因为和顶部大数字重复被过滤）。
-  assert.equal(cards.length, 6);
-  const commits = cards.find((card) => card.value === "22");
-  assert.equal(commits.unit, "个");
+  // 只保留「提交数、改动行、token 总量、花费」四类总量，每类最多一张、最多 4 张。
+  assert.equal(cards.length, 4);
+  const commits = cards.find((card) => card.unit === "个");
+  assert.equal(commits.value, "22");
   assert.match(commits.label, /提交：topics-daily 统计/);
   const lines = cards.find((card) => card.unit === "行");
   assert.equal(lines.value, "+11,342 / −525");
@@ -1531,15 +1545,24 @@ test("turns result numbers into cards and falls back to a list", () => {
   const cost = cards.find((card) => card.value === "$312.55");
   assert.equal(cost.unit, "");
   assert.match(cost.label, /按 API 列表价估算/);
-  assert.equal(cards.find((card) => card.value === "3").unit, "项");
-  assert.equal(cards.find((card) => card.value === "82").unit, "%");
 
-  // 细分子列表和没有数字的句子落到卡片下方的列表。
+  // 工具拆分的 token、重复口径的提交/行数、对比说明都落到卡片下的列表。
+  assert.doesNotMatch(rest, /325\.80M/);
+  assert.match(rest, /Cursor 281\.05M/);
+  assert.match(rest, /CodeBuddy 10\.19M/);
+  assert.match(rest, /前一天是 858\.84M/);
   assert.match(rest, /ai-native/);
+  assert.match(rest, /去掉 stash/);
   assert.match(rest, /Windows 端测试/);
   assert.match(rest, /今天没有数字可填/);
-  assert.doesNotMatch(rest, /滴答/);
+  assert.match(rest, /滴答/);
   assert.doesNotMatch(rest, /提交：topics-daily/);
+
+  // 和顶部大数字完全相同的数值（18 vs 顶部 18、325.80M vs 顶部 325.8）不再重复做卡片。
+  const deduped = parseResultCards("- 提交 18 个。\n- AI token：325.80M。", { excludeValues: [18, 325.8] });
+  assert.deepEqual(deduped.cards, []);
+  assert.match(deduped.rest, /提交 18 个/);
+  assert.match(deduped.rest, /325\.80M/);
 
   // 单位保留原样；数字补千分位。
   const unit = parseResultCards("- 峰值 325.80M，按列表价估算。");

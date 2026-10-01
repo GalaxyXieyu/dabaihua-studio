@@ -91,16 +91,16 @@ function Fold({ title, markdown }: { title: string; markdown: string }) {
   );
 }
 
-/** 「结果数字」：把带数字的条目做成大号数字卡片网格，解析不出的用列表兜底。 */
-function ResultNumbers({ markdown }: { markdown: string }) {
-  const { cards, rest } = parseResultCards(markdown);
+/** 「结果数字」：只把总量做成大号数字卡片，按工具拆分/对比说明落到卡片下的细线列表。 */
+function ResultNumbers({ markdown, excludeValues }: { markdown: string; excludeValues: number[] }) {
+  const { cards, rest } = parseResultCards(markdown, { excludeValues });
   if (cards.length === 0) return <MiniMarkdown text={markdown} />;
   return (
     <div className="daily-a-results">
       <div className="daily-a-result-grid">
         {cards.map((card, index) => (
           <div key={`${index}-${card.value}`} className="daily-a-result-card">
-            <p className={`daily-a-result-value tabular-nums${card.value.length > 7 ? " is-long" : ""}`}>
+            <p className={`daily-a-result-value tabular-nums${card.value.length > 5 ? " is-long" : ""}`}>
               {card.value}
               {card.unit ? <span className="daily-a-result-unit">{card.unit}</span> : null}
             </p>
@@ -108,7 +108,11 @@ function ResultNumbers({ markdown }: { markdown: string }) {
           </div>
         ))}
       </div>
-      {rest ? <MiniMarkdown text={rest} /> : null}
+      {rest ? (
+        <div className="daily-a-results-rest">
+          <MiniMarkdown text={rest} />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -285,7 +289,10 @@ export default async function DailyPage({ searchParams }: { searchParams: Promis
         {day.sections.results ? (
           <section className="daily-a-section">
             <h2 className="daily-a-heading">结果数字</h2>
-            <ResultNumbers markdown={day.sections.results} />
+            <ResultNumbers
+              markdown={day.sections.results}
+              excludeValues={[day.commits, day.tokensM, repoCount].filter((value): value is number => typeof value === "number")}
+            />
           </section>
         ) : null}
 
