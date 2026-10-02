@@ -51,7 +51,7 @@ async function limitedText(response: Response, maxBytes: number) {
   return value + decoder.decode();
 }
 
-export async function fetchPublicText(value: string, options: { accept?: string; maxBytes: number; timeoutMs?: number }) {
+export async function fetchPublicText(value: string, options: { accept?: string; maxBytes: number; timeoutMs?: number; userAgent?: string }) {
   let url = publicHttpUrl(value);
   for (let redirect = 0; redirect <= 3; redirect += 1) {
     let response: Response;
@@ -61,7 +61,7 @@ export async function fetchPublicText(value: string, options: { accept?: string;
         signal: AbortSignal.timeout(options.timeoutMs ?? 15_000),
         headers: {
           accept: options.accept || "text/html,application/xhtml+xml",
-          "user-agent": "Mozilla/5.0 (compatible; PersonalIntelDesk/1.0)",
+          "user-agent": options.userAgent || "Mozilla/5.0 (compatible; PersonalIntelDesk/1.0)",
         },
       });
     } catch (error) {

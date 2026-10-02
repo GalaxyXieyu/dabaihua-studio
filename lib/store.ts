@@ -4,12 +4,14 @@ import { fetchPublicText, publicHttpUrl } from "./safe-fetch";
 import { extractArticle, htmlToMarkdown, readHtmlMeta } from "./article";
 import { inferSourceCategory, isSourceCategory, type SourceCategory } from "./source-category";
 import { mergeWeakMaterial } from "./topic-material-merge";
+import { itemUrlVariants, normalizeItemUrl } from "./item-url";
+import { pickMaterialRow } from "./material-fetch-core";
 import { readXArticles, readXPost, readXProfile, xPostAddress, xProfileAddress } from "./x";
 
 export type AppEnv = { DB: D1Database; AI?: { run: (model: string, input: unknown) => Promise<unknown> } };
 const now = () => new Date().toISOString();
 const day = () => new Date().toISOString().slice(0, 10);
-const SCHEMA_VERSION = "2026-10-01.1";
+const SCHEMA_VERSION = "2026-10-02.1";
 const schemaReady = new WeakMap<object, Promise<void>>();
 
 async function initializeSchema(db: D1Database) {
@@ -28,7 +30,7 @@ async function initializeSchema(db: D1Database) {
     db.prepare("UPDATE sources SET url = 'x-tweets://karpathy' WHERE url = 'x-tweets://Andrej Karpathy'"),
     db.prepare("UPDATE sources SET url = 'x-tweets://sama' WHERE url = 'x-tweets://Sam Altman'"),
     db.prepare("UPDATE sources SET url = 'x-tweets://simonw' WHERE url = 'x-tweets://Simon Willison'"),
-    db.prepare("CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY AUTOINCREMENT, source_id INTEGER, kind TEXT NOT NULL, title TEXT NOT NULL, original_excerpt TEXT, content_markdown TEXT, author TEXT, translated_title TEXT, translated_excerpt TEXT, url TEXT NOT NULL UNIQUE, published_at TEXT, language TEXT, topic TEXT, status TEXT NOT NULL DEFAULT 'pending', is_read INTEGER NOT NULL DEFAULT 0, is_saved INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)"),
+    db.prepare("CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY AUTOINCREMENT, source_id INTEGER, kind TEXT NOT NULL, title TEXT NOT NULL, original_excerpt TEXT, content_markdown TEXT, author TEXT, content_fetch_status TEXT, content_fetch_reason TEXT, content_fetched_at TEXT, translated_title TEXT, translated_excerpt TEXT, url TEXT NOT NULL UNIQUE, published_at TEXT, language TEXT, topic TEXT, status TEXT NOT NULL DEFAULT 'pending', is_read INTEGER NOT NULL DEFAULT 0, is_saved INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)"),
     db.prepare("CREATE TABLE IF NOT EXISTS sync_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, source_id INTEGER NOT NULL, started_at TEXT NOT NULL, finished_at TEXT, item_count INTEGER NOT NULL DEFAULT 0, error TEXT)"),
     db.prepare("CREATE TABLE IF NOT EXISTS ideas (id INTEGER PRIMARY KEY AUTOINCREMENT, day TEXT NOT NULL UNIQUE, headline TEXT NOT NULL, angle TEXT NOT NULL, source_item_ids TEXT NOT NULL, created_at TEXT NOT NULL)"),
     db.prepare("CREATE TABLE IF NOT EXISTS itches (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, body TEXT NOT NULL, normalized_body TEXT NOT NULL, note TEXT, status TEXT NOT NULL DEFAULT 'open', felt_count INTEGER NOT NULL DEFAULT 1, first_felt_at TEXT NOT NULL, last_felt_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id))"),
@@ -104,6 +106,9 @@ async function initializeSchema(db: D1Database) {
   const itemColumns = await db.prepare("PRAGMA table_info(items)").all<{ name: string }>();
   if (!itemColumns.results.some((column) => column.name === "content_markdown")) await db.prepare("ALTER TABLE items ADD COLUMN content_markdown TEXT").run();
   if (!itemColumns.results.some((column) => column.name === "author")) await db.prepare("ALTER TABLE items ADD COLUMN author TEXT").run();
+  if (!itemColumns.results.some((column) => column.name === "content_fetch_status")) await db.prepare("ALTER TABLE items ADD COLUMN content_fetch_status TEXT").run();
+  if (!itemColumns.results.some((column) => column.name === "content_fetch_reason")) await db.prepare("ALTER TABLE items ADD COLUMN content_fetch_reason TEXT").run();
+  if (!itemColumns.results.some((column) => column.name === "content_fetched_at")) await db.prepare("ALTER TABLE items ADD COLUMN content_fetched_at TEXT").run();
   const requestColumns = await db.prepare("PRAGMA table_info(subscription_requests)").all<{ name: string }>();
   if (!requestColumns.results.some((column) => column.name === "kind")) await db.prepare("ALTER TABLE subscription_requests ADD COLUMN kind TEXT NOT NULL DEFAULT 'unknown'").run();
   if (!requestColumns.results.some((column) => column.name === "category")) await db.prepare("ALTER TABLE subscription_requests ADD COLUMN category TEXT").run();
@@ -567,10 +572,7 @@ export async function importWechatArticles(env: AppEnv, accountKey: string, acco
 const DIGEST_SOURCE_URL = "digest://topic-materials";
 const DIGEST_SOURCE_NAME = "选题素材";
 
-/** Normalizes a stored item URL exactly the way captureLink does. */
-export function normalizeItemUrl(value: string) {
-  return publicHttpUrl(String(value ?? "").trim()).toString();
-}
+export { normalizeItemUrl };
 
 /**
  * Lazily creates the built-in 「选题素材」 source (kind `digest`) and makes sure
@@ -744,6 +746,58 @@ export async function findItemsByUrls(env: AppEnv, urls: string[]): Promise<Map<
   for (const [normalized, originals] of normalizedToOriginals) {
     const id = byNormalized.get(normalized);
     if (id) for (const original of originals) found.set(original, id);
+  }
+  return found;
+}
+
+export type BriefMaterialItem = {
+  id: number;
+  url: string;
+  title: string;
+  translatedTitle: string | null;
+  originalExcerpt: string | null;
+  translatedExcerpt: string | null;
+  contentMarkdown: string | null;
+  author: string | null;
+  publishedAt: string | null;
+  fetchStatus: string | null;
+  fetchReason: string | null;
+};
+
+/**
+ * 按素材链接取 item 全行。和抓取共用同一套匹配（URL 写法变体）和选择（pickMaterialRow），
+ * 历史上因末尾斜杠不同存成两条的文章，页面显示的就是抓取写回的那条。
+ */
+export async function findMaterialItemsByUrls(env: AppEnv, urls: string[]): Promise<Map<string, BriefMaterialItem>> {
+  await ensureSchema(env.DB);
+  const candidateToOriginals = new Map<string, string[]>();
+  for (const raw of urls || []) {
+    const original = String(raw ?? "");
+    for (const candidate of itemUrlVariants(original)) {
+      const list = candidateToOriginals.get(candidate) || [];
+      if (!list.includes(original)) list.push(original);
+      candidateToOriginals.set(candidate, list);
+    }
+  }
+  const found = new Map<string, BriefMaterialItem>();
+  if (!candidateToOriginals.size) return found;
+  const placeholders = Array.from(candidateToOriginals.keys()).map(() => "?").join(",");
+  const rows = await env.DB.prepare(
+    `SELECT id, url, title, translated_title AS translatedTitle, original_excerpt AS originalExcerpt, translated_excerpt AS translatedExcerpt, content_markdown AS contentMarkdown, author, published_at AS publishedAt, content_fetch_status AS fetchStatus, content_fetch_reason AS fetchReason FROM items WHERE url IN (${placeholders})`,
+  )
+    .bind(...candidateToOriginals.keys())
+    .all<BriefMaterialItem>();
+  const rowsByOriginal = new Map<string, BriefMaterialItem[]>();
+  for (const row of rows.results) {
+    for (const original of candidateToOriginals.get(String(row.url)) || []) {
+      const list = rowsByOriginal.get(original) || [];
+      if (!list.some((existing) => existing.id === row.id)) list.push(row);
+      rowsByOriginal.set(original, list);
+    }
+  }
+  for (const [original, list] of rowsByOriginal) {
+    const picked = pickMaterialRow(list);
+    if (picked) found.set(original, picked);
   }
   return found;
 }

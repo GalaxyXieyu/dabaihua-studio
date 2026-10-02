@@ -8,6 +8,7 @@
  */
 
 import { ensureSchema, importTopicMaterials } from "./store";
+import { briefMaterialTargets, fetchMaterialTexts, type MaterialFetchSummary } from "./brief-material-fetch";
 import {
   shapeResponse,
   validateBrief,
@@ -100,6 +101,17 @@ export async function upsertBrief(env: Env, brief: DailyBrief, importedBy: numbe
     // Keep the reply: the CLI can retry materials on the next import.
   }
   return { created, materials };
+}
+
+/**
+ * 导入简报后的后台任务：确保 schema、取当天素材、抓取仍只有摘要的正文。
+ * 传入 `force` 时重试之前失败的素材。
+ */
+export async function runBriefMaterialFetch(env: Env, date: string, options?: { force?: boolean }): Promise<MaterialFetchSummary> {
+  await ensureSchema(env.DB);
+  const targets = await briefMaterialTargets(env.DB, date);
+  if (!targets.length) return { checked: 0, fetched: 0, failed: [], skipped: 0 };
+  return fetchMaterialTexts(env.DB, targets, { force: options?.force === true });
 }
 
 export async function getBrief(env: Env, date: string): Promise<StoredBrief | null> {

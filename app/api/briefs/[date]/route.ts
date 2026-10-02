@@ -1,7 +1,8 @@
 import { env } from "cloudflare:workers";
+import { getRequestExecutionContext } from "vinext/shims/request-context";
 import { assertSameOrigin, authenticateApiKey, getSessionUser, type SessionUser } from "../../../../lib/auth";
 import { BRIEF_MAX_BYTES, isValidBriefDate, validateBrief } from "../../../../lib/daily-brief-core";
-import { countResponses, getBrief, listResponses, upsertBrief } from "../../../../lib/daily-brief";
+import { countResponses, getBrief, listResponses, runBriefMaterialFetch, upsertBrief } from "../../../../lib/daily-brief";
 import { PayloadTooLargeError, publicBaseUrl, readBodyWithLimit } from "../../../../lib/weekly";
 
 type Params = { params: Promise<{ date: string }> };
@@ -60,6 +61,11 @@ export async function PUT(request: Request, { params }: Params) {
   if (!result.ok) return json({ error: "invalid brief", errors: result.errors }, 400);
 
   const { created, materials } = await upsertBrief(env, result.brief, auth.user.id);
+  // 抓原文不阻塞导入请求：交给 waitUntil 在后台跑。
+  const fetchJob = runBriefMaterialFetch(env, date).catch((error) => console.error("brief material fetch failed", error));
+  const requestContext = getRequestExecutionContext();
+  if (requestContext) requestContext.waitUntil(fetchJob);
+  else void fetchJob;
   const responsesKept = await countResponses(env, date);
   const base = publicBaseUrl(env, request);
   return json(
@@ -71,6 +77,7 @@ export async function PUT(request: Request, { params }: Params) {
       url: `${base}/topics/daily?date=${date}`,
       responsesKept,
       materials,
+      materialsFetch: "queued",
     },
     200,
   );

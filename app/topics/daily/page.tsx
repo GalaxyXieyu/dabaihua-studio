@@ -5,7 +5,8 @@ import { getSessionUser } from "../../../lib/auth";
 import { requestOrigin } from "../../../lib/request-origin";
 import { getBrief, getLatestBriefDate, listBriefDates, listResponses } from "../../../lib/daily-brief";
 import { isValidBriefDate } from "../../../lib/daily-brief-core";
-import { findItemsByUrls } from "../../../lib/store";
+import { findMaterialItemsByUrls } from "../../../lib/store";
+import { orderBriefTopics, pickInitialTopic, toMaterialView, type MaterialView } from "../../../lib/brief-view";
 import { dateLabel, shanghaiDate } from "../../../lib/today-core";
 import { SiteAppBar } from "../../_components/SiteAppBar";
 import { DailyBrief } from "./_components/DailyBrief";
@@ -14,8 +15,8 @@ import "./daily-brief.css";
 export const dynamic = "force-dynamic";
 export const viewport = { width: "device-width", initialScale: 1 };
 
-export default async function DailyBriefPage({ searchParams }: { searchParams: Promise<{ date?: string }> }) {
-  const { date: requested } = await searchParams;
+export default async function DailyBriefPage({ searchParams }: { searchParams: Promise<{ date?: string; topic?: string }> }) {
+  const { date: requested, topic: requestedTopic } = await searchParams;
 
   const requestHeaders = await headers();
   const user = await getSessionUser(
@@ -34,10 +35,34 @@ export default async function DailyBriefPage({ searchParams }: { searchParams: P
   const selected = requested && isValidBriefDate(requested) ? requested : await getLatestBriefDate(env);
   const stored = selected ? await getBrief(env, selected) : null;
   const label = dateLabel(selected ?? shanghaiDate());
-  const materialUrls = stored
-    ? stored.brief.topics.flatMap((topic) => topic.materials.map((material) => material.url)).filter(Boolean)
-    : [];
-  const materialReaderLinks = Object.fromEntries(await findItemsByUrls(env, materialUrls));
+
+  const materialsByUrl: Record<string, MaterialView> = {};
+  let initialTopicId: string | null = null;
+  let initialResponses: Awaited<ReturnType<typeof listResponses>> = [];
+  if (stored && selected) {
+    const materialUrls = stored.brief.topics.flatMap((topic) => topic.materials.map((material) => material.url)).filter(Boolean);
+    const materialItems = await findMaterialItemsByUrls(env, materialUrls);
+    for (const topic of stored.brief.topics) {
+      for (const material of topic.materials) {
+        if (!material.url) continue;
+        materialsByUrl[material.url] = toMaterialView(material, materialItems.get(material.url) ?? null);
+      }
+    }
+
+    initialResponses = await listResponses(env, { date: selected });
+    const decided: Record<string, "pick" | "reject" | null> = {};
+    for (const response of initialResponses) {
+      if (response.user.account !== user.account) continue;
+      decided[response.topicId] = response.decision;
+    }
+    const ordered = orderBriefTopics(stored.brief.topics, stored.brief.recommendation?.topicId ?? null);
+    initialTopicId = pickInitialTopic(
+      ordered.map((topic) => topic.id),
+      stored.brief.recommendation?.topicId ?? null,
+      decided,
+      requestedTopic ?? null,
+    );
+  }
 
   return (
     <div className="db-page">
@@ -49,8 +74,10 @@ export default async function DailyBriefPage({ searchParams }: { searchParams: P
           brief={stored.brief}
           dates={dates}
           userAccount={user.account}
-          initialResponses={await listResponses(env, { date: selected })}
-          materialReaderLinks={materialReaderLinks}
+          initialResponses={initialResponses}
+          materialsByUrl={materialsByUrl}
+          initialTopicId={initialTopicId}
+          requestedTopic={requestedTopic ?? null}
         />
       ) : (
         <main className="db-empty-wrap">

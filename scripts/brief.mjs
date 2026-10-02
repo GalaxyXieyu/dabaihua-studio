@@ -5,6 +5,7 @@
  *   node scripts/brief.mjs validate <file.json>
  *   node scripts/brief.mjs push <file.json> [--dry-run] [--base URL]
  *   node scripts/brief.mjs responses [--date D | --since ISO | --latest] [--json] [--base URL]
+ *   node scripts/brief.mjs fetch-materials (--date D | --all) [--force] [--base URL]
  *   node scripts/brief.mjs list
  *
  * validate 与 push --dry-run 在本地校验，不联网、不需要 token。
@@ -23,6 +24,7 @@ function usage() {
       "  node scripts/brief.mjs validate <file.json>",
       "  node scripts/brief.mjs push <file.json> [--dry-run] [--base URL]",
       "  node scripts/brief.mjs responses [--date D | --since ISO | --latest] [--json] [--base URL]",
+      "  node scripts/brief.mjs fetch-materials (--date D | --all) [--force] [--base URL]",
       "  node scripts/brief.mjs list",
       "",
     ].join("\n"),
@@ -34,7 +36,7 @@ function parseArgs(argv) {
   const flags = {};
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === "--json" || arg === "--latest" || arg === "--dry-run") flags[arg.slice(2)] = true;
+    if (arg === "--json" || arg === "--latest" || arg === "--dry-run" || arg === "--all" || arg === "--force") flags[arg.slice(2)] = true;
     else if (arg === "--base" || arg === "--date" || arg === "--since") flags[arg.slice(2)] = argv[(index += 1)];
     else positional.push(arg);
   }
@@ -124,6 +126,56 @@ async function cmdResponses(flags, base, token) {
   }
 }
 
+const FETCH_REASON_LABELS = { login: "需要登录或付费", unreachable: "网页打不开", extract: "正文提取失败" };
+
+function failedSummary(failed) {
+  if (!failed.length) return "";
+  const counts = new Map();
+  for (const item of failed) {
+    const reason = item && item.reason ? item.reason : "unreachable";
+    counts.set(reason, (counts.get(reason) || 0) + 1);
+  }
+  const parts = [];
+  for (const [reason, count] of counts) parts.push(`${FETCH_REASON_LABELS[reason] || reason} ${count}`);
+  return `（${parts.join("、")}）`;
+}
+
+async function cmdFetchMaterials(flags, base, token) {
+  let dates;
+  if (flags.all) {
+    const data = await request(base, token, "/api/briefs");
+    dates = (data.briefs || []).map((brief) => brief.date).filter(Boolean);
+    if (!dates.length) {
+      process.stdout.write("还没有选题简报\n");
+      return;
+    }
+  } else if (flags.date) {
+    dates = [flags.date];
+  } else {
+    throw new Error("用法：node scripts/brief.mjs fetch-materials (--date D | --all) [--force]");
+  }
+
+  let totalChecked = 0;
+  let totalFetched = 0;
+  const allFailed = [];
+  for (const date of dates) {
+    const data = await request(base, token, `/api/briefs/${date}/materials`, {
+      method: "POST",
+      body: flags.force ? { force: true } : undefined,
+    });
+    const failed = Array.isArray(data.failed) ? data.failed : [];
+    const checked = Number(data.checked || 0);
+    const fetched = Number(data.fetched || 0);
+    totalChecked += checked;
+    totalFetched += fetched;
+    allFailed.push(...failed);
+    process.stdout.write(`${date}  检查 ${checked}  抓到 ${fetched}  没抓到 ${failed.length}${failedSummary(failed)}\n`);
+  }
+  if (dates.length > 1) {
+    process.stdout.write(`合计  检查 ${totalChecked}  抓到 ${totalFetched}  没抓到 ${allFailed.length}${failedSummary(allFailed)}\n`);
+  }
+}
+
 async function cmdList(base, token) {
   const data = await request(base, token, "/api/briefs");
   if (!data.briefs || data.briefs.length === 0) {
@@ -168,6 +220,7 @@ async function main() {
   if (!token) throw new Error("请设置 DABAIHUA_API_KEY 或先运行 topics login");
 
   if (command === "responses") await cmdResponses(flags, base, token);
+  else if (command === "fetch-materials") await cmdFetchMaterials(flags, base, token);
   else if (command === "list") await cmdList(base, token);
   else throw new Error(`未知命令：${command}`);
 }

@@ -762,7 +762,7 @@ test("keeps the article review backend, asset route, and sync script wired to th
   assert.match(store, /CREATE TABLE IF NOT EXISTS article_versions/);
   assert.match(store, /CREATE TABLE IF NOT EXISTS review_marks/);
   assert.match(store, /CREATE TABLE IF NOT EXISTS review_rounds/);
-  assert.match(store, /SCHEMA_VERSION = "2026-10-01\.1"/);
+  assert.match(store, /SCHEMA_VERSION = "2026-10-02\.1"/);
   assert.match(schema, /export const articles/);
   assert.match(schema, /export const articleAssets/);
   assert.match(schema, /export const articleVersions/);
@@ -2070,7 +2070,7 @@ test("shapes brief replies with question pairing and missing-topic flags", () =>
 });
 
 test("ships the daily brief storage, API, page and CLI", async () => {
-  const [schema, store, migration, journal, domain, core, listRoute, dateRoute, responseRoute, readRoute, cli, apiLib, packageJson, page, component, css, nav, todayLib, topicsPage] = await Promise.all([
+  const [schema, store, migration, journal, domain, core, listRoute, dateRoute, responseRoute, readRoute, cli, apiLib, packageJson, page, component, topicList, topicDetail, materialItem, css, nav, todayLib, topicsPage] = await Promise.all([
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/store.ts", import.meta.url), "utf8"),
     readFile(new URL("../drizzle/0016_daily_briefs.sql", import.meta.url), "utf8"),
@@ -2086,6 +2086,9 @@ test("ships the daily brief storage, API, page and CLI", async () => {
     readFile(new URL("../package.json", import.meta.url), "utf8"),
     readFile(new URL("../app/topics/daily/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/topics/daily/_components/DailyBrief.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/topics/daily/_components/TopicList.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/topics/daily/_components/TopicDetail.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/topics/daily/_components/MaterialItem.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/topics/daily/daily-brief.css", import.meta.url), "utf8"),
     readFile(new URL("../lib/site-nav.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/today.ts", import.meta.url), "utf8"),
@@ -2150,7 +2153,11 @@ test("ships the daily brief storage, API, page and CLI", async () => {
   assert.match(todayLib, /daily_briefs/);
   assert.match(todayLib, /catch \{\s*return null;\s*\}/s);
 
-  assert.match(component, /const STARS = \[1, 2, 3, 4, 5\]/);
+  assert.match(page, /findMaterialItemsByUrls/);
+  assert.match(page, /pickInitialTopic/);
+
+  const components = [component, topicList, topicDetail, materialItem].join("\n");
+  assert.match(topicDetail, /const STARS = \[1, 2, 3, 4, 5\]/);
   for (const testid of [
     "brief-card", "brief-recommended", "brief-toggle", "brief-section-scenarios",
     "brief-section-questions", "brief-section-materials", "brief-star-",
@@ -2158,12 +2165,27 @@ test("ships the daily brief storage, API, page and CLI", async () => {
     "brief-pick-submit", "brief-reject", "brief-reject-reason", "brief-reject-submit",
     "brief-status", "brief-undo", "brief-date-select", "brief-prev", "brief-next",
   ]) {
-    assert.match(component, new RegExp(testid));
+    assert.match(components, new RegExp(testid));
   }
-  assert.match(component, /target="_blank"/);
-  assert.match(component, /rel="noopener noreferrer"/);
-  assert.match(css, /max-width: 760px/);
-  assert.match(css, /@media \(min-width: 900px\)/);
+  assert.match(components, /target="_blank"/);
+  assert.match(components, /rel="noopener noreferrer"/);
+
+  // 左列表零延迟切换：客户端改写 URL 并监听 popstate。
+  assert.match(component, /history\.pushState\(/);
+  assert.match(component, /history\.replaceState\(/);
+  assert.match(component, /popstate/);
+  // 没抓到原文时的中文文案。
+  assert.match(materialItem, /原文没抓到/);
+  assert.match(materialItem, /打开原网页/);
+  assert.match(materialItem, /原文/);
+  assert.match(materialItem, /译文/);
+
+  // 宽屏断点从 900/760 变为 1024 双栏 + sticky + 淡入。
+  assert.match(css, /@media \(min-width: 1024px\)/);
+  assert.match(css, /position: sticky/);
+  assert.match(css, /db-fade/);
+  assert.match(css, /prefers-reduced-motion/);
+  assert.doesNotMatch(css, /@media \(min-width: 900px\)/);
 });
 
 test("parses digest markdown into importable topic materials", async () => {
@@ -2250,7 +2272,7 @@ test("ships an admin-only topic materials import API and pushes digest materials
     readFile(new URL("../lib/store.ts", import.meta.url), "utf8"),
     readFile(new URL("../scripts/daily-ai-digest.mjs", import.meta.url), "utf8"),
     readFile(new URL("../scripts/materials.mjs", import.meta.url), "utf8"),
-    readFile(new URL("../app/topics/daily/_components/DailyBrief.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/topics/daily/_components/MaterialItem.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/daily-brief.ts", import.meta.url), "utf8"),
   ]);
   assert.match(route, /authenticateApiKey/);
