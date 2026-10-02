@@ -1046,6 +1046,12 @@ export function ArticleReviewer({
               <span>第 <span className="ar-a-num">{round}</span> 轮</span>
               <span className="ar-a-sep">·</span>
               <span>{updatedAt ? formatTime(updatedAt) : `排版：${htmlSourceLabel(htmlSource)}`}</span>
+              {canReview ? (
+                <>
+                  <span className="ar-a-sep">·</span>
+                  <span className="ar-a-hint">{phoneMode ? "点一下段落即可标记" : "选中文字即可标记"}</span>
+                </>
+              ) : null}
             </p>
             <div className="ar-a-toolbar">
               <button
@@ -1056,9 +1062,7 @@ export function ArticleReviewer({
               >
                 标注 ({marks.length})
               </button>
-              {canReview ? (
-                <span className="ar-a-hint">{phoneMode ? "点一下段落即可标记" : "选中文字即可标记"}</span>
-              ) : (
+              {canReview ? null : (
                 <a href={`/login?next=${encodeURIComponent("/" + (target.type === "article" ? `articles/${target.id}` : `review/${target.id}`))}`} className="ar-a-login-link">
                   登录后审稿
                 </a>
@@ -1077,7 +1081,7 @@ export function ArticleReviewer({
                 onClick={handleArticleClick}
                 onPointerDown={handlePointerDown}
                 onContextMenu={phoneMode ? (event) => event.preventDefault() : undefined}
-                className="ar-a-body desk:max-w-[760px] desk:px-12 desk:py-10"
+                className="ar-a-body desk:px-6 desk:py-6 min-[1280px]:px-12 min-[1280px]:py-10"
                 style={phoneMode
                   ? { userSelect: "none", WebkitUserSelect: "none", WebkitTouchCallout: "none" }
                   : { userSelect: "text", WebkitUserSelect: "text" }}
@@ -1155,6 +1159,7 @@ export function ArticleReviewer({
               type="button"
               onClick={() => { setVerdictComment(""); setSheet({ kind: "comments" }); }}
               disabled={busy || marks.length === 0}
+              title={marks.length === 0 ? "先划线再提交批注" : undefined}
               className="ar-a-btn ar-a-btn-block"
             >
               提交批注{marks.length ? ` (${marks.length})` : ""}

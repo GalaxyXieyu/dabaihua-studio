@@ -848,8 +848,7 @@ test("ships the phone-first article reviewer that adapts to desktop and range ma
   // Desktop layout is a Tailwind v4 custom variant keyed off the primary
   // pointer + viewport width, so there is no JS layout flash.
   assert.match(styles, /@custom-variant desk \(@media \(min-width: 900px\) and \(hover: hover\) and \(pointer: fine\)\);/);
-  assert.match(reviewer, /desk:max-w-\[760px\]/);
-  assert.match(reviewer, /desk:px-12 desk:py-10/);
+  assert.match(reviewer, /desk:px-6 desk:py-6 min-\[1280px\]:px-12 min-\[1280px\]:py-10/);
   assert.match(reviewPage, /desk:max-w-\[760px\]/);
   assert.match(reviewer, /点一下段落即可标记/);
   assert.match(reviewer, /选中文字即可标记/);

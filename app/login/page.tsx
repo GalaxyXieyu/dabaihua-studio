@@ -5,6 +5,12 @@ import { useState, type FormEvent } from "react";
 import { BRAND_NAME } from "../../lib/brand";
 import "./login.css";
 
+async function rememberCredential(form: HTMLFormElement) {
+  const PasswordCredentialCtor = (window as { PasswordCredential?: new (form: HTMLFormElement) => Credential }).PasswordCredential;
+  if (!PasswordCredentialCtor || !navigator.credentials) return;
+  await navigator.credentials.store(new PasswordCredentialCtor(form)).catch(() => undefined);
+}
+
 export default function LoginPage() {
   const [account, setAccount] = useState("");
   const [password, setPassword] = useState("");
@@ -13,6 +19,7 @@ export default function LoginPage() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     if (busy) return;
     setBusy(true);
     setError("");
@@ -25,6 +32,7 @@ export default function LoginPage() {
       });
       const data = await response.json().catch(() => ({})) as { error?: string };
       if (!response.ok) throw new Error(data.error || "登录失败，请稍后再试");
+      await rememberCredential(form);
       const requested = new URLSearchParams(window.location.search).get("next") || "";
       const next = requested.startsWith("/") && !requested.startsWith("//") ? requested : "/";
       window.location.href = next;
@@ -42,11 +50,12 @@ export default function LoginPage() {
           <p className="login-a-note">登录后即可进入手机审稿页审阅草稿</p>
         </header>
         <div className="login-a-double-rule" />
-        <form onSubmit={submit} className="login-a-form">
+        <form method="post" onSubmit={submit} className="login-a-form">
           <div className="login-a-field">
             <label htmlFor="account" className="login-a-label">账号</label>
             <input
               id="account"
+              name="username"
               value={account}
               onChange={(event) => setAccount(event.target.value)}
               autoComplete="username"
@@ -58,6 +67,7 @@ export default function LoginPage() {
             <label htmlFor="password" className="login-a-label">密码</label>
             <input
               id="password"
+              name="password"
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}

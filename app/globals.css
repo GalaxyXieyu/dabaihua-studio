@@ -72,6 +72,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 
 .global-appbar { position:relative; z-index:var(--z-appbar); grid-column:1 / -1; grid-row:1; min-height:var(--appbar-height); padding:0 28px; display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:center; overflow:visible; background:var(--canvas); border-bottom:1px solid var(--line); }
 .global-appbar.has-subnav { --appbar-height:93px; }
+.global-appbar.has-subnav[data-collapsed] { --appbar-height:52px; }
+.global-appbar[data-collapsed] .section-tabs { display:none; }
 .site-appbar { position:sticky; top:0; }
 .global-brand { grid-column:1; grid-row:1; justify-self:start; width:max-content; padding:0; display:inline-flex; align-items:center; color:var(--ink); background:transparent; border:0; white-space:nowrap; font-family:var(--font-serif); font-size:17px; font-weight:600; letter-spacing:.01em; transition:color 150ms ease; }
 .global-brand:hover { color:var(--accent); }
