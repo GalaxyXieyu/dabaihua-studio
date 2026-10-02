@@ -305,5 +305,12 @@ export async function changePassword(env: AuthEnv, request: Request, input: { cu
 
 export function authErrorResponse(error: unknown, fallback = "操作失败") {
   if (error instanceof AuthError) return Response.json({ error: error.message }, { status: error.status });
+  // 领域错误（如 ArticleAccessError）自带 HTTP status 时按它返回。
+  if (error && typeof error === "object" && "status" in error) {
+    const status = Number((error as { status?: unknown }).status);
+    if (Number.isInteger(status) && status >= 400 && status < 600) {
+      return Response.json({ error: error instanceof Error ? error.message : fallback }, { status });
+    }
+  }
   return Response.json({ error: error instanceof Error ? error.message : fallback }, { status: 400 });
 }

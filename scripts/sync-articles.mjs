@@ -19,7 +19,7 @@
 import { createHash } from "node:crypto";
 import { lstatSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -101,7 +101,7 @@ function writeJsonAtomic(file, value) {
 
 function ensureReviewTables(db) {
   db.exec(`
-CREATE TABLE IF NOT EXISTS articles (slug TEXT PRIMARY KEY, date TEXT, title TEXT, topic TEXT, status TEXT, meta_json TEXT NOT NULL DEFAULT '{}', draft_md TEXT, final_md TEXT, qa_report TEXT, article_html TEXT, content_hash TEXT, review_round INTEGER NOT NULL DEFAULT 1, is_public INTEGER NOT NULL DEFAULT 0, topic_id INTEGER, synced_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS articles (slug TEXT PRIMARY KEY, date TEXT, title TEXT, topic TEXT, status TEXT, meta_json TEXT NOT NULL DEFAULT '{}', draft_md TEXT, final_md TEXT, qa_report TEXT, article_html TEXT, content_hash TEXT, review_round INTEGER NOT NULL DEFAULT 1, is_public INTEGER NOT NULL DEFAULT 0, owner_id INTEGER, topic_id INTEGER, synced_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS articles_date_idx ON articles(date DESC, updated_at DESC);
 CREATE INDEX IF NOT EXISTS articles_public_idx ON articles(is_public, updated_at DESC);
 CREATE TABLE IF NOT EXISTS article_assets (slug TEXT NOT NULL, path TEXT NOT NULL, content_type TEXT NOT NULL, bytes BLOB NOT NULL, size INTEGER NOT NULL, sha256 TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(slug, path));
@@ -112,6 +112,11 @@ CREATE TABLE IF NOT EXISTS review_rounds (id INTEGER PRIMARY KEY AUTOINCREMENT, 
 CREATE INDEX IF NOT EXISTS review_rounds_target_idx ON review_rounds(target_type, target_id, round DESC);
 CREATE INDEX IF NOT EXISTS review_rounds_export_idx ON review_rounds(exported_at, id);
 `);
+  const articleColumns = db.prepare("PRAGMA table_info(articles)").all();
+  if (!articleColumns.some((column) => column.name === "owner_id")) {
+    db.exec("ALTER TABLE articles ADD COLUMN owner_id INTEGER");
+  }
+  db.exec("CREATE INDEX IF NOT EXISTS articles_owner_idx ON articles(owner_id, updated_at DESC)");
 }
 
 function openDb() {
@@ -182,6 +187,47 @@ function importImages(db, slug, dir, timestamp) {
   return present.length;
 }
 
+const warnedPushSlugs = new Set();
+const warnedMissingSlugs = new Set();
+
+/**
+ * 比较现有行与本次目录值是否完全一致。所有字段都相等时无需 UPDATE，
+ * 但仍会走 importImages（它自己按 sha256 跳过）。
+ */
+export function rowUnchanged(existing, next) {
+  if (!existing || !next) return false;
+  return existing.date === next.date
+    && existing.title === next.title
+    && existing.topic === next.topic
+    && existing.status === next.status
+    && existing.metaJson === next.metaJson
+    && existing.draftMd === next.draftMd
+    && existing.finalMd === next.finalMd
+    && existing.qaReport === next.qaReport
+    && existing.articleHtml === next.articleHtml
+    && existing.contentHash === next.contentHash
+    && existing.topicId === next.topicId;
+}
+
+/**
+ * INSERT 时的归属账号：优先 ARTICLES_OWNER_ACCOUNT（account_normalized），
+ * 否则取 id 最小的 admin。更新时绝不改 owner_id。
+ */
+export function resolveOwnerId(db) {
+  try {
+    const account = process.env.ARTICLES_OWNER_ACCOUNT;
+    if (account) {
+      const normalized = account.normalize("NFKC").trim().toLocaleLowerCase("en-US");
+      const row = db.prepare("SELECT id FROM users WHERE account_normalized = ?").get(normalized);
+      if (row) return row.id;
+    }
+    const admin = db.prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1").get();
+    return admin ? admin.id : null;
+  } catch {
+    return null;
+  }
+}
+
 function importArticles(db, options) {
   let entries;
   try {
@@ -192,7 +238,8 @@ function importArticles(db, options) {
   }
   const seen = new Set();
   const timestamp = new Date().toISOString();
-  let imported = 0;
+  const ownerId = resolveOwnerId(db);
+  let changed = 0;
 
   for (const entry of entries) {
     if (entry.isSymbolicLink() || isSymlink(path.join(ARTICLES_DIR, entry.name))) {
@@ -223,6 +270,28 @@ function importArticles(db, options) {
     }
     seen.add(slug);
 
+    const existing = db.prepare(
+      `SELECT date, title, topic, status, meta_json AS metaJson, draft_md AS draftMd, final_md AS finalMd,
+         qa_report AS qaReport, article_html AS articleHtml, content_hash AS contentHash, topic_id AS topicId
+       FROM articles WHERE slug = ?`,
+    ).get(slug);
+    if (existing) {
+      let existingSource = null;
+      try {
+        const parsed = JSON.parse(existing.metaJson || "{}");
+        existingSource = parsed && typeof parsed === "object" ? parsed.source : null;
+      } catch {
+        existingSource = null;
+      }
+      if (existingSource === "push") {
+        if (!warnedPushSlugs.has(slug)) {
+          warn(`跳过 ${slug}：由 superme article 推送管理`);
+          warnedPushSlugs.add(slug);
+        }
+        continue;
+      }
+    }
+
     const draftMd = readTextOrNull(path.join(dir, "01-draft.md"));
     const finalMd = readTextOrNull(path.join(dir, "02-final.md"));
     const qaReport = readTextOrNull(path.join(dir, "qa-report.md"));
@@ -234,29 +303,43 @@ function importArticles(db, options) {
     const date = typeof meta.date === "string" ? meta.date : null;
     const topicId = Number.isInteger(meta.topic_id) && meta.topic_id > 0 ? meta.topic_id : null;
     const contentHash = sha256Text(articleHtml || finalMd || draftMd || "");
+    const next = { date, title, topic, status, metaJson: JSON.stringify(meta), draftMd, finalMd, qaReport, articleHtml, contentHash, topicId };
+
+    const assetCount = importImages(db, slug, dir, timestamp);
+    if (rowUnchanged(existing, next)) continue;
 
     db.prepare(
-      `INSERT INTO articles (slug, date, title, topic, status, meta_json, draft_md, final_md, qa_report, article_html, content_hash, review_round, is_public, topic_id, synced_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?, ?, ?)
+      `INSERT INTO articles (slug, date, title, topic, status, meta_json, draft_md, final_md, qa_report, article_html, content_hash, review_round, is_public, topic_id, owner_id, synced_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?, ?, ?, ?)
        ON CONFLICT(slug) DO UPDATE SET date = excluded.date, title = excluded.title, topic = excluded.topic,
          status = excluded.status, meta_json = excluded.meta_json, draft_md = excluded.draft_md,
          final_md = excluded.final_md, qa_report = excluded.qa_report, article_html = excluded.article_html,
          content_hash = excluded.content_hash, topic_id = excluded.topic_id, synced_at = excluded.synced_at,
          updated_at = excluded.updated_at`,
-    ).run(slug, date, title, topic, status, JSON.stringify(meta), draftMd, finalMd, qaReport, articleHtml, contentHash, topicId, timestamp, timestamp, timestamp);
+    ).run(slug, date, title, topic, status, next.metaJson, draftMd, finalMd, qaReport, articleHtml, contentHash, topicId, ownerId, timestamp, timestamp, timestamp);
 
-    const assetCount = importImages(db, slug, dir, timestamp);
-    imported += 1;
+    changed += 1;
     log(`导入 ${slug}：title=${title}，图片 ${assetCount} 张`);
   }
 
   if (!options.slug) {
-    const dbSlugs = db.prepare("SELECT slug FROM articles").all();
+    const dbSlugs = db.prepare("SELECT slug, meta_json AS metaJson FROM articles").all();
     for (const row of dbSlugs) {
-      if (!seen.has(row.slug)) warn(`文章目录已消失，保留数据库中的审稿数据：${row.slug}`);
+      if (seen.has(row.slug)) continue;
+      let source = null;
+      try {
+        const parsed = JSON.parse(row.metaJson || "{}");
+        source = parsed && typeof parsed === "object" ? parsed.source : null;
+      } catch {
+        source = null;
+      }
+      if (source === "push") continue;
+      if (warnedMissingSlugs.has(row.slug)) continue;
+      warnedMissingSlugs.add(row.slug);
+      warn(`文章目录已消失，保留数据库中的审稿数据：${row.slug}`);
     }
   }
-  log(`导入完成：${imported} 篇`);
+  if (changed > 0) log(`导入完成：${changed} 篇`);
 }
 
 // ---------- EXPORT ----------
@@ -457,7 +540,9 @@ async function main() {
   runOnce(options);
 }
 
-main().catch((error) => {
-  warn(`运行失败：${error.stack || error.message}`);
-  process.exitCode = 1;
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    warn(`运行失败：${error.stack || error.message}`);
+    process.exitCode = 1;
+  });
+}

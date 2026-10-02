@@ -134,6 +134,13 @@
       "when": 1790950306044,
       "tag": "0018_item_content_fetch",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1791036706044,
+      "tag": "0019_article_owner",
+      "breakpoints": true
     }
   ]
 }

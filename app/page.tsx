@@ -51,7 +51,7 @@ export default async function TodayPage() {
   if (!user) redirect("/login?next=/");
 
   const isAdmin = user.role === "admin";
-  const data = await getTodayData(env, { isAdmin });
+  const data = await getTodayData(env, { isAdmin, userId: user.id });
 
   return (
     <div className="td-a">

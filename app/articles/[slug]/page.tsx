@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { env } from "cloudflare:workers";
 import { getSessionUser } from "../../../lib/auth";
 import { getArticle, listMarks, listRounds } from "../../../lib/article-review";
+import { canReadArticle, isArticleOwner } from "../../../lib/article-access";
 import { requestOrigin } from "../../../lib/request-origin";
 import { ArticleReviewer, type ReviewMark, type ReviewRoundSummary } from "../../_components/ArticleReviewer";
 import { SiteAppBar } from "../../_components/SiteAppBar";
@@ -31,7 +32,12 @@ export default async function ArticleDetailPage({ params }: { params: Promise<{ 
 
   const article = await getArticle(env, slug);
   if (!article) notFound();
-  if (!user && !article.isPublic) redirect(`/login?next=/articles/${slug}`);
+  const viewer = user ? { id: user.id, role: user.role } : null;
+  if (!canReadArticle(article, viewer)) {
+    if (!user) redirect(`/login?next=/articles/${slug}`);
+    notFound();
+  }
+  const owner = isArticleOwner(article, viewer);
 
   if (!user) {
     return (
@@ -76,7 +82,7 @@ export default async function ArticleDetailPage({ params }: { params: Promise<{ 
         backHref="/articles"
         updatedAt={article.updatedAt}
         extraHeader={
-          <ArticleHeaderActions slug={slug} initialPublic={article.isPublic} latestRound={latestRound} />
+          owner ? <ArticleHeaderActions slug={slug} initialPublic={article.isPublic} latestRound={latestRound} /> : undefined
         }
       />
     </div>

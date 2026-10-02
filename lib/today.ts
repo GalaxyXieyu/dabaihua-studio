@@ -64,7 +64,7 @@ async function loadTodayBrief(env: Env): Promise<TodayBrief | null> {
   }
 }
 
-export async function getTodayData(env: Env, { isAdmin }: { isAdmin: boolean }): Promise<TodayData> {
+export async function getTodayData(env: Env, { isAdmin, userId }: { isAdmin: boolean; userId: number }): Promise<TodayData> {
   await ensureSchema(env.DB);
   const date = shanghaiDate();
   const thisWeek = isoWeekOf(date);
@@ -85,9 +85,9 @@ export async function getTodayData(env: Env, { isAdmin }: { isAdmin: boolean }):
     brief,
   ] = await Promise.all([
     env.DB.prepare(`SELECT COUNT(*) AS c FROM topics WHERE ${pendingTopicWhere}`).first<{ c: number }>(),
-    env.DB.prepare(`SELECT COUNT(*) AS c FROM articles WHERE ${pendingArticleWhere}`).first<{ c: number }>(),
+    env.DB.prepare(`SELECT COUNT(*) AS c FROM articles WHERE ${pendingArticleWhere} AND owner_id = ?`).bind(userId).first<{ c: number }>(),
     env.DB.prepare(`SELECT id, title, updated_at AS updatedAt FROM topics WHERE ${pendingTopicWhere} ORDER BY updated_at DESC LIMIT 3`).all<{ id: number; title: string | null; updatedAt: string | null }>(),
-    env.DB.prepare(`SELECT slug, title, updated_at AS updatedAt FROM articles WHERE ${pendingArticleWhere} ORDER BY updated_at DESC LIMIT 3`).all<{ slug: string; title: string | null; updatedAt: string | null }>(),
+    env.DB.prepare(`SELECT slug, title, updated_at AS updatedAt FROM articles WHERE ${pendingArticleWhere} AND owner_id = ? ORDER BY updated_at DESC LIMIT 3`).bind(userId).all<{ slug: string; title: string | null; updatedAt: string | null }>(),
     env.DB.prepare("SELECT COUNT(*) AS c FROM topics WHERE status = 'candidate'").first<{ c: number }>(),
     env.DB.prepare("SELECT id, title FROM topics WHERE status = 'candidate' ORDER BY total DESC, id DESC LIMIT 1").first<{ id: number; title: string | null }>(),
     env.DB.prepare("SELECT COUNT(*) AS c FROM topics WHERE reason = ?").bind(digestReason(date)).first<{ c: number }>(),

@@ -3,6 +3,7 @@
  */
 
 const STATUS_LABELS: Record<string, string> = {
+  draft: "草稿",
   drafting: "写作中",
   "changes-requested": "待修改",
   approved: "已通过",

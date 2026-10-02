@@ -11,6 +11,7 @@ export type MarkdownBlock =
   | { type: "list"; index: number; ordered: boolean; items: string[] }
   | { type: "blockquote"; index: number; text: string }
   | { type: "code"; index: number; text: string; language: string }
+  | { type: "table"; index: number; header: string[]; align: ("left" | "center" | "right" | null)[]; rows: string[][] }
   | { type: "hr" };
 
 const HEADING = /^(#{1,4})\s+(.*)$/;
@@ -19,6 +20,50 @@ const ORDERED = /^\s*\d+[.)]\s+(.*)$/;
 const BLOCKQUOTE = /^\s*>\s?(.*)$/;
 const HR = /^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/;
 const FENCE = /^\s*```(\w*)\s*$/;
+const TABLE_SEPARATOR_CELL = /^:?-{3,}:?$/;
+
+/** 按未转义的 `|` 切分表格行；`\|` 是字面量管道符。 */
+function splitTableRow(line: string): string[] {
+  let source = String(line ?? "").trim();
+  if (source.startsWith("|")) source = source.slice(1);
+  if (source.endsWith("|")) source = source.slice(0, -1);
+  const cells: string[] = [];
+  let buffer = "";
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === "\\" && source[index + 1] === "|") {
+      buffer += "|";
+      index += 1;
+      continue;
+    }
+    if (character === "|") {
+      cells.push(buffer.trim());
+      buffer = "";
+      continue;
+    }
+    buffer += character;
+  }
+  cells.push(buffer.trim());
+  return cells;
+}
+
+function isTableSeparator(line: string): boolean {
+  const cells = splitTableRow(line);
+  return cells.length > 0 && cells.every((cell) => TABLE_SEPARATOR_CELL.test(cell));
+}
+
+function tableAlign(cell: string): "left" | "center" | "right" | null {
+  const left = cell.startsWith(":");
+  const right = cell.endsWith(":");
+  if (left && right) return "center";
+  if (left) return "left";
+  if (right) return "right";
+  return null;
+}
+
+function isTableStart(lines: string[], line: number): boolean {
+  return line + 1 < lines.length && lines[line].includes("|") && isTableSeparator(lines[line + 1]);
+}
 
 export function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
   const lines = String(markdown ?? "").replace(/\r\n?/g, "\n").split("\n");
@@ -49,6 +94,21 @@ export function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
     if (HR.test(raw)) {
       blocks.push({ type: "hr" });
       line += 1;
+      continue;
+    }
+
+    if (isTableStart(lines, line)) {
+      const header = splitTableRow(raw);
+      const align = splitTableRow(lines[line + 1]).map(tableAlign);
+      line += 2;
+      const rows: string[][] = [];
+      while (line < lines.length && lines[line].trim() && lines[line].includes("|")) {
+        const cells = splitTableRow(lines[line]).slice(0, header.length);
+        while (cells.length < header.length) cells.push("");
+        rows.push(cells);
+        line += 1;
+      }
+      blocks.push({ type: "table", index: index(), header, align, rows });
       continue;
     }
 
@@ -86,7 +146,7 @@ export function parseMarkdownBlocks(markdown: string): MarkdownBlock[] {
     }
 
     const paragraph: string[] = [];
-    while (line < lines.length && lines[line].trim() && !FENCE.test(lines[line]) && !HR.test(lines[line]) && !HEADING.test(lines[line]) && !UNORDERED.test(lines[line]) && !ORDERED.test(lines[line]) && !BLOCKQUOTE.test(lines[line])) {
+    while (line < lines.length && lines[line].trim() && !FENCE.test(lines[line]) && !HR.test(lines[line]) && !HEADING.test(lines[line]) && !UNORDERED.test(lines[line]) && !ORDERED.test(lines[line]) && !BLOCKQUOTE.test(lines[line]) && !isTableStart(lines, line)) {
       paragraph.push(lines[line].trim());
       line += 1;
     }
@@ -179,6 +239,8 @@ export function blockPlainText(block: MarkdownBlock): string {
       return block.text;
     case "list":
       return block.items.join(" ");
+    case "table":
+      return [...block.header, ...block.rows.flat()].join(" ");
     default:
       return "";
   }

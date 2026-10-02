@@ -13,6 +13,7 @@ import { sanitizeArticleHtml } from "./html-sanitize";
 import { renderMarkdownAsGzhHtml } from "./gzh-markdown";
 import { setReviewDecision } from "./reviews";
 import type { SessionUser } from "./auth";
+import { listArticlesForViewer, setArticlePublicForViewer, type Viewer } from "./article-access";
 
 type Env = { DB: D1Database };
 
@@ -141,33 +142,11 @@ const MARK_SELECT = `SELECT m.id, m.target_type AS targetType, m.target_id AS ta
 
 // ─── 文章列表 / 详情 ─────────────────────────────────
 
-export type ArticleListItem = {
-  slug: string; date: string | null; title: string | null; topic: string | null; status: string | null;
-  reviewRound: number; isPublic: boolean; hasHtml: boolean; updatedAt: string;
-};
+export type { ArticleListItem } from "./article-access";
 
-export async function listArticles(env: Env, options: { includePrivate?: boolean } = {}): Promise<ArticleListItem[]> {
+export async function listArticles(env: Env, viewer: Viewer = null) {
   await ensureSchema(env.DB);
-  const includePrivate = options.includePrivate ? 1 : 0;
-  const rows = await env.DB.prepare(
-    `SELECT slug, date, title, topic, status, review_round AS reviewRound, is_public AS isPublic,
-        CASE WHEN article_html IS NOT NULL AND article_html != '' THEN 1 ELSE 0 END AS hasHtml,
-        updated_at AS updatedAt
-     FROM articles
-     WHERE (? = 1 OR is_public = 1)
-     ORDER BY COALESCE(date, '') DESC, updated_at DESC, slug DESC`,
-  ).bind(includePrivate).all<Record<string, unknown>>();
-  return rows.results.map((row) => ({
-    slug: String(row.slug),
-    date: row.date ? String(row.date) : null,
-    title: row.title ? String(row.title) : null,
-    topic: row.topic ? String(row.topic) : null,
-    status: row.status ? String(row.status) : null,
-    reviewRound: Math.max(1, Number(row.reviewRound || 1)),
-    isPublic: Boolean(row.isPublic),
-    hasHtml: Boolean(row.hasHtml),
-    updatedAt: String(row.updatedAt || ""),
-  }));
+  return listArticlesForViewer(env.DB, viewer);
 }
 
 export async function getArticle(env: Env, slug: string) {
@@ -205,6 +184,7 @@ export async function getArticle(env: Env, slug: string) {
     contentHash: row.content_hash ? String(row.content_hash) : "",
     reviewRound: Math.max(1, Number(row.review_round || 1)),
     isPublic: Boolean(row.is_public),
+    ownerId: row.owner_id === null || row.owner_id === undefined ? null : Number(row.owner_id),
     topicId: row.topic_id === null || row.topic_id === undefined ? null : Number(row.topic_id),
     syncedAt: row.synced_at ? String(row.synced_at) : "",
     createdAt: row.created_at ? String(row.created_at) : "",
@@ -214,13 +194,10 @@ export async function getArticle(env: Env, slug: string) {
   };
 }
 
-export async function setArticlePublic(env: Env, slug: string, isPublic: boolean) {
+export async function setArticlePublic(env: Env, viewer: Viewer, slug: string, isPublic: boolean) {
   await ensureSchema(env.DB);
   const targetId = normalizeTargetId("article", slug);
-  await assertTargetExists(env, "article", targetId);
-  if (typeof isPublic !== "boolean") throw new Error("公开状态不合法");
-  await env.DB.prepare("UPDATE articles SET is_public = ?, updated_at = ? WHERE slug = ?").bind(isPublic ? 1 : 0, now(), targetId).run();
-  return { slug: targetId, isPublic };
+  return setArticlePublicForViewer(env.DB, viewer, targetId, isPublic);
 }
 
 export async function getTopicReviewTarget(env: Env, topicId: number) {

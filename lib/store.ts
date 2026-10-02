@@ -11,7 +11,7 @@ import { readXArticles, readXPost, readXProfile, xPostAddress, xProfileAddress }
 export type AppEnv = { DB: D1Database; AI?: { run: (model: string, input: unknown) => Promise<unknown> } };
 const now = () => new Date().toISOString();
 const day = () => new Date().toISOString().slice(0, 10);
-const SCHEMA_VERSION = "2026-10-02.1";
+const SCHEMA_VERSION = "2026-10-02.2";
 const schemaReady = new WeakMap<object, Promise<void>>();
 
 async function initializeSchema(db: D1Database) {
@@ -66,7 +66,7 @@ async function initializeSchema(db: D1Database) {
     db.prepare("CREATE INDEX IF NOT EXISTS content_strategies_active_idx ON content_strategies(is_active, version DESC)"),
     db.prepare("CREATE INDEX IF NOT EXISTS retrospectives_active_idx ON retrospectives(is_active, date DESC)"),
     db.prepare("CREATE INDEX IF NOT EXISTS retrospectives_title_idx ON retrospectives(title, version DESC)"),
-    db.prepare("CREATE TABLE IF NOT EXISTS articles (slug TEXT PRIMARY KEY, date TEXT, title TEXT, topic TEXT, status TEXT, meta_json TEXT NOT NULL DEFAULT '{}', draft_md TEXT, final_md TEXT, qa_report TEXT, article_html TEXT, content_hash TEXT, review_round INTEGER NOT NULL DEFAULT 1, is_public INTEGER NOT NULL DEFAULT 0, topic_id INTEGER, synced_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"),
+    db.prepare("CREATE TABLE IF NOT EXISTS articles (slug TEXT PRIMARY KEY, date TEXT, title TEXT, topic TEXT, status TEXT, meta_json TEXT NOT NULL DEFAULT '{}', draft_md TEXT, final_md TEXT, qa_report TEXT, article_html TEXT, content_hash TEXT, review_round INTEGER NOT NULL DEFAULT 1, is_public INTEGER NOT NULL DEFAULT 0, owner_id INTEGER, topic_id INTEGER, synced_at TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"),
     db.prepare("CREATE INDEX IF NOT EXISTS articles_date_idx ON articles(date DESC, updated_at DESC)"),
     db.prepare("CREATE INDEX IF NOT EXISTS articles_public_idx ON articles(is_public, updated_at DESC)"),
     db.prepare("CREATE TABLE IF NOT EXISTS article_assets (slug TEXT NOT NULL, path TEXT NOT NULL, content_type TEXT NOT NULL, bytes BLOB NOT NULL, size INTEGER NOT NULL, sha256 TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(slug, path))"),
@@ -109,6 +109,10 @@ async function initializeSchema(db: D1Database) {
   if (!itemColumns.results.some((column) => column.name === "content_fetch_status")) await db.prepare("ALTER TABLE items ADD COLUMN content_fetch_status TEXT").run();
   if (!itemColumns.results.some((column) => column.name === "content_fetch_reason")) await db.prepare("ALTER TABLE items ADD COLUMN content_fetch_reason TEXT").run();
   if (!itemColumns.results.some((column) => column.name === "content_fetched_at")) await db.prepare("ALTER TABLE items ADD COLUMN content_fetched_at TEXT").run();
+  const articleColumns = await db.prepare("PRAGMA table_info(articles)").all<{ name: string }>();
+  if (!articleColumns.results.some((column) => column.name === "owner_id")) await db.prepare("ALTER TABLE articles ADD COLUMN owner_id INTEGER").run();
+  await db.prepare("UPDATE articles SET owner_id = (SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1) WHERE owner_id IS NULL").run();
+  await db.prepare("CREATE INDEX IF NOT EXISTS articles_owner_idx ON articles(owner_id, updated_at DESC)").run();
   const requestColumns = await db.prepare("PRAGMA table_info(subscription_requests)").all<{ name: string }>();
   if (!requestColumns.results.some((column) => column.name === "kind")) await db.prepare("ALTER TABLE subscription_requests ADD COLUMN kind TEXT NOT NULL DEFAULT 'unknown'").run();
   if (!requestColumns.results.some((column) => column.name === "category")) await db.prepare("ALTER TABLE subscription_requests ADD COLUMN category TEXT").run();

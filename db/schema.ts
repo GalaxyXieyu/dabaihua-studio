@@ -326,6 +326,7 @@ export const articles = sqliteTable("articles", {
   contentHash: text("content_hash"),
   reviewRound: integer("review_round").notNull().default(1),
   isPublic: integer("is_public", { mode: "boolean" }).notNull().default(false),
+  ownerId: integer("owner_id"),
   topicId: integer("topic_id"),
   syncedAt: text("synced_at").notNull(),
   createdAt: text("created_at").notNull(),
@@ -333,6 +334,7 @@ export const articles = sqliteTable("articles", {
 }, (table) => [
   index("articles_date_idx").on(table.date, table.updatedAt),
   index("articles_public_idx").on(table.isPublic, table.updatedAt),
+  index("articles_owner_idx").on(table.ownerId, table.updatedAt),
 ]);
 
 export const articleAssets = sqliteTable("article_assets", {

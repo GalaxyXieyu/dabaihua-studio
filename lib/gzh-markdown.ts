@@ -64,6 +64,9 @@ function inlineTokenHtml(token: InlineToken): string {
       if (isHttpUrl(token.href)) {
         return `<a href="${escapeHtml(token.href)}" target="_blank" rel="noopener noreferrer" style="color:${RED};text-decoration:none;border-bottom:1px solid #FECACA;"><span leaf="">${escapeHtml(token.value)}</span></a>`;
       }
+      if (token.href.startsWith("/") && !token.href.startsWith("//")) {
+        return `<a href="${escapeHtml(token.href)}" style="color:${RED};text-decoration:none;border-bottom:1px solid #FECACA;"><span leaf="">${escapeHtml(token.value)}</span></a>`;
+      }
       return escapeHtml(token.value);
     default:
       return escapeHtml(token.value);
@@ -125,8 +128,57 @@ function renderList(items: string[], ordered: boolean, assetBase: string) {
   return `<section style="margin:0 0 20px;padding:0 10px;"><${tag} style="margin:0;padding-left:22px;font-size:16px;line-height:1.8;color:${BODY_COLOR};${style}">${body}</${tag}></section>`;
 }
 
+const CALLOUT_LABELS: Record<string, string> = {
+  note: "注",
+  info: "说明",
+  tip: "提示",
+  warning: "注意",
+  caution: "注意",
+  important: "重点",
+  quote: "引用",
+};
+
+function parseCallout(text: string): { type: string; title: string; body: string } | null {
+  const lines = String(text ?? "").split("\n");
+  const match = /^\[!([A-Za-z][A-Za-z-]*)\][+-]?(?:\s+(.*))?$/.exec((lines[0] || "").trim());
+  if (!match) return null;
+  return { type: match[1].toLowerCase(), title: (match[2] || "").trim(), body: lines.slice(1).join("\n").trim() };
+}
+
+function renderCallout(type: string, title: string, body: string, assetBase: string) {
+  const label = title || CALLOUT_LABELS[type] || type;
+  const bodyHtml = body
+    ? `<p style="margin:0;font-size:15px;color:#333;font-weight:400;line-height:1.8;"><span leaf="">${renderInline(body, assetBase)}</span></p>`
+    : "";
+  return `<section style="background:#F7F3EA;border-left:3px solid #1C1917;padding:14px 18px;margin:0 0 24px;"><p style="margin:0${body ? " 8px" : ""};font-size:13px;font-weight:700;color:#57534E;letter-spacing:1px;line-height:1.4;"><span leaf="">${escapeHtml(label)}</span></p>${bodyHtml}</section>`;
+}
+
 function renderBlockquote(text: string, assetBase: string) {
+  const callout = parseCallout(text);
+  if (callout) return renderCallout(callout.type, callout.title, callout.body, assetBase);
   return `<section style="background:#FEF2F2;border-radius:0 10px 10px 0;border-left:4px solid ${RED};padding:18px 22px;margin-bottom:24px;"><p style="font-size:16px;font-weight:700;color:${DEEP_RED};margin:0;line-height:1.8;"><span leaf="">${renderInline(text, assetBase)}</span></p></section>`;
+}
+
+function renderTable(block: { header: string[]; align: ("left" | "center" | "right" | null)[]; rows: string[][] }, assetBase: string) {
+  const alignStyle = (align: "left" | "center" | "right" | null) => (align ? `text-align:${align};` : "");
+  const header = block.header
+    .map(
+      (cell, index) =>
+        `<th style="${alignStyle(block.align[index])}font-family:Georgia,'Songti SC','Noto Serif SC',serif;font-weight:700;color:#1C1917;background:#F7F3EA;border-bottom:2px solid #1C1917;padding:8px 10px;"><span leaf="">${renderInline(cell, assetBase)}</span></th>`,
+    )
+    .join("");
+  const rows = block.rows
+    .map(
+      (row) =>
+        `<tr>${row
+          .map(
+            (cell, index) =>
+              `<td style="${alignStyle(block.align[index])}border-bottom:1px solid #E7E0D2;padding:8px 10px;vertical-align:top;"><span leaf="">${renderInline(cell, assetBase)}</span></td>`,
+          )
+          .join("")}</tr>`,
+    )
+    .join("");
+  return `<section style="margin:0 0 24px;overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:14px;line-height:1.6;color:#333;"><thead><tr>${header}</tr></thead><tbody>${rows}</tbody></table></section>`;
 }
 
 function renderCode(text: string) {
@@ -134,7 +186,7 @@ function renderCode(text: string) {
 }
 
 function renderDivider() {
-  return `<section style="padding:0 10px;"><section style="height:1px;background:linear-gradient(to right,transparent,#FCA5A5,${RED},#FCA5A5,transparent);margin:0;"><span leaf=""><br></span></section></section>`;
+  return `<section style="padding:0 10px;"><section style="height:1px;background:#E7E0D2;margin:0;"><span leaf=""><br></span></section></section>`;
 }
 
 export function renderMarkdownAsGzhHtml(markdown: string, options: GzhOptions = {}): string {
@@ -166,6 +218,9 @@ export function renderMarkdownAsGzhHtml(markdown: string, options: GzhOptions = 
         break;
       case "code":
         body.push(renderCode(block.text));
+        break;
+      case "table":
+        body.push(renderTable(block, assetBase));
         break;
       case "hr":
         body.push(renderDivider());

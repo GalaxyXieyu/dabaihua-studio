@@ -82,6 +82,11 @@ superme — 个人工作台（内容选题中心）的多端 CLI（云端命令�
   superme retro revise <id> --lesson "新教训" [--result "..."] [--problem "..."]
   superme retro history --title "..."
 
+文章命令:
+  superme article push <文件|目录> [--public] [--dry-run] [--root 目录]
+  superme article sync <目录> [--dry-run]
+  superme article list
+
 CLI 维护命令:
   superme update                             # 从远程更新到最新版
   superme update --check                     # 只检查不更新
@@ -94,12 +99,16 @@ CLI 维护命令:
 """
 
 import argparse
+import base64
 import getpass
+import hashlib
 import json
 import os
 import re
 import socket
+import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -110,10 +119,29 @@ DEFAULT_ENDPOINT = "https://superme.aigalaxy.top"
 CONFIG_DIR = Path(os.environ.get("TOPICS_CONFIG_DIR", "~/.config/topics-cli")).expanduser()
 CONFIG_FILE = CONFIG_DIR / "config.json"
 STRATEGY_CACHE = CONFIG_DIR / "strategy-cache.json"
-CLI_VERSION = "2.3.0"
+CLI_VERSION = "2.4.0"
 
 KIND_ICON = {"rss": "📰", "x": "𝕏 ", "x-tweet": "𝕏 ", "wechat": "💬", "link": "🔗"}
 CATEGORY_LABEL = {"ai": "AI", "investment": "投资", "gaming": "游戏", "technology": "科技", "business": "商业", "product": "产品"}
+
+# ─── 文章推送常量 ─────────────────────────────────────────────────────────────
+
+ARTICLE_PROTOCOL = "dabaihua.article-push/v1"
+ARTICLES_STATE = CONFIG_DIR / "articles.json"
+ARTICLE_SLUG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$")
+ARTICLE_IMAGE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
+ARTICLE_MAX_IMAGE_BYTES = 2 * 1024 * 1024
+ARTICLE_SIPS = "/usr/bin/sips"
+ARTICLE_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
+ARTICLE_EMBED_RE = re.compile(r"!\[\[([^\]\|]+)(?:\|([^\]]*))?\]\]")
+ARTICLE_MD_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\((?:<([^>]*)>|([^)\n]*))\)")
+ARTICLE_WIKILINK_RE = re.compile(r"\[\[([^\]\|]+?)(?:\|([^\]]*))?\]\]")
+ARTICLE_REMOTE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
+ARTICLE_UNSET = object()
+
+
+class ArticleError(Exception):
+    pass
 
 
 # ─── 配置 ─────────────────────────────────────────────────────────────────────
@@ -1070,6 +1098,690 @@ def cmd_retro(args):
     print(f"\n共 {len(items)} 条 · superme retro new 创建 · superme retro revise <id> 修订")
 
 
+# ─── 文章推送 ─────────────────────────────────────────────────────────────────
+
+def _article_state_load():
+    if ARTICLES_STATE.exists():
+        try:
+            data = json.loads(ARTICLES_STATE.read_text())
+            if isinstance(data, dict):
+                data.setdefault("version", 1)
+                data.setdefault("endpoints", {})
+                return data
+        except (OSError, json.JSONDecodeError):
+            pass
+    return {"version": 1, "endpoints": {}}
+
+
+def _article_state_save(state):
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    ARTICLES_STATE.write_text(json.dumps(state, ensure_ascii=False, indent=1))
+    try:
+        os.chmod(ARTICLES_STATE, 0o600)
+    except OSError:
+        pass
+
+
+def _article_state_files(state):
+    return state.setdefault("endpoints", {}).setdefault(endpoint(), {}).setdefault("files", {})
+
+
+def _article_scalar(value):
+    text = value.strip().strip("\r")
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in ("'", '"'):
+        return text[1:-1]
+    lowered = text.lower()
+    if lowered in ("true", "yes"):
+        return True
+    if lowered in ("false", "no"):
+        return False
+    if lowered in ("null", "~"):
+        return None
+    if text.startswith("[") and text.endswith("]"):
+        inner = text[1:-1].strip()
+        if not inner:
+            return []
+        return [_article_scalar(part) for part in inner.split(",")]
+    return text
+
+
+def _parse_frontmatter(text):
+    """解析文件开头的 YAML frontmatter，返回 (meta, body)。"""
+    if not text.startswith("---"):
+        return {}, text
+    lines = text.split("\n")
+    if lines[0].strip() != "---":
+        return {}, text
+    end = None
+    for index in range(1, len(lines)):
+        if lines[index].strip() == "---":
+            end = index
+            break
+    if end is None:
+        return {}, text
+    meta = {}
+    index = 1
+    while index < end:
+        raw = lines[index].rstrip("\r")
+        index += 1
+        if not raw.strip() or raw.lstrip().startswith("#"):
+            continue
+        match = re.match(r"^([A-Za-z0-9_-]+)\s*:\s*(.*)$", raw)
+        if not match:
+            continue
+        key = match.group(1).strip().lower()
+        value = match.group(2)
+        if value.strip() == "":
+            items = []
+            while index < end:
+                item_match = re.match(r"^\s*-\s+(.*)$", lines[index].rstrip("\r"))
+                if item_match:
+                    items.append(_article_scalar(item_match.group(1)))
+                    index += 1
+                elif not lines[index].strip():
+                    index += 1
+                else:
+                    break
+            meta[key] = items if items else None
+        else:
+            meta[key] = _article_scalar(value)
+    return meta, "\n".join(lines[end + 1:])
+
+
+def _article_title(meta, body, path):
+    value = meta.get("title")
+    if value is not None and str(value).strip():
+        return str(value).strip()
+    heading = re.search(r"^#\s+(.+)$", body, re.MULTILINE)
+    if heading:
+        return heading.group(1).strip()
+    return path.stem
+
+
+def _article_generate_slug(title, rel_path):
+    words = re.findall(r"[A-Za-z0-9]+", title.lower())
+    slug = re.sub(r"-+", "-", "-".join(words)).strip("-")[:60].strip("-")
+    if len(re.sub(r"[^A-Za-z0-9]", "", slug)) < 3:
+        return "n-" + hashlib.sha256(rel_path.encode("utf-8")).hexdigest()[:10]
+    return slug
+
+
+def _article_resolve_slug(meta, title, rel_path, abs_path, state_files):
+    value = meta.get("slug")
+    if value is not None and str(value).strip():
+        slug = str(value).strip()
+        if not ARTICLE_SLUG_RE.match(slug):
+            raise ArticleError("slug 不合法: %r（需匹配 [A-Za-z0-9][A-Za-z0-9._-]{0,120}）" % slug)
+        return slug
+    record = state_files.get(str(abs_path))
+    if record and record.get("slug"):
+        return record["slug"]
+    return _article_generate_slug(title, rel_path)
+
+
+def _article_tags(meta):
+    value = meta.get("tags")
+    tags = []
+    if isinstance(value, list):
+        for item in value:
+            if item is not None:
+                tags.append(str(item).strip())
+    elif isinstance(value, str):
+        tags = [part.strip() for part in value.split(",")]
+    return [tag for tag in tags if tag]
+
+
+def _article_status(meta):
+    value = meta.get("status")
+    if value is None or not str(value).strip():
+        return "draft"
+    status = str(value).strip().lower()
+    if status not in ("draft", "published"):
+        raise ArticleError("status 只能是 draft 或 published，得到 %r" % value)
+    return status
+
+
+def _article_date(meta):
+    value = meta.get("date")
+    if value is None or not str(value).strip():
+        return None
+    text = str(value).strip()
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", text):
+        raise ArticleError("date 必须是 YYYY-MM-DD，得到 %r" % value)
+    return text
+
+
+def _article_is_public(meta, status, cli_public):
+    if cli_public:
+        return True
+    if meta.get("public") is not None:
+        return bool(meta.get("public"))
+    if status == "published":
+        return True
+    if "status" in meta and str(meta.get("status")).strip().lower() == "draft":
+        return False
+    return None
+
+
+def _article_content_hash(title, status, is_public, date, tags, assets, markdown):
+    public_text = "" if is_public is None else ("true" if is_public else "false")
+    lines = [
+        ARTICLE_PROTOCOL,
+        "title:" + title,
+        "status:" + status,
+        "public:" + public_text,
+        "date:" + (date or ""),
+        "tags:" + "\t".join(tags or []),
+    ]
+    for asset in sorted(assets or [], key=lambda item: item["name"]):
+        lines.append("asset:" + asset["name"] + " " + asset["sha256"])
+    payload = "\n".join(lines) + "\n\n" + markdown
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _article_merge_ranges(ranges):
+    merged = []
+    for start, end in sorted(ranges):
+        if merged and start <= merged[-1][1]:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+        else:
+            merged.append((start, end))
+    return merged
+
+
+def _article_fenced_ranges(text):
+    ranges = []
+    lines = text.split("\n")
+    position = 0
+    fence_char = None
+    fence_start = 0
+    fence_len = 0
+    for line in lines:
+        line_start = position
+        line_end = position + len(line)
+        if fence_char is None:
+            match = ARTICLE_FENCE_RE.match(line)
+            if match:
+                fence_char = match.group(1)[0]
+                fence_len = len(match.group(1))
+                fence_start = line_start
+        else:
+            close = re.match(r"^ {0,3}(" + re.escape(fence_char) + r"{" + str(fence_len) + r",})\s*$", line)
+            if close:
+                ranges.append((fence_start, line_end))
+                fence_char = None
+        position = line_end + 1
+    if fence_char is not None:
+        ranges.append((fence_start, len(text)))
+    return ranges
+
+
+def _article_inline_code_ranges(text):
+    ranges = []
+    length = len(text)
+    index = 0
+    while index < length:
+        if text[index] != "`":
+            index += 1
+            continue
+        run_end = index
+        while run_end < length and text[run_end] == "`":
+            run_end += 1
+        run = run_end - index
+        search = run_end
+        closing = None
+        while search < length:
+            if text[search] == "`":
+                close_end = search
+                while close_end < length and text[close_end] == "`":
+                    close_end += 1
+                if close_end - search == run:
+                    closing = close_end
+                    break
+                search = close_end
+            else:
+                search += 1
+        if closing is None:
+            index = run_end
+        else:
+            ranges.append((index, closing))
+            index = closing
+    return ranges
+
+
+def _article_protected_ranges(text):
+    return _article_merge_ranges(_article_fenced_ranges(text) + _article_inline_code_ranges(text))
+
+
+def _article_split_protected(text, ranges):
+    position = 0
+    for start, end in ranges:
+        if start > position:
+            yield False, text[position:start]
+        yield True, text[start:end]
+        position = end
+    if position < len(text):
+        yield False, text[position:]
+
+
+class _ArticleNormalizer:
+    def __init__(self, path, root, note_index):
+        self.path = Path(path)
+        self.file_dir = self.path.parent
+        self.root = Path(root)
+        self.note_index = note_index
+        self.assets = {}
+        self.warnings = []
+        self._attachment = ARTICLE_UNSET
+
+    def warn(self, message):
+        if message not in self.warnings:
+            self.warnings.append(message)
+
+    def normalize(self, text):
+        pieces = []
+        for protected, piece in _article_split_protected(text, _article_protected_ranges(text)):
+            pieces.append(piece if protected else self._convert(piece))
+        return "".join(pieces)
+
+    def _convert(self, piece):
+        piece = re.sub(r"%%[\s\S]*?%%", "", piece)
+        piece = re.sub(r"==(.+?)==", r"**\1**", piece)
+        piece = ARTICLE_EMBED_RE.sub(self._embed, piece)
+        piece = ARTICLE_MD_IMAGE_RE.sub(self._md_image, piece)
+        piece = ARTICLE_WIKILINK_RE.sub(self._wikilink, piece)
+        return piece
+
+    def _embed(self, match):
+        target = match.group(1).strip()
+        base = target.split("#")[0].strip()
+        extension = Path(base).suffix.lower().lstrip(".")
+        if extension in ARTICLE_IMAGE_EXTS:
+            source = self._resolve_image(base)
+            if source is None:
+                self.warn("找不到图片: " + base)
+                return match.group(0)
+            name = self._store_image(source)
+            if name is None:
+                return match.group(0)
+            return "![%s](%s)" % (Path(base).stem, name)
+        return self._note_link(base, match.group(2), base)
+
+    def _md_image(self, match):
+        alt = match.group(1)
+        raw = (match.group(2) if match.group(2) is not None else match.group(3) or "").strip()
+        if not raw or ARTICLE_REMOTE_RE.match(raw) or raw.startswith("//"):
+            return match.group(0)
+        source = self._resolve_image(raw)
+        if source is None:
+            self.warn("找不到图片: " + raw)
+            return match.group(0)
+        name = self._store_image(source)
+        if name is None:
+            return match.group(0)
+        return "![%s](%s)" % (alt, name)
+
+    def _wikilink(self, match):
+        target = match.group(1).strip()
+        base = target.split("#")[0].strip()
+        return self._note_link(base, match.group(2), target)
+
+    def _note_link(self, base, alias, fallback):
+        display = alias.strip() if alias and alias.strip() else base
+        slug = self.note_index.get(Path(base).stem.lower())
+        if slug:
+            return "[%s](/articles/%s)" % (display, slug)
+        return display or fallback
+
+    def _attachment_folder(self):
+        if self._attachment is not ARTICLE_UNSET:
+            return self._attachment
+        self._attachment = None
+        config_path = self.root / ".obsidian" / "app.json"
+        if config_path.is_file():
+            try:
+                data = json.loads(config_path.read_text())
+            except (OSError, json.JSONDecodeError):
+                data = {}
+            value = data.get("attachmentFolderPath") if isinstance(data, dict) else None
+            if isinstance(value, str) and value.strip():
+                value = value.strip()
+                if value in (".", "./", "/"):
+                    self._attachment = self.root
+                elif value.startswith("/"):
+                    self._attachment = self.root / value.lstrip("/")
+                else:
+                    self._attachment = self.root / value
+        return self._attachment
+
+    def _resolve_image(self, raw):
+        if raw.startswith("<") and raw.endswith(">"):
+            raw = raw[1:-1].strip()
+        try:
+            decoded = urllib.parse.unquote(raw)
+        except Exception:
+            decoded = raw
+        target = Path(decoded)
+        candidates = []
+        if target.is_absolute():
+            candidates.append(target)
+        else:
+            candidates.append(self.file_dir / decoded)
+            if self.root != self.file_dir:
+                candidates.append(self.root / decoded)
+            attachment = self._attachment_folder()
+            if attachment is not None:
+                candidates.append(attachment / decoded)
+        for candidate in candidates:
+            try:
+                if candidate.is_file():
+                    return candidate
+            except OSError:
+                pass
+        wanted = target.name.lower()
+        best = None
+        for dirpath, dirnames, filenames in os.walk(self.root):
+            dirnames[:] = [name for name in dirnames if not name.startswith(".")]
+            for filename in filenames:
+                if filename.lower() == wanted:
+                    candidate = Path(dirpath) / filename
+                    if best is None or str(candidate) < str(best):
+                        best = candidate
+        return best
+
+    def _store_image(self, source):
+        try:
+            data = source.read_bytes()
+        except OSError as error:
+            self.warn("读不到图片 %s: %s" % (source.name, error))
+            return None
+        extension = source.suffix.lower().lstrip(".")
+        if extension not in ARTICLE_IMAGE_EXTS:
+            self.warn("不支持的图片格式: " + source.name)
+            return None
+        if len(data) > ARTICLE_MAX_IMAGE_BYTES:
+            compressed = self._compress_image(source)
+            if compressed is None:
+                self.warn("图片超过 2MB 且无法压缩，保留原样: " + source.name)
+                return None
+            data = compressed
+            extension = "jpg"
+        if extension == "jpeg":
+            extension = "jpg"
+        sha = hashlib.sha256(data).hexdigest()
+        if sha in self.assets:
+            return self.assets[sha]["name"]
+        name = "images/%s.%s" % (sha[:12], extension)
+        self.assets[sha] = {"name": name, "sha256": sha, "bytes": data}
+        return name
+
+    def _compress_image(self, source):
+        if not os.path.exists(ARTICLE_SIPS):
+            return None
+        handle = tempfile.NamedTemporaryFile(prefix="superme-image-", suffix=".jpg", delete=False)
+        handle.close()
+        try:
+            result = subprocess.run(
+                [ARTICLE_SIPS, "-s", "format", "jpeg", "-s", "formatOptions", "80", "-Z", "2400",
+                 str(source), "--out", handle.name],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+            )
+            if result.returncode != 0:
+                return None
+            data = Path(handle.name).read_bytes()
+            if len(data) <= ARTICLE_MAX_IMAGE_BYTES:
+                return data
+            return None
+        except (OSError, subprocess.SubprocessError):
+            return None
+        finally:
+            try:
+                os.unlink(handle.name)
+            except OSError:
+                pass
+
+
+def _collect_article_files(target):
+    if target.is_file():
+        return [target] if target.suffix.lower() == ".md" else []
+    found = []
+    for dirpath, dirnames, filenames in os.walk(target):
+        dirnames[:] = sorted(name for name in dirnames if not name.startswith("."))
+        for filename in sorted(filenames):
+            if filename.lower().endswith(".md") and not filename.startswith("."):
+                found.append(Path(dirpath) / filename)
+    return found
+
+
+def _article_relative(path, root):
+    try:
+        relative = os.path.relpath(str(path), str(root))
+    except ValueError:
+        return path.name
+    return relative.replace(os.sep, "/")
+
+
+def _article_http(method, path, body=None):
+    url = endpoint() + path
+    headers = {
+        "Content-Type": "application/json",
+        "Origin": endpoint(),
+        "Referer": endpoint() + "/",
+        "User-Agent": "superme-cli/" + CLI_VERSION,
+    }
+    token = load_config().get("token")
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    data = json.dumps(body).encode("utf-8") if body is not None else None
+    req = urllib.request.Request(url, data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=120) as response:
+            raw = response.read().decode("utf-8")
+            return response.status, (json.loads(raw) if raw else {})
+    except urllib.error.HTTPError as error:
+        raw = error.read().decode("utf-8")
+        try:
+            payload = json.loads(raw)
+        except (ValueError, TypeError):
+            payload = {"error": raw[:200]}
+        return error.code, payload
+    except urllib.error.URLError as error:
+        raise ArticleError("连不上 %s: %s" % (endpoint(), error.reason))
+
+
+def _article_uploaded_assets(state_files, slug):
+    uploaded = {}
+    for record in state_files.values():
+        if record.get("slug") == slug:
+            for name, sha in (record.get("assets") or {}).items():
+                uploaded[name] = sha
+    return uploaded
+
+
+def _article_push_one(entry, assets, state_files):
+    slug = entry["slug"]
+    uploaded = _article_uploaded_assets(state_files, slug)
+    payload_assets = []
+    for asset in assets:
+        item = {"name": asset["name"], "sha256": asset["sha256"]}
+        if uploaded.get(asset["name"]) != asset["sha256"]:
+            item["base64"] = base64.b64encode(asset["bytes"]).decode("ascii")
+        payload_assets.append(item)
+    body = {
+        "protocol": ARTICLE_PROTOCOL,
+        "title": entry["title"],
+        "markdown": entry["markdown"],
+        "status": entry["status"],
+        "tags": entry["tags"],
+        "sourcePath": entry["rel"],
+        "contentHash": entry["contentHash"],
+        "assets": payload_assets,
+    }
+    if entry["is_public"] is not None:
+        body["isPublic"] = entry["is_public"]
+    if entry["date"]:
+        body["date"] = entry["date"]
+    path = "/api/articles/" + urllib.parse.quote(slug)
+    try:
+        status, response = _article_http("PUT", path, body)
+    except ArticleError as error:
+        print("失败 %s: %s" % (slug, error))
+        return True
+    if status == 422:
+        missing = [name for name in (response.get("missingAssets") or []) if name]
+        if missing:
+            by_name = {asset["name"]: asset for asset in assets}
+            for item in payload_assets:
+                if item["name"] in missing and "base64" not in item:
+                    asset = by_name.get(item["name"])
+                    if asset is not None:
+                        item["base64"] = base64.b64encode(asset["bytes"]).decode("ascii")
+            try:
+                status, response = _article_http("PUT", path, body)
+            except ArticleError as error:
+                print("失败 %s: %s" % (slug, error))
+                return True
+    if status in (200, 201):
+        result = response.get("result") or ("created" if status == 201 else "updated")
+        print("%s %s · %s" % (slug, result, entry["title"]))
+        record = state_files.setdefault(str(entry["file"]), {})
+        record["slug"] = slug
+        record["contentHash"] = entry["contentHash"]
+        record["assets"] = {asset["name"]: asset["sha256"] for asset in assets}
+        record["pushedAt"] = datetime.now(timezone.utc).isoformat()
+        return False
+    code = response.get("code") or ""
+    message = response.get("error") or code or ("HTTP %s" % status)
+    if status == 401:
+        print("失败 %s: 未登录或 Key 已失效（先跑 superme login）" % slug)
+    elif status == 409 and code == "slug_taken":
+        print("失败 %s: slug 已被其他账号占用，请在 frontmatter 里换一个 slug，例如 slug: %s-2" % (slug, slug))
+    elif status == 409 and code == "slug_managed":
+        print("失败 %s: 该 slug 由服务器目录导入管理，请在 frontmatter 里换一个 slug" % slug)
+    else:
+        print("失败 %s: %s" % (slug, message))
+    return True
+
+
+def _cmd_article_list():
+    try:
+        status, response = _article_http("GET", "/api/articles")
+    except ArticleError as error:
+        sys.exit(str(error))
+    if status != 200:
+        sys.exit("服务器返回 %s: %s" % (status, response.get("error") or ""))
+    rows = response.get("articles") or response.get("items") or []
+    if not rows:
+        print("（还没有文章）")
+        return 0
+    for row in rows:
+        public = "公开" if row.get("isPublic") else "私密"
+        print("%-40s %s · %s · %s" % (
+            row.get("slug", ""), row.get("title") or "", public, str(row.get("date") or "")[:10],
+        ))
+    return 0
+
+
+def _article_default_root(target):
+    """没给 --root 时：从目标往上找 Obsidian 库根（含 .obsidian 目录）；找不到就用目标目录本身。
+    这样单独推送库里的一篇笔记，也能找到库里别处的附件。"""
+    start = target if target.is_dir() else target.parent
+    for candidate in [start] + list(start.parents):
+        if (candidate / ".obsidian").is_dir():
+            return candidate
+    return start
+
+
+def _cmd_article_push(args, sync):
+    if not args.path:
+        sys.exit("用法: superme article %s <文件|目录> [--dry-run]" % ("sync" if sync else "push"))
+    target = Path(args.path).expanduser()
+    if not target.exists():
+        sys.exit("找不到: " + str(target))
+    target = target.resolve()
+    root = Path(args.root).expanduser().resolve() if args.root else _article_default_root(target)
+    if not root.exists():
+        sys.exit("找不到根目录: " + str(root))
+    files = _collect_article_files(target)
+    if not files:
+        print("（没有 .md 文件）")
+        return 0
+    state = _article_state_load()
+    state_files = _article_state_files(state)
+    entries = []
+    for path in files:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError as error:
+            print("跳过 %s: 读取失败 %s" % (path.name, error))
+            continue
+        meta, body = _parse_frontmatter(text)
+        title = _article_title(meta, body, path)
+        rel = _article_relative(path, root)
+        if meta.get("publish") is False:
+            print("跳过 %s: publish: false" % rel)
+            continue
+        try:
+            slug = _article_resolve_slug(meta, title, rel, path, state_files)
+            status = _article_status(meta)
+            date = _article_date(meta)
+        except ArticleError as error:
+            print("跳过 %s: %s" % (rel, error))
+            continue
+        entries.append({
+            "file": path, "rel": rel, "meta": meta, "body": body,
+            "title": title, "slug": slug, "status": status, "date": date,
+        })
+    if not entries:
+        return 0
+    note_index = {}
+    for abs_key, record in state_files.items():
+        if record.get("slug"):
+            note_index[Path(abs_key).stem.lower()] = record["slug"]
+    for entry in entries:
+        note_index[entry["file"].stem.lower()] = entry["slug"]
+    failed = 0
+    unchanged = 0
+    for entry in entries:
+        normalizer = _ArticleNormalizer(entry["file"], root, note_index)
+        entry["markdown"] = normalizer.normalize(entry["body"])
+        assets = list(normalizer.assets.values())
+        entry["tags"] = _article_tags(entry["meta"])
+        entry["is_public"] = _article_is_public(entry["meta"], entry["status"], args.public)
+        entry["contentHash"] = _article_content_hash(
+            entry["title"], entry["status"], entry["is_public"], entry["date"],
+            entry["tags"], assets, entry["markdown"],
+        )
+        cached = state_files.get(str(entry["file"])) or {}
+        changed = cached.get("contentHash") != entry["contentHash"]
+        if sync and not changed:
+            print("%s 未变化" % entry["slug"])
+            unchanged += 1
+            continue
+        if args.dry_run:
+            public_text = "公开" if entry["is_public"] is True else ("私密" if entry["is_public"] is False else "默认")
+            print("%s · %s · %s/%s · 图片 %d · %s" % (
+                entry["slug"], entry["title"], entry["status"], public_text, len(assets),
+                "已变化" if changed else "未变化",
+            ))
+            for warning in normalizer.warnings:
+                print("  警告: " + warning)
+            continue
+        if _article_push_one(entry, assets, state_files):
+            failed += 1
+    if not args.dry_run:
+        _article_state_save(state)
+    if unchanged:
+        print("未变化 %d 篇" % unchanged)
+    return 1 if failed else 0
+
+
+def cmd_article(args):
+    if args.action == "list":
+        return _cmd_article_list()
+    return _cmd_article_push(args, sync=(args.action == "sync"))
+
+
 # ─── CLI 维护 ──────────────────────────────────────────────────────────────────
 
 def cmd_version(_):
@@ -1289,6 +2001,14 @@ def main():
     rt.add_argument("--series", help="new: 关联系列")
     rt.add_argument("--topics", help="new: 关联选题ID，逗号分隔如 5,7,9")
 
+    # ─── 文章推送 ───
+    art = sub.add_parser("article", help="文章推送（push/sync/list）")
+    art.add_argument("action", choices=["push", "sync", "list"])
+    art.add_argument("path", nargs="?", help="push/sync: 文件或目录")
+    art.add_argument("--public", action="store_true", help="推送为公开文章")
+    art.add_argument("--dry-run", action="store_true", help="只预览，不联网、不写状态")
+    art.add_argument("--root", help="同步根目录（默认目录本身/文件所在目录）")
+
     # ─── CLI 维护 ───
     sub.add_parser("version", help="显示 CLI 版本")
     upd = sub.add_parser("update", help="更新 CLI 到最新版")
@@ -1306,8 +2026,11 @@ def main():
         "schedule": cmd_schedule, "unschedule": cmd_unschedule,
         "calendar": cmd_calendar, "publish": cmd_publish, "series": cmd_series,
         "retro": cmd_retro, "version": cmd_version, "update": cmd_update,
+        "article": cmd_article,
     }
-    handlers[args.cmd](args)
+    result = handlers[args.cmd](args)
+    if isinstance(result, int) and result:
+        sys.exit(result)
 
 
 if __name__ == "__main__":

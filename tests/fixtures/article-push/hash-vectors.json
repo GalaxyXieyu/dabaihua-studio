@@ -1,0 +1,37 @@
+{
+  "protocol": "dabaihua.article-push/v1",
+  "note": "测试向量：服务端 TS 与 superme CLI 必须算出相同的 contentHash（见 docs/article-push-protocol.md §3）",
+  "cases": [
+    {
+      "name": "basic",
+      "body": {
+        "title": "样例文章 Sample",
+        "status": "draft",
+        "tags": [
+          "agent",
+          "笔记"
+        ],
+        "date": "2026-10-02",
+        "markdown": "# 样例文章 Sample\n\n正文第一段。\n\n| 列 A | 列 B |\n| --- | ---: |\n| 1 | 2 |\n\n![图](images/0123456789ab.png)\n",
+        "assets": [
+          {
+            "name": "images/0123456789ab.png",
+            "sha256": "0123456789ab0000000000000000000000000000000000000000000000000000"
+          }
+        ]
+      },
+      "contentHash": "483e53de3f3fcc93ebbd0321f5d93dff2ccdb2499d42456fae7687dd9324114f"
+    },
+    {
+      "name": "public-no-date-no-assets",
+      "body": {
+        "title": "T",
+        "status": "published",
+        "isPublic": true,
+        "tags": [],
+        "markdown": "hello"
+      },
+      "contentHash": "3f4fb56ea706e41ccc44f31daffc188ea40a26605c2e9d090cc47835d6265450"
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { env } from "cloudflare:workers";
 import { getSessionUser } from "../../lib/auth";
-import { listArticles } from "../../lib/article-review";
+import { listArticlesForViewer } from "../../lib/article-access";
 import { requestOrigin } from "../../lib/request-origin";
 import { SiteAppBar } from "../_components/SiteAppBar";
 import { statusLabelFor } from "../_components/article-status";
@@ -21,7 +21,7 @@ export default async function ArticlesPage() {
       },
     }),
   );
-  const articles = await listArticles(env, { includePrivate: Boolean(user) });
+  const articles = await listArticlesForViewer(env.DB, user ? { id: user.id, role: user.role } : null);
 
   return (
     <div className="art-a fixed inset-0 overflow-y-auto bg-[var(--canvas)] text-[var(--ink)]">
