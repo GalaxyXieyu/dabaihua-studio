@@ -8,7 +8,19 @@
 
 import { parseInline, parseMarkdownBlocks, type InlineToken } from "./review-markdown.ts";
 
-export type GzhOptions = { assetBase?: string };
+/**
+ * pageTitle：页面已经在头部显示了标题时传入；正文第一个标题如果是 `# H1` 且与它相同
+ * （忽略首尾空白、连续空白和 ** ` 等行内标记），正文里就不再重复渲染这个 H1。
+ */
+export type GzhOptions = { assetBase?: string; pageTitle?: string | null };
+
+export function normalizeTitleText(value: string | null | undefined) {
+  return String(value ?? "")
+    .normalize("NFKC")
+    .replace(/[*_`~]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 const FONT_STACK = "-apple-system,BlinkMacSystemFont,'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif";
 const BODY_COLOR = "#333";
@@ -109,7 +121,7 @@ function renderParagraph(text: string, assetBase: string) {
 }
 
 function renderTitle(text: string) {
-  return `<section style="margin:0 0 32px;padding:24px 20px 20px;border-bottom:3px solid ${RED};background:#FFFFFF;"><p style="margin:0;font-size:24px;font-weight:900;color:${TITLE_COLOR};line-height:1.35;letter-spacing:-0.5px;"><span leaf="">${escapeHtml(text)}</span></p></section>`;
+  return `<section data-gzh-title="" style="margin:0 0 32px;padding:24px 20px 20px;border-bottom:3px solid ${RED};background:#FFFFFF;"><p style="margin:0;font-size:24px;font-weight:900;color:${TITLE_COLOR};line-height:1.35;letter-spacing:-0.5px;"><span leaf="">${escapeHtml(text)}</span></p></section>`;
 }
 
 function renderChapter(text: string) {
@@ -194,8 +206,19 @@ export function renderMarkdownAsGzhHtml(markdown: string, options: GzhOptions = 
   const blocks = parseMarkdownBlocks(String(markdown ?? ""));
   const body: string[] = [];
   let titleUsed = false;
+  const pageTitle = normalizeTitleText(options.pageTitle);
+  const firstHeading = blocks.find((block) => block.type === "heading");
+  const skipBlock =
+    pageTitle && firstHeading && firstHeading.type === "heading" && firstHeading.level === 1 &&
+    normalizeTitleText(firstHeading.text) === pageTitle
+      ? firstHeading
+      : null;
 
   for (const block of blocks) {
+    if (block === skipBlock) {
+      titleUsed = true;
+      continue;
+    }
     switch (block.type) {
       case "heading":
         if (block.level === 1 && !titleUsed) {
@@ -231,7 +254,7 @@ export function renderMarkdownAsGzhHtml(markdown: string, options: GzhOptions = 
   }
 
   const inner = body.join("\n  ");
-  return `<section style="max-width:677px;margin:0 auto;background:#ffffff;font-family:${FONT_STACK};color:${BODY_COLOR};line-height:1.8;letter-spacing:0.5px;overflow-x:hidden;">\n  ${inner}\n</section>`;
+  return `<section data-gzh-md="" style="max-width:677px;margin:0 auto;background:#ffffff;font-family:${FONT_STACK};color:${BODY_COLOR};line-height:1.8;letter-spacing:0.5px;overflow-x:hidden;">\n  ${inner}\n</section>`;
 }
 
 export default renderMarkdownAsGzhHtml;

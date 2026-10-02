@@ -143,8 +143,11 @@
   font-family: var(--font-sans) !important;
 }
 
-/* 正文第一块（标题块）：去白底 / 阴影 / 边框，宋体 22px 600，下方 1px --line。 */
-.ar-a-body > section > :first-child {
+/* 正文第一块（标题块）：去白底 / 阴影 / 边框，宋体 22px 600，下方 1px --line。
+   外部 article.html 按位置认第一块；站内 Markdown 渲染（data-gzh-md）只认显式的
+   data-gzh-title 块——H1 与页面标题相同被省略、或正文没有 H1 时，第一段保持正文样式。 */
+.ar-a-body > section:not([data-gzh-md]) > :first-child,
+.ar-a-body > section[data-gzh-md] > [data-gzh-title] {
   margin: 0 0 22px !important;
   padding: 0 0 14px !important;
   background: transparent !important;
@@ -156,12 +159,13 @@
   text-align: left !important;
 }
 
-.ar-a-body > section > :first-child h1,
-.ar-a-body > section > :first-child h2,
-.ar-a-body > section > :first-child p,
-.ar-a-body > section > h1:first-child,
-.ar-a-body > section > h2:first-child,
-.ar-a-body > section > p:first-child {
+.ar-a-body > section:not([data-gzh-md]) > :first-child h1,
+.ar-a-body > section:not([data-gzh-md]) > :first-child h2,
+.ar-a-body > section:not([data-gzh-md]) > :first-child p,
+.ar-a-body > section:not([data-gzh-md]) > h1:first-child,
+.ar-a-body > section:not([data-gzh-md]) > h2:first-child,
+.ar-a-body > section:not([data-gzh-md]) > p:first-child,
+.ar-a-body > section[data-gzh-md] > [data-gzh-title] p {
   font-family: var(--font-serif) !important;
   font-size: 22px !important;
   font-weight: 600 !important;

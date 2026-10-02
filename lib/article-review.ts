@@ -158,16 +158,18 @@ export async function getArticle(env: Env, slug: string) {
   const finalMd = row.final_md ? String(row.final_md) : "";
   const draftMd = row.draft_md ? String(row.draft_md) : "";
   const assetBase = `/api/articles/${targetId}/assets`;
+  // 页面头部显示的就是这个标题（app/articles/[slug]/page.tsx：article.title || slug）。
+  const titleForPage = row.title ? String(row.title) : targetId;
   let renderedHtml = "";
   let htmlSource: "article.html" | "02-final.md" | "01-draft.md" | "none" = "none";
   if (articleHtml.trim()) {
     renderedHtml = sanitizeArticleHtml(articleHtml, { assetBase });
     htmlSource = "article.html";
   } else if (finalMd.trim()) {
-    renderedHtml = renderMarkdownAsGzhHtml(finalMd, { assetBase });
+    renderedHtml = renderMarkdownAsGzhHtml(finalMd, { assetBase, pageTitle: titleForPage });
     htmlSource = "02-final.md";
   } else if (draftMd.trim()) {
-    renderedHtml = renderMarkdownAsGzhHtml(draftMd, { assetBase });
+    renderedHtml = renderMarkdownAsGzhHtml(draftMd, { assetBase, pageTitle: titleForPage });
     htmlSource = "01-draft.md";
   }
   return {

@@ -324,6 +324,27 @@ test("renders tables, callouts and same-site links without gradients", () => {
   assert.doesNotMatch(html, /linear-gradient/);
 });
 
+test("drops a leading H1 that repeats the page title, keeps everything else", () => {
+  const md = "#   Agent  **评测**清单 \n\n正文第一段。\n\n# 第二个一级标题\n\n## 章节\n";
+  const html = renderMarkdownAsGzhHtml(md, { pageTitle: "Agent 评测清单" });
+  assert.doesNotMatch(html, /Agent  ?\*?\*?评测/);
+  assert.match(html, /正文第一段/);
+  // later H1s are no longer promoted to the big title block
+  assert.match(html, /<h2[^>]*><span leaf="">第二个一级标题<\/span><\/h2>/);
+  assert.doesNotMatch(html, /font-size:24px;font-weight:900/);
+  assert.doesNotMatch(html, /data-gzh-title/);
+  assert.match(html, /^<section data-gzh-md=""/);
+
+  // no pageTitle → unchanged behaviour (title block rendered)
+  assert.match(renderMarkdownAsGzhHtml(md), /font-size:24px;font-weight:900[^<]*><span leaf="">Agent  \*\*评测\*\*清单<\/span>/);
+  assert.match(renderMarkdownAsGzhHtml(md), /<section data-gzh-title=""/);
+  // different title → kept
+  assert.match(renderMarkdownAsGzhHtml(md, { pageTitle: "别的标题" }), /font-size:24px;font-weight:900/);
+  // first heading is H2 → nothing dropped even if a later H1 matches
+  const h2First = renderMarkdownAsGzhHtml("## 导语\n\n# Agent 评测清单\n", { pageTitle: "Agent 评测清单" });
+  assert.match(h2First, /Agent 评测清单/);
+});
+
 test("blockPlainText includes table content", () => {
   const blocks = parseMarkdownBlocks("| a | b |\n| --- | --- |\n| 1 | 2 |\n");
   assert.equal(blocks[0].type, "table");

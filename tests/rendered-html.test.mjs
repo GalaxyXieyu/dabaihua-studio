@@ -729,7 +729,7 @@ test("sanitizes trusted-pipeline gzh html conservatively", async () => {
 test("renders markdown as a gzh html fragment with inline styles", async () => {
   const { renderMarkdownAsGzhHtml } = await import("../lib/gzh-markdown.ts");
   const html = renderMarkdownAsGzhHtml("# 标题\n\n正文一段，**加粗**。\n\n## 章节标题\n\n- 甲\n- 乙\n\n> 引用金句\n\n![封面](images/cover.png)\n\n[官网](https://example.com)", { assetBase: "/api/articles/demo/assets" });
-  assert.match(html, /^<section style="/);
+  assert.match(html, /^<section data-gzh-md="" style="/);
   assert.match(html, /#DC2626/);
   assert.doesNotMatch(html, /class=/);
   assert.doesNotMatch(html, /<script/i);
