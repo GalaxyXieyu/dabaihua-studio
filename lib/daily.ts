@@ -1,7 +1,6 @@
 /**
- * 日报页的纯数据类型与展示助手。数据来自 scripts/build-daily.mjs 生成的
- * content/daily/daily.json（由 lib/daily-data.ts 载入）。这里不引入任何
- * 运行时依赖，方便 node 的类型擦除测试直接 import。
+ * 日报页的纯数据类型与展示助手。数据在运行时由 lib/daily-data.ts 从 D1 读取，
+ * 这里不引入任何运行时依赖，方便 node 的类型擦除测试直接 import。
  */
 
 import { splitSentences } from "./sentences.ts";

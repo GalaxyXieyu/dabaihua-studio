@@ -87,6 +87,10 @@ superme — 个人工作台（内容选题中心）的多端 CLI（云端命令�
   superme article sync <目录> [--dry-run]
   superme article list
 
+数据命令:
+  superme data put <daily|career> <文件> [--dry-run] [--endpoint URL]   # 上传日报/职业数据到 D1
+  superme data status [--endpoint URL]                                  # 看已上传数据的元信息
+
 CLI 维护命令:
   superme update                             # 从远程更新到最新版
   superme update --check                     # 只检查不更新
@@ -119,7 +123,7 @@ DEFAULT_ENDPOINT = "https://superme.aigalaxy.top"
 CONFIG_DIR = Path(os.environ.get("TOPICS_CONFIG_DIR", "~/.config/topics-cli")).expanduser()
 CONFIG_FILE = CONFIG_DIR / "config.json"
 STRATEGY_CACHE = CONFIG_DIR / "strategy-cache.json"
-CLI_VERSION = "2.4.0"
+CLI_VERSION = "2.5.0"
 
 KIND_ICON = {"rss": "📰", "x": "𝕏 ", "x-tweet": "𝕏 ", "wechat": "💬", "link": "🔗"}
 CATEGORY_LABEL = {"ai": "AI", "investment": "投资", "gaming": "游戏", "technology": "科技", "business": "商业", "product": "产品"}
@@ -1782,6 +1786,184 @@ def cmd_article(args):
     return _cmd_article_push(args, sync=(args.action == "sync"))
 
 
+# ─── 私密数据（D1） ─────────────────────────────────────────────────────────
+
+_DATA_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _data_is_nullable_number(value):
+    return value is None or (isinstance(value, (int, float)) and not isinstance(value, bool))
+
+
+def _data_validate(name, value):
+    """和 lib/private-data.ts 的 validate* 保持同一套宽松规则，只在本机提前报错。"""
+    if not isinstance(value, dict):
+        return "顶层必须是对象"
+    if name == "daily":
+        if not isinstance(value.get("generatedAt"), str) or not value["generatedAt"]:
+            return "generatedAt 必须是非空字符串"
+        days = value.get("days")
+        if not isinstance(days, list):
+            return "days 必须是数组"
+        if len(days) > 4000:
+            return "days 不能超过 4000 条"
+        seen = set()
+        for index, day in enumerate(days):
+            if not isinstance(day, dict):
+                return "days[%d] 必须是对象" % index
+            date = day.get("date")
+            if not isinstance(date, str) or not _DATA_DATE_RE.match(date):
+                return "days[%d].date 必须是 YYYY-MM-DD" % index
+            if date in seen:
+                return "日期重复：%s" % date
+            seen.add(date)
+            if not isinstance(day.get("summary"), str):
+                return "days[%d].summary 必须是字符串" % index
+            if not isinstance(day.get("sections"), dict):
+                return "days[%d].sections 必须是对象" % index
+            if not isinstance(day.get("repos"), list):
+                return "days[%d].repos 必须是数组" % index
+            if not isinstance(day.get("repoStats"), list):
+                return "days[%d].repoStats 必须是数组" % index
+            for key in ("commits", "tokensM"):
+                if not _data_is_nullable_number(day.get(key)):
+                    return "days[%d].%s 必须是数字或 null" % (index, key)
+        return None
+    if value.get("schema_version") != 1:
+        return "schema_version 必须是 1"
+    if not isinstance(value.get("generated_at"), str) or not value["generated_at"]:
+        return "generated_at 必须是非空字符串"
+    for key in ("header", "missing"):
+        if not isinstance(value.get(key), dict):
+            return "%s 必须是对象" % key
+    for key in ("jobs", "results", "pending"):
+        if not isinstance(value.get(key), list):
+            return "%s 必须是数组" % key
+    return None
+
+
+def _data_summary(name, value):
+    if name == "daily":
+        days = value.get("days") or []
+        dates = sorted(str(day.get("date")) for day in days if isinstance(day, dict) and day.get("date"))
+        return {"days": len(days), "first": dates[0] if dates else None, "last": dates[-1] if dates else None}
+    return {"jobs": len(value.get("jobs") or []), "results": len(value.get("results") or [])}
+
+
+def _data_summary_text(name, summary):
+    if name == "daily":
+        first, last = summary.get("first"), summary.get("last")
+        span = "%s..%s" % (first, last) if first and last else "—"
+        return "%s 天 · %s" % (summary.get("days", 0), span)
+    return "%s 岗位 · %s 成果" % (summary.get("jobs", 0), summary.get("results", 0))
+
+
+def _data_size(value):
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return "?"
+    if number >= 1024 * 1024:
+        return "%.1f MB" % (number / (1024 * 1024))
+    return "%.0f KB" % (number / 1024)
+
+
+def _data_shanghai(value):
+    if not value:
+        return "?"
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M")
+    except ValueError:
+        return str(value)[:16]
+
+
+def _data_http(method, path, body_text=None, endpoint_override=None):
+    """发原始 UTF-8 body（日报 JSON 已经序列化过，绝不再 json.dumps 一次）。"""
+    base = (endpoint_override or endpoint()).rstrip("/")
+    headers = {
+        "Content-Type": "application/json",
+        "Origin": base,
+        "Referer": base + "/",
+        "User-Agent": "superme-cli/" + CLI_VERSION,
+    }
+    token = load_config().get("token")
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    data = body_text.encode("utf-8") if body_text is not None else None
+    req = urllib.request.Request(base + path, data=data, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=120) as response:
+            raw = response.read().decode("utf-8")
+            return response.status, (json.loads(raw) if raw else {})
+    except urllib.error.HTTPError as error:
+        raw = error.read().decode("utf-8")
+        try:
+            payload = json.loads(raw)
+        except (ValueError, TypeError):
+            payload = {"error": raw[:200]}
+        return error.code, payload
+    except urllib.error.URLError as error:
+        sys.exit("连不上 %s: %s" % (base, error.reason))
+
+
+def _cmd_data_status(args):
+    for name in ("daily", "career"):
+        status, response = _data_http("GET", "/api/%s/data" % name, endpoint_override=args.endpoint)
+        if status == 404:
+            print("%-7s未上传" % name)
+            continue
+        if status != 200:
+            code = response.get("code") or ""
+            message = response.get("error") or code or ("HTTP %s" % status)
+            sys.exit("%s: %s · %s" % (name, code or "error", message))
+        sha = str(response.get("sha256") or "")[:12]
+        print("%-7s %s（北京时间） · %s · %s · %s" % (
+            name,
+            _data_shanghai(response.get("uploadedAt")),
+            sha,
+            _data_size(response.get("bytes")),
+            _data_summary_text(name, response.get("summary") or {}),
+        ))
+    return 0
+
+
+def cmd_data(args):
+    if args.action == "status":
+        return _cmd_data_status(args)
+    if not args.name or not args.file:
+        sys.exit("用法: superme data put <daily|career> <文件> [--dry-run] [--endpoint URL]")
+    name = args.name
+    path = Path(args.file)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as error:
+        sys.exit("无法读取 %s: %s" % (path, error))
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError as error:
+        sys.exit("%s 不是合法 JSON: %s" % (path, error))
+    problem = _data_validate(name, value)
+    if problem:
+        sys.exit("%s 校验失败: %s" % (name, problem))
+    local_summary = _data_summary(name, value)
+    if args.dry_run:
+        print("dry-run %s: %s · %s" % (name, _data_summary_text(name, local_summary), _data_size(len(text.encode("utf-8")))))
+        return 0
+    status, response = _data_http("PUT", "/api/%s/data" % name, text, endpoint_override=args.endpoint)
+    if status == 200:
+        if response.get("status") == "unchanged":
+            print("%s: unchanged" % name)
+        else:
+            print("%s: updated · %s · %s" % (name, _data_summary_text(name, response.get("summary") or local_summary), _data_size(response.get("bytes"))))
+        return 0
+    code = response.get("code") or ""
+    message = response.get("error") or code or ("HTTP %s" % status)
+    sys.exit("%s: %s · %s" % (name, code or "error", message))
+
+
 # ─── CLI 维护 ──────────────────────────────────────────────────────────────────
 
 def cmd_version(_):
@@ -2009,6 +2191,14 @@ def main():
     art.add_argument("--dry-run", action="store_true", help="只预览，不联网、不写状态")
     art.add_argument("--root", help="同步根目录（默认目录本身/文件所在目录）")
 
+    # ─── 私密数据 ───
+    dta = sub.add_parser("data", help="上传/查看日报与职业数据")
+    dta.add_argument("action", choices=["put", "status"])
+    dta.add_argument("name", nargs="?", choices=["daily", "career"])
+    dta.add_argument("file", nargs="?")
+    dta.add_argument("--dry-run", action="store_true", help="只校验并预览，不联网")
+    dta.add_argument("--endpoint", help="本次调用覆盖服务端地址")
+
     # ─── CLI 维护 ───
     sub.add_parser("version", help="显示 CLI 版本")
     upd = sub.add_parser("update", help="更新 CLI 到最新版")
@@ -2026,7 +2216,7 @@ def main():
         "schedule": cmd_schedule, "unschedule": cmd_unschedule,
         "calendar": cmd_calendar, "publish": cmd_publish, "series": cmd_series,
         "retro": cmd_retro, "version": cmd_version, "update": cmd_update,
-        "article": cmd_article,
+        "article": cmd_article, "data": cmd_data,
     }
     result = handlers[args.cmd](args)
     if isinstance(result, int) and result:

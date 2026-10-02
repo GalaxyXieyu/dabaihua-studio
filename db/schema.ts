@@ -448,6 +448,17 @@ export const dailyBriefResponses = sqliteTable("daily_brief_responses", {
   index("daily_brief_responses_date_idx").on(table.date),
 ]);
 
+export const privateDatasets = sqliteTable("private_datasets", {
+  name: text("name").primaryKey(),
+  json: text("json").notNull(),
+  sha256: text("sha256").notNull(),
+  bytes: integer("bytes").notNull(),
+  generatedAt: text("generated_at"),
+  summaryJson: text("summary_json").notNull().default("{}"),
+  uploadedAt: text("uploaded_at").notNull(),
+  uploadedBy: text("uploaded_by"),
+});
+
 export const cards = sqliteTable("cards", {
   id: text("id").primaryKey(),
   kind: text("kind").notNull().default("mirror"),

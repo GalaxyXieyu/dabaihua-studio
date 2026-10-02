@@ -1,20 +1,11 @@
-import type { CareerData } from "./career";
+import type { CareerData } from "./career.ts";
+import { loadDataset } from "./private-data.ts";
 
-declare global {
-  interface ImportMeta {
-    glob(
-      pattern: string,
-      options?: { eager?: boolean; import?: string },
-    ): Record<string, unknown>;
-  }
-}
-
-const modules = import.meta.glob("../content/career/career.json", {
-  eager: true,
-  import: "default",
-}) as Record<string, unknown>;
-
-export function loadCareerData(): CareerData | null {
-  const value = Object.values(modules)[0];
-  return value ? (value as CareerData) : null;
+/**
+ * /career 的私密数据在运行时从 D1 的 private_datasets 表读取。
+ * 由 `scripts/upload-daily.sh --career` 上传，站点构建不再读取 content/career/。
+ * 不存在或损坏时返回 null，页面显示空状态。
+ */
+export async function loadCareerData(db: D1Database): Promise<CareerData | null> {
+  return loadDataset<CareerData>(db, "career");
 }

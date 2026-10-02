@@ -157,7 +157,7 @@ function EmptyState({ user }: { user: Awaited<ReturnType<typeof getSessionUser>>
         <div className="daily-a-empty">
           <h2>还没有日报数据</h2>
           <p>
-            运行 <code>npm run daily:build</code> 汇总本机日报后再刷新。
+            在本机运行 <code>scripts/upload-daily.sh</code> 上传。
           </p>
         </div>
       </main>
@@ -181,7 +181,7 @@ export default async function DailyPage({ searchParams }: { searchParams: Promis
   if (!user) redirect("/login?next=/daily");
   if (user.role !== "admin") notFound();
 
-  const data = loadDailyData();
+  const data = await loadDailyData(env.DB);
   if (!data || data.days.length === 0) return <EmptyState user={user} />;
 
   const days = data.days;

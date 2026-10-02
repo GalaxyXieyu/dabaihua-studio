@@ -23,6 +23,8 @@
 #   DABAIHUA_ALLOW_REGISTER        "0/false/no/off/closed" disables registration;
 #                                  anything else (or unset) leaves it open.
 #   DABAIHUA_REGISTER_INVITE_CODE  when set, registration requires this invite code.
+#   IMPORT_TOKEN                   shared secret for x-import-token (import queue,
+#                                  PUT /api/daily/data, PUT /api/career/data).
 # These are read from the current shell env first, then from the optional file
 # `.wrangler/prod/prod.env` (KEY=VALUE lines, `#` comments, gitignored). Only
 # non-empty values are forwarded to wrangler as `--var KEY:VALUE`; secret values
@@ -48,7 +50,7 @@ WRANGLER_CONFIG="dist/server/wrangler.json"
 PROD_ENV_FILE="${PROD_DIR}/prod.env"
 
 # Worker vars that may be forwarded to wrangler (values stay out of the logs).
-FORWARDED_VAR_KEYS=(DABAIHUA_TRUSTED_PROXY_HOSTS DABAIHUA_ALLOW_REGISTER DABAIHUA_REGISTER_INVITE_CODE DABAIHUA_PUBLIC_BASE_URL DABAIHUA_CARDS_ASSISTANT_TOKEN)
+FORWARDED_VAR_KEYS=(IMPORT_TOKEN DABAIHUA_TRUSTED_PROXY_HOSTS DABAIHUA_ALLOW_REGISTER DABAIHUA_REGISTER_INVITE_CODE DABAIHUA_PUBLIC_BASE_URL DABAIHUA_CARDS_ASSISTANT_TOKEN)
 
 mkdir -p -- "${PROD_DIR}"
 

@@ -1,11 +1,12 @@
 /**
- * build-daily.mjs — 把本机私密日报汇总成站点可读的 content/daily/daily.json。
+ * build-daily.mjs — 把本机私密日报汇总成待上传的 JSON（默认 content/daily/daily.json）。
  *
  * 输入（只读，两个目录都在仓库之外）：
  *   /workspace/daily/YYYY-MM-DD.md          早八每晚生成的中文日报（YAML front matter + 固定二级标题）
  *   /workspace/career/git-daily/YYYY-MM-DD.json   当天的 git 提交明细（见同目录 README.md）
  *
- * 输出：content/daily/daily.json —— 页面只读这个文件；它被 .gitignore 忽略，不进公开仓库。
+ * 输出：content/daily/daily.json —— 本地构建 / 上传用的中间产物；站点运行时不读它，
+ * 由 scripts/upload-daily.sh 上传到 D1 的 private_datasets 表。它被 .gitignore 忽略，不进公开仓库。
  * 任一边缺失都不报错：没有 git 明细就只出日报正文，没有任何日报就写出空 days。
  *
  * 用法：

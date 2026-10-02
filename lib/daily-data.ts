@@ -1,24 +1,11 @@
-import type { DailyData } from "./daily";
-
-declare global {
-  interface ImportMeta {
-    glob(
-      pattern: string,
-      options?: { eager?: boolean; import?: string },
-    ): Record<string, unknown>;
-  }
-}
-
-const modules = import.meta.glob("../content/daily/daily.json", {
-  eager: true,
-  import: "default",
-}) as Record<string, unknown>;
+import type { DailyData } from "./daily.ts";
+import { loadDataset } from "./private-data.ts";
 
 /**
- * content/daily/daily.json 由 `npm run daily:build` 生成，且被 .gitignore 忽略。
- * 文件不存在时 glob 结果为空，页面显示空状态，构建不会失败。
+ * /daily 的私密数据在运行时从 D1 的 private_datasets 表读取。
+ * 由 `scripts/upload-daily.sh` 上传，站点构建不再读取 content/daily/。
+ * 不存在或损坏时返回 null，页面显示空状态。
  */
-export function loadDailyData(): DailyData | null {
-  const value = Object.values(modules)[0];
-  return value ? (value as DailyData) : null;
+export async function loadDailyData(db: D1Database): Promise<DailyData | null> {
+  return loadDataset<DailyData>(db, "daily");
 }

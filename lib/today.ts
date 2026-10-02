@@ -112,7 +112,7 @@ export async function getTodayData(env: Env, { isAdmin, userId }: { isAdmin: boo
     .slice(0, 3)
     .map(({ title, href }) => ({ title, href }));
 
-  const career = loadCareerData();
+  const career = await loadCareerData(env.DB);
   const latestReason = digestLatest?.reason || null;
 
   const latest = reports[0];

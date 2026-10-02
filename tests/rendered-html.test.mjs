@@ -762,7 +762,7 @@ test("keeps the article review backend, asset route, and sync script wired to th
   assert.match(store, /CREATE TABLE IF NOT EXISTS article_versions/);
   assert.match(store, /CREATE TABLE IF NOT EXISTS review_marks/);
   assert.match(store, /CREATE TABLE IF NOT EXISTS review_rounds/);
-  assert.match(store, /SCHEMA_VERSION = "2026-10-02\.2"/);
+  assert.match(store, /SCHEMA_VERSION = "2026-10-02\.3"/);
   assert.match(schema, /export const articles/);
   assert.match(schema, /export const articleAssets/);
   assert.match(schema, /export const articleVersions/);
@@ -1224,11 +1224,11 @@ test("gates the admin-only career page and keeps raw result fields out of the da
   assert.match(page, /redirect\("\/login\?next=\/career"\)/);
   assert.match(page, /if \(user\.role !== "admin"\) notFound\(\)/);
   assert.match(page, /robots:\s*\{ index: false, follow: false \}/);
-  assert.match(page, /loadCareerData\(\)/);
+  assert.match(page, /loadCareerData\(env\.DB\)/);
   assert.match(page, /还没有数据/);
   assert.doesNotMatch(page, /from "\.\.\/\.\.\/content\/career\/career\.json"/);
-  assert.match(careerData, /import\.meta\.glob\(/);
-  assert.match(careerData, /content\/career\/career\.json/);
+  assert.doesNotMatch(careerData, /import\.meta\.glob\(/);
+  assert.match(careerData, /loadDataset/);
   assert.match(gitignore, /\/content\/career\/career\.json/);
   assert.match(worker, /url\.pathname === "\/career" \|\| url\.pathname\.startsWith\("\/career\/"\)/);
   assert.match(worker, /new Response\(response\.body, response\)/);
@@ -1242,7 +1242,8 @@ test("gates the admin-only career page and keeps raw result fields out of the da
   assert.match(page, /未归类，默认按过程算/);
 
   // Private keys must never appear anywhere in the generated data. The raw file
-  // is private and only deployed over rsync, so skip these checks on a fresh clone.
+  // is now only a local upload source and is no longer read by the site build,
+  // so skip these checks on a fresh clone.
   const rawPath = new URL("../content/career/career.json", import.meta.url);
   if (existsSync(rawPath)) {
     const raw = await readFile(rawPath, "utf8");
@@ -1272,7 +1273,7 @@ test("gates the admin-only daily page and keeps the private feed out of git", as
   assert.match(page, /redirect\("\/login\?next=\/daily"\)/);
   assert.match(page, /if \(user\.role !== "admin"\) notFound\(\)/);
   assert.match(page, /robots:\s*\{ index: false, follow: false \}/);
-  assert.match(page, /loadDailyData\(\)/);
+  assert.match(page, /loadDailyData\(env\.DB\)/);
   assert.match(page, /还没有日报数据/);
   assert.match(page, /<SiteAppBar user=\{user\} pathname="\/daily" \/>/);
   // 日期选择走 URL 参数，默认最新一天。
@@ -1282,8 +1283,8 @@ test("gates the admin-only daily page and keeps the private feed out of git", as
   // 页面只读汇总后的 json，不直接读仓库外的日报目录。
   assert.doesNotMatch(page, /workspace\/(daily|career)/);
 
-  assert.match(dailyData, /import\.meta\.glob\(/);
-  assert.match(dailyData, /content\/daily\/daily\.json/);
+  assert.doesNotMatch(dailyData, /import\.meta\.glob\(/);
+  assert.match(dailyData, /loadDataset/);
   assert.match(trend, /"use client"/);
   assert.match(trend, /<svg/);
   assert.match(trend, /<polyline/);

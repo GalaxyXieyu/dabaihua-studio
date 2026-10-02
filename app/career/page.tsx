@@ -111,7 +111,7 @@ export default async function CareerPage() {
   if (!user) redirect("/login?next=/career");
   if (user.role !== "admin") notFound();
 
-  const data = loadCareerData();
+  const data = await loadCareerData(env.DB);
 
   if (!data) {
     return (
@@ -126,6 +126,9 @@ export default async function CareerPage() {
         </div>
         <main className="career-a-main">
           <p className="career-a-lede">还没有数据</p>
+          <p className={subtleClass}>
+            运行 <code>scripts/upload-daily.sh --career</code> 上传
+          </p>
         </main>
       </div>
     );

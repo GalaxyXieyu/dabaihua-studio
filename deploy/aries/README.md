@@ -116,6 +116,31 @@ ssh Aries 'sudo systemctl restart dabaihua-studio'
 - `POST /api/cards`、`PATCH /api/cards/:id`：新增 / 直接改。
 - `POST /api/cards/:id/supersede|expire|restore|confirm|reject`、`DELETE /api/cards/:id`（软删）。
 
+## 日报 / 职业数据
+
+`/daily` 与 `/career` 的私密数据只在运行时从 D1 的 `private_datasets` 表读取；构建
+产物不再包含这些数据，部署也不再需要它们。
+
+在本机上传日报（`DAILY_DIR` / `GIT_DAILY_DIR` 环境变量照旧生效）：
+
+```bash
+npm run daily:upload
+```
+
+同时上传职业数据（默认 `content/career/career.json`）：
+
+```bash
+scripts/upload-daily.sh --career
+```
+
+`scripts/upload-daily.sh` 支持 `--endpoint URL`（本次调用覆盖服务端地址）和 `--dry-run`
+（只在本机校验并打印大小 / 条数，不联网）。上传凭证为 admin 会话、`topk_` API key，
+或 `x-import-token`（`IMPORT_TOKEN`）。查看已上传的数据：
+
+```bash
+public/cli/superme data status
+```
+
 ## 回滚到旧的 qingliu-reader
 
 服务器上保留有回滚脚本：

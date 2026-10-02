@@ -1,9 +1,9 @@
 /**
  * Types and small pure helpers for the admin-only `/career` page.
  *
- * The page optionally loads `content/career/career.json` via `lib/career-data.ts`.
- * That loader uses `import.meta.glob`, so a fresh clone without the private file
- * still builds; `loadCareerData()` returns `null` when the file is missing.
+ * The page optionally loads the private dataset via `lib/career-data.ts`, which
+ * reads it from D1 at request time. A fresh clone without the private data
+ * still builds; `loadCareerData()` returns `null` when nothing is stored.
  * The types below mirror that generated file one-to-one; fields the generator
  * may omit are optional.
  */
