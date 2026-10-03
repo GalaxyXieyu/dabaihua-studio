@@ -763,7 +763,7 @@ test("keeps the article review backend, asset route, and sync script wired to th
   assert.match(store, /CREATE TABLE IF NOT EXISTS article_versions/);
   assert.match(store, /CREATE TABLE IF NOT EXISTS review_marks/);
   assert.match(store, /CREATE TABLE IF NOT EXISTS review_rounds/);
-  assert.match(store, /SCHEMA_VERSION = "2026-10-03\.1"/);
+  assert.match(store, /SCHEMA_VERSION = "2026-10-04\.1"/);
   assert.match(schema, /export const articles/);
   assert.match(schema, /export const articleAssets/);
   assert.match(schema, /export const articleVersions/);
@@ -2165,9 +2165,12 @@ test("ships the daily brief storage, API, page and CLI", async () => {
   for (const testid of [
     "brief-card", "brief-recommended", "brief-toggle", "brief-section-scenarios",
     "brief-section-questions", "brief-section-materials", "brief-star-",
-    "brief-rating-comment", "brief-pick", "brief-pick-scenario-", "brief-pick-answer-",
-    "brief-pick-submit", "brief-reject", "brief-reject-reason", "brief-reject-submit",
+    "brief-rating-comment", "brief-pick", "brief-scenario-option-", "brief-scenario-custom",
+    "brief-answer-", "brief-reject", "brief-reject-reason", "brief-reject-submit",
     "brief-status", "brief-undo", "brief-date-select", "brief-prev", "brief-next",
+    "brief-destination", "brief-board-link", "brief-selection-status",
+    "brief-confirm-outline", "brief-autosave", "brief-notify-delivered",
+    "brief-notify-failed", "brief-notify-retry", "brief-notify-unconfigured",
   ]) {
     assert.match(components, new RegExp(testid));
   }

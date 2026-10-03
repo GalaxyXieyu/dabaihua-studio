@@ -439,6 +439,7 @@ export const dailyBriefResponses = sqliteTable("daily_brief_responses", {
   decision: text("decision", { enum: ["pick", "reject"] }),
   scenarioIndex: integer("scenario_index"),
   scenarioText: text("scenario_text").notNull().default(""),
+  scenarioCustom: text("scenario_custom").notNull().default(""),
   answersJson: text("answers_json").notNull().default("[]"),
   rejectReason: text("reject_reason").notNull().default(""),
   createdAt: text("created_at").notNull(),
@@ -448,6 +449,44 @@ export const dailyBriefResponses = sqliteTable("daily_brief_responses", {
   index("daily_brief_responses_updated_idx").on(table.updatedAt),
   index("daily_brief_responses_date_idx").on(table.date),
 ]);
+
+export const briefSelections = sqliteTable("brief_selections", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  date: text("date").notNull(),
+  topicId: text("topic_id").notNull(),
+  boardTopicId: integer("board_topic_id"),
+  status: text("status").notNull().default("selected"),
+  outlineMd: text("outline_md").notNull().default(""),
+  outlineBy: text("outline_by").notNull().default(""),
+  outlineAt: text("outline_at"),
+  statusBy: text("status_by").notNull().default(""),
+  statusAt: text("status_at"),
+  selectedBy: integer("selected_by"),
+  selectedAt: text("selected_at"),
+  notifyEvent: text("notify_event"),
+  notifyState: text("notify_state"),
+  notifyHttpStatus: integer("notify_http_status"),
+  notifyError: text("notify_error"),
+  notifyAt: text("notify_at"),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  uniqueIndex("brief_selections_date_topic_idx").on(table.date, table.topicId),
+  index("brief_selections_date_idx").on(table.date, table.selectedAt),
+]);
+
+export const briefNotifyLog = sqliteTable("brief_notify_log", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  date: text("date").notNull(),
+  topicId: text("topic_id").notNull(),
+  event: text("event").notNull(),
+  state: text("state").notNull(),
+  httpStatus: integer("http_status"),
+  error: text("error"),
+  durationMs: integer("duration_ms").notNull().default(0),
+  targetHost: text("target_host").notNull().default(""),
+  createdAt: text("created_at").notNull(),
+}, (table) => [index("brief_notify_log_date_topic_idx").on(table.date, table.topicId, table.id)]);
 
 export const privateDatasets = sqliteTable("private_datasets", {
   name: text("name").primaryKey(),

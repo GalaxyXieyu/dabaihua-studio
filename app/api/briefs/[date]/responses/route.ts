@@ -49,6 +49,7 @@ export async function POST(request: Request, { params }: Params) {
   if (has("decision")) patch.decision = body.decision === "pick" || body.decision === "reject" ? body.decision : null;
   if (has("rejectReason")) patch.rejectReason = String(body.rejectReason ?? "");
   if (has("scenarioIndex")) patch.scenarioIndex = body.scenarioIndex === null || body.scenarioIndex === undefined ? null : Number(body.scenarioIndex);
+  if (has("scenarioCustom")) patch.scenarioCustom = String(body.scenarioCustom ?? "");
   if (has("answers")) patch.answers = Array.isArray(body.answers) ? body.answers.map((answer) => String(answer ?? "")) : [];
 
   try {

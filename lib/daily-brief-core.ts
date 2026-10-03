@@ -26,7 +26,9 @@ export type BriefTopic = {
   oneLiner: string;
   detail: string;
   scenarios: string[];
+  scenarioSources: string[];
   questions: string[];
+  questionSources: string[];
   materials: BriefMaterial[];
   note: string;
 };
@@ -54,6 +56,21 @@ function str(value: unknown): string {
 function stringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === "string").map((item) => item.trim());
+}
+
+/**
+ * `scenarioSources` / `questionSources` 与 `scenarios` / `questions` 按下标对齐：
+ * 缺失补空串、多余的丢掉、非字符串当空串、去首尾空白、每个最多 200 字。
+ * 旧简报没有这两个数组时一律返回等长的空串数组。
+ */
+function sourceArray(value: unknown, length: number): string[] {
+  const raw = Array.isArray(value) ? value : [];
+  const result: string[] = [];
+  for (let index = 0; index < length; index += 1) {
+    const item = raw[index];
+    result.push(typeof item === "string" ? item.trim().slice(0, 200) : "");
+  }
+  return result;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -128,6 +145,9 @@ function parseTopic(value: unknown, index: number, seen: Set<string>, errors: st
     });
   }
 
+  const scenarios = stringArray(raw.scenarios);
+  const questions = stringArray(raw.questions);
+
   return {
     id,
     type,
@@ -135,8 +155,10 @@ function parseTopic(value: unknown, index: number, seen: Set<string>, errors: st
     title,
     oneLiner: str(raw.oneLiner),
     detail: str(raw.detail),
-    scenarios: stringArray(raw.scenarios),
-    questions: stringArray(raw.questions),
+    scenarios,
+    scenarioSources: sourceArray(raw.scenarioSources, scenarios.length),
+    questions,
+    questionSources: sourceArray(raw.questionSources, questions.length),
     materials,
     note: str(raw.note),
   };
@@ -227,6 +249,7 @@ export type BriefResponseRow = {
   decision?: string | null;
   scenarioIndex?: number | null;
   scenarioText?: string | null;
+  scenarioCustom?: string | null;
   answersJson?: string | null;
   rejectReason?: string | null;
   createdAt?: string | null;
@@ -247,6 +270,7 @@ export type ShapedBriefResponse = {
   ratingComment: string;
   decision: BriefDecision | null;
   scenario: { index: number; text: string } | null;
+  scenarioCustom: string;
   answers: BriefAnswer[];
   rejectReason: string;
   createdAt: string;
@@ -298,6 +322,7 @@ export function shapeResponse(row: BriefResponseRow, brief: DailyBrief | null): 
     ratingComment: str(row.ratingComment),
     decision: normalizeDecision(row.decision),
     scenario,
+    scenarioCustom: str(row.scenarioCustom),
     answers: answers.map((answer, index) => ({ question: topic?.questions[index] ?? "", answer })),
     rejectReason: str(row.rejectReason),
     createdAt: str(row.createdAt),

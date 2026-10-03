@@ -5,6 +5,7 @@ import { getSessionUser } from "../../lib/auth";
 import { requestOrigin } from "../../lib/request-origin";
 import { listArticlesForViewer } from "../../lib/article-access";
 import { getBrief, getLatestBriefDate, listBriefDates, listResponses } from "../../lib/daily-brief";
+import { listSelections } from "../../lib/brief-pipeline";
 import { isValidBriefDate } from "../../lib/daily-brief-core";
 import { findMaterialItemsByUrls } from "../../lib/store";
 import { orderBriefTopics, pickInitialTopic, toMaterialView, type MaterialView } from "../../lib/brief-view";
@@ -101,6 +102,7 @@ export default async function ContentPage({
     const materialsByUrl: Record<string, MaterialView> = {};
     let initialTopicId: string | null = null;
     let initialResponses: Awaited<ReturnType<typeof listResponses>> = [];
+    let initialSelections: Awaited<ReturnType<typeof listSelections>> = [];
     if (stored && selected) {
       const materialUrls = stored.brief.topics
         .flatMap((topic) => topic.materials.map((material) => material.url))
@@ -114,6 +116,7 @@ export default async function ContentPage({
       }
 
       initialResponses = await listResponses(env, { date: selected });
+      initialSelections = await listSelections(env, selected);
       const decided: Record<string, "pick" | "reject" | null> = {};
       for (const response of initialResponses) {
         if (response.user.account !== user.account) continue;
@@ -140,6 +143,7 @@ export default async function ContentPage({
             dates={dates}
             userAccount={user.account}
             initialResponses={initialResponses}
+            initialSelections={initialSelections}
             materialsByUrl={materialsByUrl}
             initialTopicId={initialTopicId}
             requestedTopic={requestedTopic ?? null}

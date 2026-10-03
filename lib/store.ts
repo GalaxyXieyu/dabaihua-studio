@@ -11,7 +11,7 @@ import { readXArticles, readXPost, readXProfile, xPostAddress, xProfileAddress }
 export type AppEnv = { DB: D1Database; AI?: { run: (model: string, input: unknown) => Promise<unknown> } };
 const now = () => new Date().toISOString();
 const day = () => new Date().toISOString().slice(0, 10);
-const SCHEMA_VERSION = "2026-10-03.1";
+const SCHEMA_VERSION = "2026-10-04.1";
 const schemaReady = new WeakMap<object, Promise<void>>();
 
 async function initializeSchema(db: D1Database) {
@@ -81,7 +81,12 @@ async function initializeSchema(db: D1Database) {
     db.prepare("CREATE TABLE IF NOT EXISTS weekly_upload_log (user_id INTEGER NOT NULL, at TEXT NOT NULL)"),
     db.prepare("CREATE INDEX IF NOT EXISTS weekly_upload_log_user_idx ON weekly_upload_log(user_id, at)"),
     db.prepare("CREATE TABLE IF NOT EXISTS daily_briefs (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL UNIQUE, data_json TEXT NOT NULL, topic_count INTEGER NOT NULL, imported_by INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"),
-    db.prepare("CREATE TABLE IF NOT EXISTS daily_brief_responses (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, topic_id TEXT NOT NULL, user_id INTEGER NOT NULL REFERENCES users(id), rating INTEGER, rating_comment TEXT NOT NULL DEFAULT '', decision TEXT, scenario_index INTEGER, scenario_text TEXT NOT NULL DEFAULT '', answers_json TEXT NOT NULL DEFAULT '[]', reject_reason TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(date, topic_id, user_id))"),
+    db.prepare("CREATE TABLE IF NOT EXISTS daily_brief_responses (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, topic_id TEXT NOT NULL, user_id INTEGER NOT NULL REFERENCES users(id), rating INTEGER, rating_comment TEXT NOT NULL DEFAULT '', decision TEXT, scenario_index INTEGER, scenario_text TEXT NOT NULL DEFAULT '', scenario_custom TEXT NOT NULL DEFAULT '', answers_json TEXT NOT NULL DEFAULT '[]', reject_reason TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(date, topic_id, user_id))"),
+    db.prepare("CREATE TABLE IF NOT EXISTS brief_selections (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, topic_id TEXT NOT NULL, board_topic_id INTEGER, status TEXT NOT NULL DEFAULT 'selected', outline_md TEXT NOT NULL DEFAULT '', outline_by TEXT NOT NULL DEFAULT '', outline_at TEXT, status_by TEXT NOT NULL DEFAULT '', status_at TEXT, selected_by INTEGER, selected_at TEXT, notify_event TEXT, notify_state TEXT, notify_http_status INTEGER, notify_error TEXT, notify_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(date, topic_id))"),
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS brief_selections_date_topic_idx ON brief_selections(date, topic_id)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS brief_selections_date_idx ON brief_selections(date, selected_at DESC)"),
+    db.prepare("CREATE TABLE IF NOT EXISTS brief_notify_log (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, topic_id TEXT NOT NULL, event TEXT NOT NULL, state TEXT NOT NULL, http_status INTEGER, error TEXT, duration_ms INTEGER NOT NULL DEFAULT 0, target_host TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS brief_notify_log_date_topic_idx ON brief_notify_log(date, topic_id, id DESC)"),
     db.prepare("CREATE TABLE IF NOT EXISTS private_datasets (name TEXT PRIMARY KEY, json TEXT NOT NULL, sha256 TEXT NOT NULL, bytes INTEGER NOT NULL, generated_at TEXT, summary_json TEXT NOT NULL DEFAULT '{}', uploaded_at TEXT NOT NULL, uploaded_by TEXT)"),
     db.prepare("CREATE INDEX IF NOT EXISTS daily_brief_responses_updated_idx ON daily_brief_responses(updated_at)"),
     db.prepare("CREATE INDEX IF NOT EXISTS daily_brief_responses_date_idx ON daily_brief_responses(date)"),
@@ -127,6 +132,8 @@ async function initializeSchema(db: D1Database) {
   if (!requestColumns.results.some((column) => column.name === "requester_user_id")) await db.prepare("ALTER TABLE subscription_requests ADD COLUMN requester_user_id INTEGER REFERENCES users(id)").run();
   const weeklyColumns = await db.prepare("PRAGMA table_info(weekly_reports)").all<{ name: string }>();
   if (!weeklyColumns.results.some((column) => column.name === "current_version")) await db.prepare("ALTER TABLE weekly_reports ADD COLUMN current_version INTEGER NOT NULL DEFAULT 1").run();
+  const briefResponseColumns = await db.prepare("PRAGMA table_info(daily_brief_responses)").all<{ name: string }>();
+  if (!briefResponseColumns.results.some((column) => column.name === "scenario_custom")) await db.prepare("ALTER TABLE daily_brief_responses ADD COLUMN scenario_custom TEXT NOT NULL DEFAULT ''").run();
   const itchColumns = await db.prepare("PRAGMA table_info(itches)").all<{ name: string }>();
   const itchExisting = new Set(itchColumns.results.map((column) => column.name));
   const itchNewColumns: Array<[string, string]> = [

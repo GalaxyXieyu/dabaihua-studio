@@ -161,6 +161,7 @@ export type ResponsePatch = {
   ratingComment?: string;
   decision?: BriefDecision | null;
   scenarioIndex?: number | null;
+  scenarioCustom?: string;
   answers?: string[];
   rejectReason?: string;
 };
@@ -172,12 +173,13 @@ type ResponseRow = {
   decision: string | null;
   scenarioIndex: number | null;
   scenarioText: string;
+  scenarioCustom: string;
   answersJson: string;
   rejectReason: string;
 };
 
 const RESPONSE_COLUMNS =
-  "r.date, r.topic_id AS topicId, u.account AS account, u.nickname AS nickname, r.rating, r.rating_comment AS ratingComment, r.decision, r.scenario_index AS scenarioIndex, r.scenario_text AS scenarioText, r.answers_json AS answersJson, r.reject_reason AS rejectReason, r.created_at AS createdAt, r.updated_at AS updatedAt";
+  "r.date, r.topic_id AS topicId, u.account AS account, u.nickname AS nickname, r.rating, r.rating_comment AS ratingComment, r.decision, r.scenario_index AS scenarioIndex, r.scenario_text AS scenarioText, r.scenario_custom AS scenarioCustom, r.answers_json AS answersJson, r.reject_reason AS rejectReason, r.created_at AS createdAt, r.updated_at AS updatedAt";
 
 const RESPONSE_SELECT = `SELECT ${RESPONSE_COLUMNS} FROM daily_brief_responses r JOIN users u ON u.id = r.user_id`;
 
@@ -205,7 +207,7 @@ export async function upsertResponse(
   if (!topic) throw new Error("选题不在当日简报里");
 
   const existing = await env.DB.prepare(
-    "SELECT rating, rating_comment AS ratingComment, decision, scenario_index AS scenarioIndex, scenario_text AS scenarioText, answers_json AS answersJson, reject_reason AS rejectReason, created_at AS createdAt FROM daily_brief_responses WHERE date = ? AND topic_id = ? AND user_id = ?",
+    "SELECT rating, rating_comment AS ratingComment, decision, scenario_index AS scenarioIndex, scenario_text AS scenarioText, scenario_custom AS scenarioCustom, answers_json AS answersJson, reject_reason AS rejectReason, created_at AS createdAt FROM daily_brief_responses WHERE date = ? AND topic_id = ? AND user_id = ?",
   ).bind(date, topicId, userId).first<ResponseRow>();
 
   let rating = existing && typeof existing.rating === "number" ? existing.rating : null;
@@ -213,6 +215,7 @@ export async function upsertResponse(
   let decision: BriefDecision | null = existing?.decision === "pick" || existing?.decision === "reject" ? existing.decision : null;
   let scenarioIndex = existing && typeof existing.scenarioIndex === "number" ? existing.scenarioIndex : null;
   let scenarioText = existing ? String(existing.scenarioText || "") : "";
+  let scenarioCustom = existing ? String(existing.scenarioCustom || "") : "";
   let answers: string[] = [];
   try {
     const parsed = JSON.parse(existing?.answersJson || "[]");
@@ -263,30 +266,39 @@ export async function upsertResponse(
     }
   }
 
-  if (decision === "pick" && topic.scenarios.length > 0 && scenarioIndex === null) {
-    throw new Error("选「就写这个」必须先选一个场景");
+  if ("scenarioCustom" in patch) {
+    scenarioCustom = cleanText(patch.scenarioCustom, "自定义场景", 2000);
+    if (scenarioCustom) {
+      scenarioIndex = null;
+      scenarioText = "";
+    }
   }
+  // 预设场景与自定义场景互斥：只要选中了预设，就清掉自定义。
+  if (scenarioIndex !== null) scenarioCustom = "";
+
   if (decision === "reject") {
     scenarioIndex = null;
     scenarioText = "";
+    scenarioCustom = "";
   }
 
   const timestamp = now();
   const createdAt = existing?.createdAt || timestamp;
   await env.DB.prepare(
-    `INSERT INTO daily_brief_responses (date, topic_id, user_id, rating, rating_comment, decision, scenario_index, scenario_text, answers_json, reject_reason, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO daily_brief_responses (date, topic_id, user_id, rating, rating_comment, decision, scenario_index, scenario_text, scenario_custom, answers_json, reject_reason, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(date, topic_id, user_id) DO UPDATE SET
        rating = excluded.rating,
        rating_comment = excluded.rating_comment,
        decision = excluded.decision,
        scenario_index = excluded.scenario_index,
        scenario_text = excluded.scenario_text,
+       scenario_custom = excluded.scenario_custom,
        answers_json = excluded.answers_json,
        reject_reason = excluded.reject_reason,
        updated_at = excluded.updated_at`,
   )
-    .bind(date, topicId, userId, rating, ratingComment, decision, scenarioIndex, scenarioText, JSON.stringify(answers), rejectReason, createdAt, timestamp)
+    .bind(date, topicId, userId, rating, ratingComment, decision, scenarioIndex, scenarioText, scenarioCustom, JSON.stringify(answers), rejectReason, createdAt, timestamp)
     .run();
 
   const row = await env.DB.prepare(`${RESPONSE_SELECT} WHERE r.date = ? AND r.topic_id = ? AND r.user_id = ?`)
@@ -299,6 +311,22 @@ export type ResponseQuery = { date?: string; since?: string; latest?: boolean };
 
 function emptyBrief(date: string): DailyBrief {
   return { version: 1, date, title: "", intro: "", recommendation: null, topics: [], notes: "", sources: [] };
+}
+
+/** 读取某一条回复的展示形态；不存在返回 null。 */
+export async function getResponse(
+  env: Env,
+  date: string,
+  topicId: string,
+  userId: number,
+): Promise<ShapedBriefResponse | null> {
+  await ensureSchema(env.DB);
+  const stored = await getBrief(env, date);
+  if (!stored) return null;
+  const row = await env.DB.prepare(`${RESPONSE_SELECT} WHERE r.date = ? AND r.topic_id = ? AND r.user_id = ?`)
+    .bind(date, topicId, userId).first<BriefResponseRow>();
+  if (!row) return null;
+  return shapeResponse(row, stored.brief);
 }
 
 /**

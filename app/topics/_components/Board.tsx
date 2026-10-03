@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { TopicCard } from "./TopicCard";
 import { TopicDrawer } from "./TopicDrawer";
 
@@ -60,6 +60,18 @@ export function Board({ initialTopics, initialSeries }: { initialTopics: Topic[]
   const [platformFilter, setPlatformFilter] = useState<string>("全部");
   const [seriesFilter, setSeriesFilter] = useState<string>("全部");
   const [showPublished, setShowPublished] = useState(false);
+
+  // 深链：/content?view=board&card=<id> 进入时直接打开对应选题抽屉。
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const card = new URLSearchParams(window.location.search).get("card");
+    if (!card) return;
+    const id = Number(card);
+    if (!Number.isFinite(id)) return;
+    const hit = initialTopics.find((topic) => topic.id === id);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 深链只在挂载时读取一次外部 URL
+    if (hit) setSelected(hit);
+  }, [initialTopics]);
 
   const filtered = topics.filter((t) => {
     if (platformFilter !== "全部" && platformLabel(t.platform) !== platformFilter) return false;

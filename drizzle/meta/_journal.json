@@ -155,6 +155,13 @@
       "when": 1791163200000,
       "tag": "0021_session_persistent",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1791249600000,
+      "tag": "0022_brief_pipeline",
+      "breakpoints": true
     }
   ]
 }
