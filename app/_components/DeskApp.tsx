@@ -41,6 +41,7 @@ import {
 import { SOURCE_CATEGORIES, sourceCategoryLabel, type SourceCategory } from "../../lib/source-category";
 import { BRAND_NAME } from "../../lib/brand";
 import { SiteNavCluster } from "./SiteNav";
+import { SiteSidebarNav } from "./SiteSidebar";
 
 type SessionUser = { id: number; account: string; nickname: string; bio: string; avatarUrl: string | null; role: "user" | "admin"; createdAt: string };
 type Source = { id: number; kind: "rss" | "wechat" | "x" | "digest"; category: SourceCategory; name: string; url: string; enabled: number | boolean; lastSyncedAt: string | null; lastError: string | null; avatarUrl: string | null; itemCount: number; contributorUserId: number | null; contributorNickname: string; canManage: number | boolean; isFollowed: number | boolean };
@@ -1614,6 +1615,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
         {BRAND_NAME}
       </a>
       <SiteNavCluster role={data.user?.role} section={navSection} activeTab={navActiveTab} onSelect={handleNavSelect} />
+      <SiteSidebarNav role={data.user?.role} section={navSection} activeTab={navActiveTab} context={view === "discover" ? "reader" : "default"} onSelect={handleNavSelect} />
       {data.user
         ? <div className="global-user-wrap">
           <div className="global-notification-wrap">

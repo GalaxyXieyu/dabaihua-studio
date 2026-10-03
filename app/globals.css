@@ -34,6 +34,7 @@
   --font-latin:"Newsreader Variable",Georgia,"Times New Roman",serif;
   --font-sans:"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Source Han Sans SC","Microsoft YaHei",system-ui,sans-serif;
   --appbar-height:48px;
+  --nav-w:200px;
   --ease-out:cubic-bezier(.23,1,.32,1);
   --z-sticky:10;
   --z-appbar:20;
@@ -42,6 +43,8 @@
   --z-modal:60;
   --z-skip:50;
 }
+
+html[data-nav="collapsed"] { --nav-w:56px; }
 
 * { box-sizing:border-box; }
 html,body { min-width:320px; }
@@ -868,4 +871,234 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 @media (max-width:640px) {
   .toast { bottom:calc(66px + env(safe-area-inset-bottom)); }
   .today-immersive .today-scroll, .discover-immersive .reader-pane { padding-bottom:0 !important; }
+}
+
+/* ── 桌面端（>=761px）：顶栏转成杂志风固定左侧栏 ───────────────── */
+.global-appbar nav.nav-sidebar { display:none; }
+
+@media (min-width:761px) {
+  /* 桌面不再有顶部占位行，所有 calc(100dvh - var(--appbar-height)) 继续成立。 */
+  :root { --appbar-height:0px; }
+  .reader-workspace { --appbar-height:0px; }
+
+  .global-appbar {
+    position:fixed;
+    left:0; top:0; bottom:0;
+    width:var(--nav-w);
+    min-height:0;
+    padding:0;
+    display:flex;
+    flex-direction:column;
+    align-items:stretch;
+    gap:0;
+    grid-column:auto; grid-row:auto;
+    background:var(--sidebar);
+    border-right:1px solid var(--line);
+    border-bottom:0;
+    /* 侧栏本身不滚动：中间的导航列表自己滚，底部账号区始终可见；弹出菜单用 fixed 定位，不会被裁掉。 */
+    overflow:visible;
+  }
+  .site-appbar { position:fixed; top:0; }
+
+  /* 手机端底部标签栏在桌面隐藏，改用左侧栏。 */
+  .global-nav-cluster { display:none; }
+
+  .global-brand {
+    grid-column:auto; grid-row:auto;
+    width:100%;
+    min-height:0;
+    padding:20px 14px 12px;
+    display:inline-flex;
+    align-items:center;
+    font-size:17px;
+    letter-spacing:.02em;
+  }
+
+  /* 用 nav.nav-sidebar 提高优先级，压过 .global-appbar nav 的手机端规则。 */
+  .global-appbar nav.nav-sidebar {
+    grid-column:auto; grid-row:auto;
+    justify-self:stretch;
+    width:100%;
+    flex:1 1 auto;
+    min-height:0;
+    padding:0 0 8px;
+    display:flex;
+    flex-direction:column;
+    align-items:stretch;
+    gap:0;
+    overflow-x:hidden;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    scrollbar-width:none;
+    background:transparent;
+  }
+  .global-appbar nav.nav-sidebar::-webkit-scrollbar { display:none; }
+  .global-appbar nav.nav-sidebar::after { display:none; }
+
+  .nav-sidebar-rule { margin:0 14px 10px; border-top:3px double var(--ink); }
+
+  .nav-sidebar-item {
+    position:relative;
+    min-height:33px;
+    padding:0 14px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    color:var(--muted);
+    background:transparent;
+    font-size:14px;
+    line-height:1.3;
+    transition:color 150ms ease,background-color 150ms ease;
+  }
+  .nav-sidebar-item:hover { color:var(--ink); }
+  .nav-sidebar-item.active {
+    color:var(--ink);
+    font-weight:600;
+    background:var(--paper);
+    box-shadow:inset 2px 0 0 var(--ink);
+  }
+  .nav-sidebar-item .nav-sidebar-monogram { display:none; }
+
+  .nav-sidebar-group { padding:0; }
+  .nav-sidebar-group + .nav-sidebar-group { margin-top:10px; }
+  .nav-sidebar-group-label {
+    min-height:28px;
+    padding:6px 14px 4px;
+    display:flex;
+    align-items:center;
+    color:var(--muted);
+    font-size:11px;
+    font-weight:600;
+    letter-spacing:.18em;
+  }
+  .nav-sidebar-group.is-active .nav-sidebar-group-label { color:var(--ink); }
+  .nav-sidebar-group-rule { display:none; }
+  .nav-sidebar-group .nav-sidebar-item { padding-left:22px; }
+
+  .nav-sidebar-toggle {
+    width:26px;
+    height:26px;
+    margin:auto auto 8px 14px;
+    padding:0;
+    display:grid;
+    place-items:center;
+    flex:0 0 auto;
+    color:var(--faint);
+    background:transparent;
+    border:1px solid var(--line);
+    border-radius:var(--r-xs);
+  }
+  .nav-sidebar-toggle:hover { color:var(--ink); border-color:var(--ink); }
+  .nav-sidebar-toggle-expand { display:none; }
+  html[data-nav="collapsed"] .nav-sidebar-toggle-collapse { display:none; }
+  html[data-nav="collapsed"] .nav-sidebar-toggle-expand { display:block; }
+
+  /* 账号区贴到侧栏底部，与上方内容用细线分隔。 */
+  .global-user-wrap {
+    grid-column:auto; grid-row:auto;
+    margin-top:auto;
+    padding:12px 14px 16px;
+    border-top:1px solid var(--line);
+  }
+  .user-menu.global-user-menu {
+    position:fixed;
+    left:calc(var(--nav-w) + 8px); right:auto;
+    top:auto; bottom:12px;
+    width:168px;
+  }
+  .notification-menu {
+    position:fixed;
+    left:calc(var(--nav-w) + 8px);
+    right:auto;
+    top:auto;
+    bottom:12px;
+    max-height:min(540px,calc(100dvh - 24px));
+  }
+
+  /* 正文整体右移，避开固定侧栏。 */
+  body:has(.global-appbar) { padding-left:var(--nav-w); transition:padding-left 180ms var(--ease-out); }
+  body:has(.global-appbar) .reader-workspace {
+    width:calc(100vw - var(--nav-w));
+    transition:grid-template-columns 180ms var(--ease-out),width 180ms var(--ease-out);
+  }
+  /* 固定居中元素在内容区重新居中。 */
+  body:has(.global-appbar) .toast,
+  body:has(.global-appbar) .db-toast,
+  body:has(.global-appbar) .ce-toast { left:calc(50% + var(--nav-w) / 2); }
+
+  /* 收起态：56px 轨道，只显示单字与竖排账号区。 */
+  html[data-nav="collapsed"] .global-brand {
+    width:100%;
+    padding:20px 0 12px;
+    justify-content:center;
+    font-size:0;
+  }
+  html[data-nav="collapsed"] .global-brand::before {
+    content:"白";
+    font-family:var(--font-serif);
+    font-size:19px;
+    font-weight:600;
+  }
+  html[data-nav="collapsed"] .nav-sidebar-label { display:none; }
+  html[data-nav="collapsed"] .nav-sidebar-group .nav-sidebar-item,
+  html[data-nav="collapsed"] .nav-sidebar-item {
+    min-height:34px;
+    padding:0;
+    justify-content:center;
+  }
+  html[data-nav="collapsed"] .nav-sidebar-item .nav-sidebar-monogram {
+    width:32px;
+    height:32px;
+    display:grid;
+    place-items:center;
+    font-family:var(--font-serif);
+    font-size:15px;
+    line-height:1;
+  }
+  html[data-nav="collapsed"] .nav-sidebar-item.active {
+    background:transparent;
+    box-shadow:none;
+    font-weight:600;
+  }
+  html[data-nav="collapsed"] .nav-sidebar-item.active .nav-sidebar-monogram {
+    color:var(--canvas);
+    background:var(--ink);
+    border:1px solid var(--ink);
+  }
+  html[data-nav="collapsed"] .nav-sidebar-group-label { display:none; }
+  html[data-nav="collapsed"] .nav-sidebar-group-rule {
+    display:block;
+    width:20px;
+    height:1px;
+    margin:10px auto 6px;
+    background:var(--line-strong);
+  }
+  html[data-nav="collapsed"] .nav-sidebar-group.is-active .nav-sidebar-group-rule { background:var(--ink); }
+  html[data-nav="collapsed"] .nav-sidebar-toggle { margin:auto auto 8px; }
+  html[data-nav="collapsed"] .global-user-wrap {
+    margin-top:auto;
+    padding:12px 0 16px;
+    flex-direction:column;
+    gap:10px;
+    align-items:center;
+  }
+  html[data-nav="collapsed"] .global-user > span:not(.user-avatar),
+  html[data-nav="collapsed"] .global-user > svg { display:none; }
+  html[data-nav="collapsed"] .user-menu.global-user-menu { left:calc(var(--nav-w) + 8px); right:auto; }
+}
+
+/* 矮屏（如 1024x532）：侧栏行距收紧，尽量一屏放下全部入口。 */
+@media (min-width:761px) and (max-height:640px) {
+  .global-brand { padding:14px 14px 8px; }
+  .nav-sidebar-rule { margin-bottom:6px; }
+  .nav-sidebar-item { min-height:28px; font-size:13px; }
+  .nav-sidebar-group + .nav-sidebar-group { margin-top:4px; }
+  .nav-sidebar-group-label { min-height:22px; padding:4px 14px 2px; }
+  .nav-sidebar-toggle { margin-bottom:6px; }
+  .global-user-wrap { padding:8px 14px 10px; }
+  html[data-nav="collapsed"] .nav-sidebar-group .nav-sidebar-item,
+  html[data-nav="collapsed"] .nav-sidebar-item { min-height:30px; }
+  html[data-nav="collapsed"] .nav-sidebar-item .nav-sidebar-monogram { width:28px; height:28px; }
+  html[data-nav="collapsed"] .nav-sidebar-group-rule { margin:6px auto 4px; }
+  html[data-nav="collapsed"] .global-user-wrap { padding:8px 0 10px; gap:6px; }
 }

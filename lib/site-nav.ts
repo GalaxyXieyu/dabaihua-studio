@@ -4,6 +4,26 @@
 
 export type NavSection = "today" | "content" | "growth";
 export type NavItem = { key: string; label: string; href: string };
+export type NavState = "collapsed" | "expanded";
+
+/** 收起态每个导航项显示的单字缩写，键与 NavItem.key 对齐。 */
+export const NAV_MONOGRAMS: Record<string, string> = {
+  today: "今",
+  brief: "简",
+  reading: "读",
+  topics: "题",
+  articles: "文",
+  strategy: "策",
+  weekly: "周",
+  daily: "日",
+  career: "职",
+  mirror: "镜",
+};
+
+/** 取导航项的单字缩写；没有映射时退回标签首字。 */
+export function navMonogram(item: NavItem): string {
+  return NAV_MONOGRAMS[item.key] ?? Array.from(item.label)[0] ?? "";
+}
 
 /** Routes that stay reachable but never appear in the navigation. */
 export const HIDDEN_FROM_NAV = ["/annotations", "/leaderboard"];
@@ -68,6 +88,24 @@ export function sectionForPath(pathname: string): NavSection | null {
   }
   if (hasPrefix(pathname, "/weekly") || hasPrefix(pathname, "/daily") || hasPrefix(pathname, "/career") || hasPrefix(pathname, "/mirror")) return "growth";
   return null;
+}
+
+export function isReaderPath(pathname: string): boolean {
+  return hasPrefix(pathname, "/discover") || hasPrefix(pathname, "/reading");
+}
+
+/**
+ * 侧边栏收起的有效状态。阅读器默认收起，只有显式展开才会被记住；
+ * 其它页面默认展开，只有显式收起才会被记住。
+ * 该逻辑与 app/layout.tsx 里的防闪脚本保持一致。
+ */
+export function navStateFor(
+  pathname: string,
+  stored: string | null | undefined,
+  storedReader: string | null | undefined,
+): NavState {
+  if (isReaderPath(pathname)) return storedReader === "expanded" ? "expanded" : "collapsed";
+  return stored === "collapsed" ? "collapsed" : "expanded";
 }
 
 export function activeTabKey(pathname: string): string | null {

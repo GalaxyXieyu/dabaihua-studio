@@ -9,6 +9,10 @@ import { requestOrigin } from "../lib/request-origin";
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1 };
 
+// 防闪脚本：在首次绘制前根据 localStorage 与当前路径决定侧栏收起状态。
+// 决策逻辑与 lib/site-nav.ts 的 navStateFor 保持一致（纯函数不可在防闪脚本里 import）。
+const NAV_INIT_SCRIPT = `(function(){try{var p=location.pathname;var r=p==="/discover"||p.indexOf("/discover/")===0||p==="/reading"||p.indexOf("/reading/")===0;var v=r?(localStorage.getItem("dbh-nav-reader")==="expanded"?"expanded":"collapsed"):(localStorage.getItem("dbh-nav")==="collapsed"?"collapsed":"expanded");document.documentElement.dataset.nav=v;}catch(e){}})();`;
+
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
   const siteUrl = new URL(requestOrigin(requestHeaders));
@@ -48,7 +52,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh-CN">
+    <html lang="zh-CN" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: NAV_INIT_SCRIPT }} />
+      </head>
       <body>{children}</body>
     </html>
   );
