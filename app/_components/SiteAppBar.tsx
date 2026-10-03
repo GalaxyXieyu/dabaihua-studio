@@ -2,7 +2,6 @@
 import type { SessionUser } from "../../lib/auth";
 import { BRAND_NAME } from "../../lib/brand";
 import { activeTabKey, sectionForPath, sectionTabs } from "../../lib/site-nav";
-import { AppBarAutoCollapse } from "./AppBarAutoCollapse";
 import { SiteNavCluster } from "./SiteNav";
 import { SiteUserMenu } from "./SiteUserMenu";
 
@@ -21,7 +20,6 @@ export function SiteAppBar({ user, pathname }: { user: SessionUser | null; pathn
       </a>
       <SiteNavCluster role={user?.role} section={section} activeTab={activeTabKey(pathname)} />
       {user ? <SiteUserMenu user={user} /> : null}
-      {tabs.length > 0 ? <AppBarAutoCollapse /> : null}
     </header>
   );
 }

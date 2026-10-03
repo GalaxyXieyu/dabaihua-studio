@@ -438,7 +438,7 @@ test("ships secure accounts, personal state, source follows, contributors, and d
   assert.match(styles, /\.reader-workspace \{[^}]*grid-template-columns:280px var\(--article-pane-width\) minmax\(560px,1fr\)/);
   assert.match(styles, /\.user-menu\.global-user-menu \{[^}]*right:0[^}]*top:calc\(100% \+ 8px\)[^}]*width:168px/);
   assert.match(styles, /\.global-appbar \{[^}]*z-index:var\(--z-appbar\)/);
-  assert.match(styles, /\.article-pane-header \{[^}]*padding:10px 16px[^}]*align-items:center/);
+  assert.match(styles, /\.article-pane-header \{[^}]*padding:0 12px[^}]*align-items:center/);
   assert.match(styles, /\.article-status-tabs \{[^}]*margin:8px 16px[^}]*padding:4px/);
   assert.match(styles, /\.user-menu button \{[^}]*white-space:nowrap/);
   assert.match(styles, /\.article-pane-header h1 \{[^}]*text-overflow:ellipsis/);
@@ -1790,8 +1790,9 @@ test("mounts the shared site app bar on every content and growth subpage", async
   assert.match(userMenu, /action: "logout"/);
   assert.match(userMenu, /href="\/profile"/);
   assert.match(styles, /\.site-appbar \{ position:sticky; top:0; \}/);
-  assert.match(styles, /\.global-appbar\.has-subnav \{ --appbar-height:93px; \}/);
-  assert.match(styles, /\.reader-workspace\.has-subnav \{ --appbar-height:93px; \}/);
+  assert.match(styles, /:root \{[^}]*--appbar-height:48px/);
+  assert.match(styles, /\.global-appbar \{[^}]*grid-template-columns:auto minmax\(0,1fr\) auto auto/);
+  assert.doesNotMatch(styles, /--appbar-height:93px/);
 
   const pages = [
     [topics, "/topics"],
