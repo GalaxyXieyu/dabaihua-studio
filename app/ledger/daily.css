@@ -78,6 +78,8 @@ body:has(.daily-a) {
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.01em;
+  /* 大数字永不换行：窄屏靠媒体查询降字号。 */
+  white-space: nowrap;
 }
 
 .daily-a-metric-label {
@@ -85,6 +87,14 @@ body:has(.daily-a) {
   color: var(--muted);
   font-size: 13px;
   letter-spacing: 0.08em;
+}
+
+/* 大数字下的次要数字（如 `+48,395 / −10,777`）：小字弱化，不让大数字换行。 */
+.daily-a-metric-sub {
+  margin: 4px 0 0;
+  color: var(--faint);
+  font-size: 12px;
+  letter-spacing: 0.02em;
 }
 
 .daily-a-metric-delta {

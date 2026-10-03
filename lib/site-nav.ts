@@ -6,6 +6,13 @@ export type NavSection = "today" | "content" | "growth";
 export type NavItem = { key: string; label: string; href: string };
 export type NavState = "collapsed" | "expanded";
 
+/** 成长板块各页的名字，只在这里改。monogram = 收起侧栏时的单字。 */
+export const GROWTH_NAMES = {
+  ledger: { label: "翻翻旧账", monogram: "账" },
+  career: { label: "攒点筹码", monogram: "筹" },
+  mirror: { label: "照照镜子", monogram: "镜" },
+} as const;
+
 /** 收起态每个导航项显示的单字缩写，键与 NavItem.key 对齐。 */
 export const NAV_MONOGRAMS: Record<string, string> = {
   today: "今",
@@ -14,10 +21,9 @@ export const NAV_MONOGRAMS: Record<string, string> = {
   topics: "题",
   articles: "文",
   strategy: "策",
-  weekly: "周",
-  daily: "日",
-  career: "职",
-  mirror: "镜",
+  ledger: GROWTH_NAMES.ledger.monogram,
+  career: GROWTH_NAMES.career.monogram,
+  mirror: GROWTH_NAMES.mirror.monogram,
 };
 
 /** 取导航项的单字缩写；没有映射时退回标签首字。 */
@@ -31,7 +37,7 @@ export const HIDDEN_FROM_NAV = ["/annotations", "/leaderboard"];
 const TODAY_ITEM: NavItem = { key: "today", label: "今天", href: "/" };
 const CONTENT_ITEM: NavItem = { key: "content", label: "内容", href: "/discover" };
 const ADMIN_CONTENT_ITEM: NavItem = { key: "content", label: "内容", href: "/topics/daily" };
-const GROWTH_ITEM: NavItem = { key: "growth", label: "成长", href: "/career" };
+const GROWTH_ITEM: NavItem = { key: "growth", label: "成长", href: "/ledger" };
 
 const CONTENT_TABS: NavItem[] = [
   { key: "reading", label: "阅读", href: "/discover" },
@@ -43,10 +49,9 @@ const CONTENT_TABS: NavItem[] = [
 const BRIEF_TAB: NavItem = { key: "brief", label: "选题简报", href: "/topics/daily" };
 
 const GROWTH_TABS: NavItem[] = [
-  { key: "weekly", label: "周报", href: "/weekly" },
-  { key: "daily", label: "日报", href: "/daily" },
-  { key: "career", label: "职业", href: "/career" },
-  { key: "mirror", label: "照照镜子", href: "/mirror" },
+  { key: "ledger", label: GROWTH_NAMES.ledger.label, href: "/ledger" },
+  { key: "career", label: GROWTH_NAMES.career.label, href: "/career" },
+  { key: "mirror", label: GROWTH_NAMES.mirror.label, href: "/mirror" },
 ];
 
 function isAdmin(role: string | null | undefined): boolean {
@@ -86,7 +91,15 @@ export function sectionForPath(pathname: string): NavSection | null {
   ) {
     return "content";
   }
-  if (hasPrefix(pathname, "/weekly") || hasPrefix(pathname, "/daily") || hasPrefix(pathname, "/career") || hasPrefix(pathname, "/mirror")) return "growth";
+  if (
+    hasPrefix(pathname, "/ledger") ||
+    hasPrefix(pathname, "/weekly") ||
+    hasPrefix(pathname, "/daily") ||
+    hasPrefix(pathname, "/career") ||
+    hasPrefix(pathname, "/mirror")
+  ) {
+    return "growth";
+  }
   return null;
 }
 
@@ -114,8 +127,7 @@ export function activeTabKey(pathname: string): string | null {
   if (hasPrefix(pathname, "/topics")) return "topics";
   if (hasPrefix(pathname, "/articles") || hasPrefix(pathname, "/review")) return "articles";
   if (hasPrefix(pathname, "/strategy")) return "strategy";
-  if (hasPrefix(pathname, "/weekly")) return "weekly";
-  if (hasPrefix(pathname, "/daily")) return "daily";
+  if (hasPrefix(pathname, "/ledger") || hasPrefix(pathname, "/daily") || hasPrefix(pathname, "/weekly")) return "ledger";
   if (hasPrefix(pathname, "/career")) return "career";
   if (hasPrefix(pathname, "/mirror")) return "mirror";
   return null;

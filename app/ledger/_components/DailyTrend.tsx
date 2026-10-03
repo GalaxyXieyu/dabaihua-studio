@@ -150,7 +150,7 @@ export function DailyTrend({ points, selected }: { points: TrendPoint[]; selecte
                   className={`daily-a-bar ${isSelected ? "is-selected" : ""} ${hover === index ? "is-hover" : ""}`}
                 />
                 <a
-                  href={`/daily?date=${point.date}`}
+                  href={`/ledger?view=day&date=${point.date}`}
                   aria-label={`${formatDay(point.date)}：${point.commits} 个提交，${formatToken(point.tokensM)} 百万 token`}
                 >
                   <rect

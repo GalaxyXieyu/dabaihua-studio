@@ -1182,10 +1182,8 @@ test("serves weekly reports under login with a tight CSP", async () => {
 
   assert.match(authorize, /export async function authenticateApiKey/);
   assert.match(authorize, /topk_\[a-f0-9\]\{32,64\}/);
-  assert.match(page, /topics daily publish weekly.html --week 2026-W39/);
-  assert.match(page, /redirect\("\/login\?next=\/weekly"\)/);
+  assert.match(page, /redirect\("\/ledger\?view=week"\)/);
   assert.match(serve, /if \(user\.role !== "admin"\) return notFoundResponse\(\)/);
-  assert.match(page, /if \(user\.role !== "admin"\) notFound\(\)/);
 
   assert.match(migration, /CREATE TABLE IF NOT EXISTS `weekly_reports`/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS `weekly_report_chunks`/);
@@ -1259,28 +1257,28 @@ test("gates the admin-only career page and keeps raw result fields out of the da
   }
 });
 
-test("gates the admin-only daily page and keeps the private feed out of git", async () => {
+test("gates the admin-only ledger page and keeps the private feed out of git", async () => {
   const [page, worker, dailyData, gitignore, packageJson, trend, css] = await Promise.all([
-    readFile(new URL("../app/daily/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/ledger/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../worker/index.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/daily-data.ts", import.meta.url), "utf8"),
     readFile(new URL("../.gitignore", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
-    readFile(new URL("../app/daily/_components/DailyTrend.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/daily/daily.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/ledger/_components/DailyTrend.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/ledger/daily.css", import.meta.url), "utf8"),
   ]);
 
   // 未登录跳登录页；已登录非管理员 404。
-  assert.match(page, /redirect\("\/login\?next=\/daily"\)/);
+  assert.match(page, /redirect\("\/login\?next=\/ledger"\)/);
   assert.match(page, /if \(user\.role !== "admin"\) notFound\(\)/);
   assert.match(page, /robots:\s*\{ index: false, follow: false \}/);
   assert.match(page, /loadDailyData\(env\.DB\)/);
   assert.match(page, /还没有日报数据/);
-  assert.match(page, /<SiteAppBar user=\{user\} pathname="\/daily" \/>/);
-  // 日期选择走 URL 参数，默认最新一天。
-  assert.match(page, /Promise<\{ date\?: string \}>/);
+  assert.match(page, /<SiteAppBar user=\{user\} pathname="\/ledger" \/>/);
+  // 日期选择走 URL 参数（view=day），默认最新一天。
+  assert.match(page, /Promise<\{ view\?: string; date\?: string \}>/);
   assert.match(page, /selectDay\(days, requested\)/);
-  assert.match(page, /\?date=/);
+  assert.match(page, /view=\$\{view\}&date=\$\{date\}/);
   // 页面只读汇总后的 json，不直接读仓库外的日报目录。
   assert.doesNotMatch(page, /workspace\/(daily|career)/);
 
@@ -1394,6 +1392,7 @@ test("gates the admin-only daily page and keeps the private feed out of git", as
   assert.match(gitignore, /\/content\/daily\//);
   assert.match(packageJson, /"daily:build": "node scripts\/build-daily\.mjs"/);
   assert.match(worker, /url\.pathname === "\/daily" \|\| url\.pathname\.startsWith\("\/daily\/"\)/);
+  assert.match(worker, /url\.pathname === "\/ledger" \|\| url\.pathname\.startsWith\("\/ledger\/"\)/);
 });
 
 test("summarizes sample daily markdown and git commits for /daily", async () => {
@@ -1709,7 +1708,7 @@ test("runs the login gate in the worker before serving weekly reports", async ()
 test("configures primary navigation by role", () => {
   const admin = primaryNavItems("admin");
   assert.deepEqual(admin.map((item) => item.label), ["今天", "内容", "成长"]);
-  assert.deepEqual(admin.map((item) => item.href), ["/", "/topics/daily", "/career"]);
+  assert.deepEqual(admin.map((item) => item.href), ["/", "/topics/daily", "/ledger"]);
   assert.equal(admin.find((item) => item.key === "content")?.href, "/topics/daily");
 
   for (const role of ["user", null, undefined]) {
@@ -1731,7 +1730,8 @@ test("configures section tabs by section and role", () => {
   assert.deepEqual(sectionTabs("content", "admin").map((item) => item.href), ["/topics/daily", "/discover", "/topics", "/articles", "/strategy"]);
   assert.deepEqual(sectionTabs("content", "admin").map((item) => item.label), ["选题简报", "阅读", "选题", "文章", "策略"]);
   assert.equal(JSON.stringify(sectionTabs("content", "user")).includes("/topics/daily"), false);
-  assert.deepEqual(sectionTabs("growth", "admin").map((item) => item.label), ["周报", "日报", "职业", "照照镜子"]);
+  assert.deepEqual(sectionTabs("growth", "admin").map((item) => item.label), ["翻翻旧账", "攒点筹码", "照照镜子"]);
+  assert.deepEqual(sectionTabs("growth", "admin").map((item) => item.href), ["/ledger", "/career", "/mirror"]);
   assert.deepEqual(sectionTabs("growth", "user"), []);
   assert.deepEqual(sectionTabs("growth", null), []);
   assert.deepEqual(sectionTabs("today", "admin"), []);
@@ -1739,10 +1739,10 @@ test("configures section tabs by section and role", () => {
 
 test("maps paths to navigation sections and active tabs", () => {
   assert.equal(sectionForPath("/"), "today");
-  for (const pathname of ["/reading", "/discover", "/topics", "/topics/daily", "/articles", "/articles/hello", "/review/1", "/strategy", "/annotations", "/leaderboard"]) {
+  for (const pathname of ["/reading", "/discover", "/topics", "/topics/daily", "/articles", "/articles/hello", "/review", "/review/1", "/strategy", "/annotations", "/leaderboard"]) {
     assert.equal(sectionForPath(pathname), "content", `${pathname} should be content`);
   }
-  for (const pathname of ["/weekly", "/weekly/2026-W39/", "/daily", "/career", "/mirror"]) {
+  for (const pathname of ["/ledger", "/weekly", "/weekly/2026-W39/", "/daily", "/career", "/mirror"]) {
     assert.equal(sectionForPath(pathname), "growth", `${pathname} should be growth`);
   }
   for (const pathname of ["/profile", "/login"]) {
@@ -1754,10 +1754,12 @@ test("maps paths to navigation sections and active tabs", () => {
   assert.equal(activeTabKey("/topics"), "topics");
   assert.equal(activeTabKey("/topics/daily"), "brief");
   assert.equal(activeTabKey("/articles/hello"), "articles");
-  assert.equal(activeTabKey("/review/1"), "articles");
   assert.equal(activeTabKey("/strategy"), "strategy");
-  assert.equal(activeTabKey("/weekly/2026-W39/"), "weekly");
-  assert.equal(activeTabKey("/daily"), "daily");
+  assert.equal(activeTabKey("/review"), "articles");
+  assert.equal(activeTabKey("/review/1"), "articles");
+  assert.equal(activeTabKey("/ledger"), "ledger");
+  assert.equal(activeTabKey("/weekly/2026-W39/"), "ledger");
+  assert.equal(activeTabKey("/daily"), "ledger");
   assert.equal(activeTabKey("/career"), "career");
   assert.equal(activeTabKey("/mirror"), "mirror");
   assert.equal(activeTabKey("/profile"), null);
@@ -1766,14 +1768,13 @@ test("maps paths to navigation sections and active tabs", () => {
 });
 
 test("mounts the shared site app bar on every content and growth subpage", async () => {
-  const [appBar, userMenu, topics, strategy, articles, weekly, daily, career, mirror, articleDetail, review, styles] = await Promise.all([
+  const [appBar, userMenu, topics, strategy, articles, reviewPage, career, mirror, articleDetail, review, styles] = await Promise.all([
     readFile(new URL("../app/_components/SiteAppBar.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/_components/SiteUserMenu.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/topics/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/strategy/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/articles/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/weekly/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/daily/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/ledger/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/career/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/mirror/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/articles/[slug]/page.tsx", import.meta.url), "utf8"),
@@ -1798,8 +1799,7 @@ test("mounts the shared site app bar on every content and growth subpage", async
     [topics, "/topics"],
     [strategy, "/strategy"],
     [articles, "/articles"],
-    [weekly, "/weekly"],
-    [daily, "/daily"],
+    [reviewPage, "/ledger"],
     [career, "/career"],
     [mirror, "/mirror"],
   ];

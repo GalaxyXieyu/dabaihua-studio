@@ -4,6 +4,7 @@ import handler from "vinext/server/app-router-entry";
 import { processPendingItems, promotePendingXArticles, syncDueSources } from "../lib/store";
 import { handleWeeklyRequest } from "../lib/weekly-serve";
 import { getSessionUser, refreshSessionCookie } from "../lib/auth";
+import { legacyRedirect } from "../lib/legacy-redirects";
 import { isPublicPath, loginRedirectResponse } from "../lib/login-gate";
 import { secureRedirectResponse, upgradeForwardedRequestWithFlag } from "../lib/trusted-proxy";
 
@@ -59,6 +60,18 @@ const worker = {
       if (!user) return secure(loginRedirectResponse(url));
     }
 
+    // 旧链接（/daily、/weekly 列表）在 worker 层重定向：vinext 下「只做 redirect 的页面」
+    // 拿不到 searchParams，日期会在页面层丢失。登录门在前面已经放行，保持原顺序。
+    if (request.method === "GET" || request.method === "HEAD") {
+      const legacy = legacyRedirect(url);
+      if (legacy) {
+        return secure(new Response(null, {
+          status: 302,
+          headers: { location: legacy, "cache-control": "no-store" },
+        }));
+      }
+    }
+
     if (url.pathname.startsWith("/weekly/")) {
       const weekly = await handleWeeklyRequest(request, env);
       if (weekly) return secure(weekly);
@@ -73,7 +86,7 @@ const worker = {
         response.headers.append("set-cookie", refreshed);
       }
     }
-    if (url.pathname === "/career" || url.pathname.startsWith("/career/") || url.pathname === "/daily" || url.pathname.startsWith("/daily/") || url.pathname === "/mirror" || url.pathname.startsWith("/mirror/")) {
+    if (url.pathname === "/career" || url.pathname.startsWith("/career/") || url.pathname === "/daily" || url.pathname.startsWith("/daily/") || url.pathname === "/ledger" || url.pathname.startsWith("/ledger/") || url.pathname === "/mirror" || url.pathname.startsWith("/mirror/")) {
       const noindexed = new Response(response.body, response);
       noindexed.headers.set("x-robots-tag", "noindex, nofollow");
       noindexed.headers.set("cache-control", "private, no-store");

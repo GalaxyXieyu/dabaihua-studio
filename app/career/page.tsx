@@ -4,6 +4,7 @@ import { env } from "cloudflare:workers";
 import { getSessionUser } from "../../lib/auth";
 import { requestOrigin } from "../../lib/request-origin";
 import { SiteAppBar } from "../_components/SiteAppBar";
+import { GROWTH_NAMES } from "../../lib/site-nav";
 import { loadCareerData } from "../../lib/career-data";
 import {
   formatShanghai,
@@ -18,7 +19,7 @@ import "./career.css";
 
 export const dynamic = "force-dynamic";
 export const viewport = { width: "device-width", initialScale: 1 };
-export const metadata = { title: "职业 · 成长", robots: { index: false, follow: false } };
+export const metadata = { title: `${GROWTH_NAMES.career.label} · 成长`, robots: { index: false, follow: false } };
 
 const noteClass = "career-a-note";
 const subtleClass = "career-a-subtle";
@@ -119,8 +120,8 @@ export default async function CareerPage() {
         <SiteAppBar user={user} pathname="/career" />
         <div className="career-a-masthead-wrap">
           <header className="career-a-masthead">
-            <p className="page-kicker">成长 · 职业</p>
-            <h1 className="page-title">职业</h1>
+            <p className="page-kicker">成长 · {GROWTH_NAMES.career.label}</p>
+            <h1 className="page-title">{GROWTH_NAMES.career.label}</h1>
           </header>
           <div className="double-rule" />
         </div>
@@ -160,8 +161,8 @@ export default async function CareerPage() {
 
       <div className="career-a-masthead-wrap">
         <header className="career-a-masthead">
-          <p className="page-kicker">成长 · 职业</p>
-          <h1 className="page-title">职业</h1>
+          <p className="page-kicker">成长 · {GROWTH_NAMES.career.label}</p>
+          <h1 className="page-title">{GROWTH_NAMES.career.label}</h1>
           <p className="page-sub">数据截至 {formatShanghai(header.data_as_of)}（北京时间）</p>
         </header>
         <div className="double-rule" />

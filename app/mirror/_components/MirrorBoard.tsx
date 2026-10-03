@@ -15,6 +15,7 @@ import {
   type MirrorEntry,
 } from "../../../lib/mirror";
 import type { Card, CardRevision } from "../../../lib/cards-core";
+import { GROWTH_NAMES } from "../../../lib/site-nav";
 import { MirrorDeck, type MirrorCardVariant } from "./MirrorDeck";
 
 const SHEET_CATEGORIES = ["画像", "偏好", "方法论", "决策", "待调整"];
@@ -639,8 +640,8 @@ export function MirrorBoard({
     <>
       <div className="mirror-a-masthead-wrap">
         <header className="mirror-a-masthead">
-          <p className="page-kicker">成长 · 照照镜子</p>
-          <h1 className="page-title">照照镜子</h1>
+          <p className="page-kicker">成长 · {GROWTH_NAMES.mirror.label}</p>
+          <h1 className="page-title">{GROWTH_NAMES.mirror.label}</h1>
           <div className="mirror-a-masthead-row">
             <p className="page-sub">
               共 {stats.entryCount} 条
@@ -968,7 +969,7 @@ function CreateSheet({
       <div className="ce-sheet" role="dialog" aria-label="新增一条">
         <header className="ce-sheet-head">
           <div>
-            <p className="ce-kicker">照照镜子 · 新增</p>
+            <p className="ce-kicker">{GROWTH_NAMES.mirror.label} · 新增</p>
             <h2 className="ce-title">新增一条</h2>
           </div>
           <button type="button" className="ce-link" onClick={onClose}>

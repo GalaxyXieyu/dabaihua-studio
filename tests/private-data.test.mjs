@@ -260,7 +260,7 @@ test("daily/career loaders read D1 and never glob at build time", async () => {
   const [dailyDataFile, careerDataFile, dailyPage, careerPage, todayLib] = await Promise.all([
     readFile(new URL("../lib/daily-data.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/career-data.ts", import.meta.url), "utf8"),
-    readFile(new URL("../app/daily/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/ledger/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/career/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/today.ts", import.meta.url), "utf8"),
   ]);
@@ -272,7 +272,7 @@ test("daily/career loaders read D1 and never glob at build time", async () => {
   assert.match(dailyDataFile, /loadDataset<DailyData>\(db, "daily"\)/);
   assert.match(careerDataFile, /loadDataset<CareerData>\(db, "career"\)/);
 
-  assert.match(dailyPage, /await loadDailyData\(env\.DB\)/);
+  assert.match(dailyPage, /loadDailyData\(env\.DB\)/);
   assert.match(careerPage, /await loadCareerData\(env\.DB\)/);
   assert.match(todayLib, /await loadCareerData\(env\.DB\)/);
 

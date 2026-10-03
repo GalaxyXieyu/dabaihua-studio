@@ -1,0 +1,437 @@
+/* /ledger：日 / 周 / 月三个视图的补充样式。
+   日视图沿用 daily.css 的 .daily-a-* 类，这里只加刊头切换、周视图和月热力。 */
+
+/* ── 刊头：左边名字，右边视图切换 + 前后翻页 ─────────── */
+.review-a-masthead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px 20px;
+  padding: 18px 0 0;
+}
+
+.review-a-masthead-main {
+  min-width: 0;
+}
+
+.review-a-title {
+  margin-top: 6px;
+}
+
+.review-a-masthead-side {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+}
+
+.review-a-switch {
+  display: inline-flex;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-xs);
+  overflow: hidden;
+}
+
+.review-a-switch-item {
+  min-width: 40px;
+  padding: 6px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  background: var(--paper);
+  border-left: 1px solid var(--line);
+  font-size: 13px;
+  transition: color 150ms ease, background 150ms ease;
+}
+
+.review-a-switch-item:first-child {
+  border-left: 0;
+}
+
+.review-a-switch-item:hover {
+  color: var(--accent);
+}
+
+.review-a-switch-item.is-active {
+  color: var(--paper);
+  background: var(--ink);
+}
+
+.review-a-steps {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.review-a-step {
+  min-height: 32px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.review-a-step:hover {
+  color: var(--accent);
+  border-color: var(--ink);
+}
+
+.review-a-step.is-disabled {
+  color: var(--faint);
+  opacity: .5;
+}
+
+/* 上一期没数据的灰说明。 */
+.daily-a-metric-delta.is-none {
+  color: var(--faint);
+  font-weight: 500;
+}
+
+.review-a-section {
+  margin-top: 34px;
+}
+
+/* ── 周视图：逐日柱 ─────────────────────────────────── */
+.review-a-week {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+}
+
+.review-a-week-col {
+  min-width: 0;
+  background: var(--canvas);
+}
+
+.review-a-week-link {
+  min-height: 156px;
+  padding: 10px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.review-a-week-link.is-empty {
+  color: var(--faint);
+}
+
+.review-a-week-weekday {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.review-a-week-barwrap {
+  /* 给柱图区一个确定高度，柱子的百分比高度才能真的算出来（原来 flex 子项高度不确定，百分比归 0）。 */
+  flex: 0 0 auto;
+  height: 120px;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.review-a-week-bar {
+  width: 52%;
+  max-width: 28px;
+  background: var(--ink);
+}
+
+.review-a-week-commits {
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.review-a-week-value {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* ── 周视图：按仓库 ─────────────────────────────────── */
+.review-a-repos {
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.review-a-repo {
+  display: grid;
+  grid-template-columns: minmax(90px, 1.4fr) minmax(60px, 2fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.review-a-repo-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.review-a-repo-track {
+  height: 8px;
+  background: var(--accent-wash);
+}
+
+.review-a-repo-bar {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+}
+
+.review-a-repo-commits,
+.review-a-repo-lines {
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* ── 周视图：本周要点与往期周记 ─────────────────────── */
+.review-a-takeaway {
+  margin-top: 10px;
+  padding-top: 12px;
+  max-width: 780px;
+  border-top: 1px solid var(--line);
+}
+
+.review-a-takeaway-title {
+  margin: 0 0 6px;
+  font-family: var(--font-serif);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.review-a-takeaway-body {
+  margin: 0;
+  color: var(--muted);
+}
+
+.review-a-takeaway-link {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--accent);
+  font-size: 13px;
+}
+
+.review-a-takeaway-link:hover {
+  color: var(--accent-hover);
+}
+
+.review-a-archive-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  color: var(--faint);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.review-a-archive-list a:hover {
+  color: var(--accent);
+}
+
+/* 一条周记：主链接去周视图，`原文` 小字链接回存好的周记页。 */
+.review-a-archive-list li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.review-a-archive-source {
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.review-a-archive-source:hover {
+  color: var(--accent);
+}
+
+/* ── 月视图：热力日历 ───────────────────────────────── */
+.review-a .daily-a-metrics[data-count="5"] {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.review-a-heatmap-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.review-a-heatmap-head .daily-a-heading {
+  flex: 1 1 auto;
+}
+
+.review-a-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.review-a-swatch {
+  width: 12px;
+  height: 12px;
+  display: inline-block;
+  border: 1px solid var(--line);
+}
+
+.review-a-heatmap {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.review-a-heatmap-weekday {
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.review-a-heatmap-blank {
+  min-height: 46px;
+}
+
+.review-a-heatmap-cell {
+  min-height: 46px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  font-size: 13px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* 有记录的格子像日视图的小日历那样，在日号下再压一个提交数。 */
+.review-a-heatmap-count {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1;
+  opacity: 0.85;
+}
+
+.review-a-heatmap-cell.is-level-4 .review-a-heatmap-count {
+  color: var(--paper);
+}
+
+.review-a-heatmap-cell.is-selected,
+.review-a-heatmap-cell.is-today {
+  outline: 1px solid var(--ink);
+  outline-offset: -3px;
+}
+
+.review-a-swatch.is-level-1,
+.review-a-heatmap-cell.is-level-1 {
+  background: color-mix(in srgb, var(--accent) 10%, var(--paper));
+}
+
+.review-a-swatch.is-level-2,
+.review-a-heatmap-cell.is-level-2 {
+  background: color-mix(in srgb, var(--accent) 28%, var(--paper));
+}
+
+.review-a-swatch.is-level-3,
+.review-a-heatmap-cell.is-level-3 {
+  background: color-mix(in srgb, var(--accent) 52%, var(--paper));
+}
+
+.review-a-swatch.is-level-4,
+.review-a-heatmap-cell.is-level-4 {
+  color: var(--paper);
+  background: var(--accent);
+}
+
+/* ── 手机：单列、图表跟宽度、热力格不小于 40px ─────── */
+@media (max-width: 760px) {
+  .review-a-masthead {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .review-a-masthead-side {
+    justify-content: space-between;
+  }
+
+  .review-a .daily-a-metrics[data-count="5"] {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .review-a-week-link {
+    min-height: 124px;
+    padding: 8px 2px;
+  }
+
+  .review-a-week-barwrap {
+    height: 96px;
+  }
+
+  .review-a-week-value {
+    font-size: 10px;
+  }
+
+  /* 大数字在窄屏不换行：收窄字号，月视图的 5 张卡也一样。 */
+  .daily-a-metric-value {
+    font-size: clamp(20px, 6.5vw, 32px);
+    white-space: nowrap;
+  }
+
+  .daily-a-metric-sub {
+    font-size: 11px;
+  }
+
+  .review-a-repo {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "name name"
+      "track track"
+      "commits lines";
+    row-gap: 8px;
+  }
+
+  .review-a-repo-name {
+    grid-area: name;
+  }
+
+  .review-a-repo-track {
+    grid-area: track;
+  }
+
+  .review-a-repo-commits {
+    grid-area: commits;
+  }
+
+  .review-a-repo-lines {
+    grid-area: lines;
+    text-align: right;
+  }
+
+  .review-a-heatmap-cell,
+  .review-a-heatmap-blank {
+    min-height: 40px;
+  }
+}

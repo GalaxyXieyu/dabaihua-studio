@@ -7,6 +7,7 @@ import { listAllHistory, listCards } from "../../lib/cards";
 import { resolveMirrorTab } from "../../lib/mirror";
 import { ensureSchema } from "../../lib/store";
 import { SiteAppBar } from "../_components/SiteAppBar";
+import { GROWTH_NAMES } from "../../lib/site-nav";
 import { MirrorBoard } from "./_components/MirrorBoard";
 import type { Card, CardRevision } from "../../lib/cards-core";
 import "./mirror.css";
@@ -14,7 +15,7 @@ import "./card-editing.css";
 
 export const dynamic = "force-dynamic";
 export const viewport = { width: "device-width", initialScale: 1 };
-export const metadata = { title: "照照镜子 · 成长", robots: { index: false, follow: false } };
+export const metadata = { title: `${GROWTH_NAMES.mirror.label} · 成长`, robots: { index: false, follow: false } };
 
 function EmptyState({ user }: { user: Awaited<ReturnType<typeof getSessionUser>> }) {
   return (
@@ -22,8 +23,8 @@ function EmptyState({ user }: { user: Awaited<ReturnType<typeof getSessionUser>>
       <SiteAppBar user={user} pathname="/mirror" />
       <div className="mirror-a-masthead-wrap">
         <header className="mirror-a-masthead">
-          <p className="page-kicker">成长 · 照照镜子</p>
-          <h1 className="page-title">照照镜子</h1>
+          <p className="page-kicker">成长 · {GROWTH_NAMES.mirror.label}</p>
+          <h1 className="page-title">{GROWTH_NAMES.mirror.label}</h1>
         </header>
         <div className="double-rule" />
       </div>
