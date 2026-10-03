@@ -56,9 +56,9 @@
 }
 
 .ar-a-title {
-  margin: 14px 0 0;
+  margin: 8px 0 10px;
   font-family: var(--font-serif);
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 700;
   line-height: 1.3;
   letter-spacing: 0;
@@ -128,8 +128,8 @@
 .ar-a-body {
   margin: 16px 0 0;
   overflow-x: hidden;
-  font-size: 17px;
-  line-height: 1.85;
+  font-size: 18px;
+  line-height: 1.75;
   color: var(--ink);
   background: transparent;
 }
@@ -143,7 +143,7 @@
   font-family: var(--font-sans) !important;
 }
 
-/* 正文第一块（标题块）：去白底 / 阴影 / 边框，宋体 22px 600，下方 1px --line。
+/* 正文第一块（标题块）：去白底 / 阴影 / 边框，宋体 20px 600，下方 1px --line。
    外部 article.html 按位置认第一块；站内 Markdown 渲染（data-gzh-md）只认显式的
    data-gzh-title 块——H1 与页面标题相同被省略、或正文没有 H1 时，第一段保持正文样式。 */
 .ar-a-body > section:not([data-gzh-md]) > :first-child,
@@ -167,7 +167,7 @@
 .ar-a-body > section:not([data-gzh-md]) > p:first-child,
 .ar-a-body > section[data-gzh-md] > [data-gzh-title] p {
   font-family: var(--font-serif) !important;
-  font-size: 22px !important;
+  font-size: 20px !important;
   font-weight: 600 !important;
   line-height: 1.4 !important;
   letter-spacing: 0 !important;
@@ -176,9 +176,9 @@
 }
 
 .ar-a-body p {
-  margin: 1em 0 !important;
-  font-size: 17px !important;
-  line-height: 1.85 !important;
+  margin: .8em 0 !important;
+  font-size: 18px !important;
+  line-height: 1.75 !important;
   text-align: left !important;
   color: var(--ink) !important;
 }
@@ -191,6 +191,14 @@
   line-height: 1.4 !important;
   letter-spacing: 0 !important;
   color: var(--ink) !important;
+}
+
+.ar-a-body h2 {
+  font-size: 20px !important;
+}
+
+.ar-a-body h3 {
+  font-size: 18px !important;
 }
 
 .ar-a-body blockquote,
@@ -605,12 +613,27 @@
   }
 
   .ar-a-title {
-    margin-top: 10px;
-    font-size: 30px;
+    margin-top: 8px;
+    margin-bottom: 6px;
+    font-size: 26px;
+  }
+
+  /* 标题 → 元信息压到 6px，刊头不再吃掉首屏正文空间。 */
+  .ar-a-meta {
+    margin-top: 6px;
   }
 
   .ar-a-toolbar {
     padding: 10px 0 12px;
+  }
+
+  /* 正文容器去掉多余的上内边距；首段顶边距归零，双线到正文只留 16px 外边距。 */
+  .ar-a-body {
+    padding-top: 0 !important;
+  }
+
+  .ar-a-body p:first-child {
+    margin-top: 0 !important;
   }
 
   .ar-a-double-rule {
@@ -669,7 +692,7 @@
   }
 
   .ar-a-title {
-    font-size: 36px;
+    font-size: 26px;
   }
 
   .ar-a-toolbar:has(> [data-testid="marks-list-button"]:only-child) {
@@ -681,7 +704,7 @@
   }
 
   .ar-a-double-rule {
-    margin-top: 16px;
+    margin-top: 10px;
   }
 
   .ar-a-layout {
@@ -709,5 +732,12 @@
   .ar-a-body,
   .ar-a-body p {
     font-size: 16px !important;
+  }
+}
+
+/* 窄桌面：标题再收一档，给首屏正文让位。 */
+@media (max-width: 1360px) {
+  .ar-a-title {
+    font-size: 24px;
   }
 }
