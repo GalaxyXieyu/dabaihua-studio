@@ -81,7 +81,6 @@ export default async function DailyBriefPage({ searchParams }: { searchParams: P
         />
       ) : (
         <main className="db-empty-wrap">
-          <p className="page-kicker">内容 · 选题简报</p>
           <h1 className="page-title">{label}</h1>
           <div className="double-rule" />
           <div className="db-empty">

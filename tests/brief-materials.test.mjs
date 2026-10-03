@@ -7,6 +7,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import {
   FETCH_REASON_LABELS,
@@ -410,4 +411,38 @@ test("topicStatusLabel: 已选 / 不要 / 星 / 未处理", () => {
   assert.equal(topicStatusLabel({ decision: "reject", rating: null }), "不要");
   assert.equal(topicStatusLabel({ decision: "pick", rating: 4 }), "已选 · 4 星");
   assert.equal(topicStatusLabel({ decision: "reject", rating: 5 }), "不要 · 5 星");
+});
+
+test("DailyBrief 紧凑刊头与宽屏满屏双栏：源码约束", () => {
+  const tsx = readFileSync(
+    new URL("../app/topics/daily/_components/DailyBrief.tsx", import.meta.url),
+    "utf8",
+  );
+  const css = readFileSync(
+    new URL("../app/topics/daily/daily-brief.css", import.meta.url),
+    "utf8",
+  );
+
+  // 刊头去掉面包屑，日期标题用自己的类，方便覆盖全局 page-title 样式。
+  assert.equal(tsx.includes("page-kicker"), false);
+  assert.equal(tsx.includes("内容 · 选题简报"), false);
+  assert.ok(tsx.includes("db-head-title"));
+
+  // 交互与日期切换的钩子必须保留。
+  assert.ok(tsx.includes('aria-live="polite"'));
+  assert.ok(tsx.includes("brief-prev"));
+  assert.ok(tsx.includes("brief-next"));
+  assert.ok(tsx.includes("brief-date-select"));
+  assert.ok(tsx.includes("scrollIntoView"));
+
+  // 宽屏用 flex 撑满视口，不再依赖硬编码的 appbar 高度。
+  const wideStart = css.indexOf("@media (min-width: 1024px)");
+  assert.ok(wideStart >= 0, "缺少宽屏媒体查询");
+  const wide = css.slice(wideStart);
+  assert.ok(wide.includes(".db-page"));
+  assert.ok(wide.includes("height: 100dvh"));
+  assert.equal(css.includes("--db-appbar: 93px"), false);
+
+  // 刊头下保留杂志风双细线。
+  assert.ok(css.includes("3px double var(--ink)"));
 });

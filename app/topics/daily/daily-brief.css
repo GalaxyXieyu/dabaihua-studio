@@ -30,18 +30,32 @@
 
 /* ── 刊头与日期切换 ─────────────────────────────────── */
 .db-head {
-  padding-bottom: 24px;
-  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 0 12px;
 }
 
-.db-subtitle {
-  margin: 10px 0 0;
-  color: var(--muted);
-  font-size: 15px;
+.db-head-main {
+  flex: 1 1 100%;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+
+.db-head-title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .db-nav {
-  margin-top: 16px;
+  flex: 1 1 100%;
   display: flex;
   gap: 8px;
   align-items: stretch;
@@ -49,7 +63,7 @@
 
 .db-nav-button {
   flex: 0 0 auto;
-  min-height: 40px;
+  min-height: 32px;
   padding: 0 10px;
   display: inline-flex;
   align-items: center;
@@ -78,25 +92,20 @@
   flex: 1 1 auto;
   width: auto;
   min-width: 0;
-  min-height: 40px;
+  min-height: 32px;
   padding: 0 10px;
   color: var(--ink);
   background: var(--paper);
   border: 1px solid var(--line);
   border-radius: var(--r-xs);
-  font-size: 13px;
-}
-
-.db-subtitle {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
+  font-size: 12px;
 }
 
 .db-progress {
   color: var(--muted);
   font-size: 13px;
   font-variant-numeric: tabular-nums lining-nums;
+  white-space: nowrap;
 }
 
 .db-note {
@@ -120,6 +129,7 @@
 /* ── 双栏骨架：窄屏堆叠，宽屏左列表右详情 ───────────── */
 .db-body {
   padding-top: 20px;
+  border-top: 3px double var(--ink);
 }
 
 .db-left {
@@ -832,53 +842,49 @@
 
 /* ── 宽屏：40/60 双栏，右栏自滚 ────────────────────── */
 @media (min-width: 1024px) {
-  /* 与 .global-appbar.has-subnav 的 --appbar-height 保持一致（内容区有子导航）。 */
+  /* 宽屏是一屏的工作台：整页撑满视口且不滚，刊头一行，左右两栏各自滚动。 */
   .db-page {
-    --db-appbar: 93px;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
-  /* 宽屏是一屏的工作台：刊头一行，下面左右两栏各自滚动，整页不滚。 */
+  /* appbar 保持自身高度，不被 flex 压缩。 */
+  .db-page > .global-appbar {
+    flex: 0 0 auto;
+  }
+
   .db {
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
     max-width: 1280px;
-    height: calc(100dvh - var(--db-appbar));
-    padding: 22px 40px 0;
+    padding: 10px 40px 0;
     display: flex;
     flex-direction: column;
   }
 
+  /* 刊头压成一行，总高约 50px。 */
   .db-head {
     flex: 0 0 auto;
-    display: flex;
-    align-items: flex-end;
+    flex-wrap: nowrap;
     justify-content: space-between;
-    gap: 32px;
-    padding-bottom: 16px;
-    border-bottom: 0;
+    gap: 24px;
+    padding: 10px 0;
   }
 
-  .db-head .page-kicker {
-    margin-bottom: 4px;
-  }
-
-  .db-head .page-title {
-    margin: 0;
-    font-size: 30px;
-    line-height: 1.2;
-  }
-
-  .db-head .db-subtitle {
-    margin-top: 6px;
-    font-size: 13px;
+  .db-head-main {
+    flex: 0 1 auto;
   }
 
   .db-nav {
     flex: 0 0 auto;
-    margin-top: 0;
   }
 
   .db-date-select {
     flex: 0 0 auto;
-    width: 210px;
+    width: 190px;
   }
 
   .db-body {
@@ -907,6 +913,11 @@
     border-left: 1px solid var(--line);
     overscroll-behavior: contain;
     scrollbar-width: thin;
+  }
+
+  /* 详情自身不留底部空白，底部操作栏才能贴住右栏底边。 */
+  .db-detail {
+    padding-bottom: 0;
   }
 
   .db-overlay {

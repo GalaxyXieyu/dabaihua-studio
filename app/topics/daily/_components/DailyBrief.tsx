@@ -364,15 +364,14 @@ export function DailyBrief({
   return (
     <div className="db">
       <header className="db-head">
+        {/* 刊头压成一行：日期标题 + 统计；完整简报标题只放在 title 里供悬停查看。 */}
         <div className="db-head-main">
-          <p className="page-kicker">内容 · 选题简报</p>
-          <h1 className="page-title">{dateLabel}</h1>
-          <p className="db-subtitle">
-            {brief.title && <span>{brief.title}</span>}
-            <span className="db-progress" aria-live="polite">
-              已选 {counts.pick} · 不要 {counts.reject} · 已打分 {counts.rated} / {counts.total}
-            </span>
-          </p>
+          <h1 className="db-head-title" title={brief.title || undefined}>
+            {dateLabel}
+          </h1>
+          <span className="db-progress" aria-live="polite">
+            已选 {counts.pick} · 不要 {counts.reject} · 已打分 {counts.rated}/{counts.total}
+          </span>
         </div>
         <nav className="db-nav" aria-label="日期切换">
           {older ? (
