@@ -1017,6 +1017,8 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
 
   /* 正文整体右移，避开固定侧栏。 */
   body:has(.global-appbar) { padding-left:var(--nav-w); transition:padding-left 180ms var(--ease-out); }
+  /* 有侧栏时阅读区少了 56/200px：取消 1180px 最小宽度，阅读栏最窄 360px，避免出现横向滚动。 */
+  body:has(.global-appbar) .reader-workspace { min-width:0; }
   body:has(.global-appbar) .reader-workspace {
     width:calc(100vw - var(--nav-w));
     transition:grid-template-columns 180ms var(--ease-out),width 180ms var(--ease-out);
@@ -1101,4 +1103,10 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
   html[data-nav="collapsed"] .nav-sidebar-item .nav-sidebar-monogram { width:28px; height:28px; }
   html[data-nav="collapsed"] .nav-sidebar-group-rule { margin:6px auto 4px; }
   html[data-nav="collapsed"] .global-user-wrap { padding:8px 0 10px; gap:6px; }
+}
+
+/* 有侧栏的三栏阅读：阅读栏最窄 360px（只作用于阅读页三栏，不影响个人主页、批注等视图）。 */
+@media (min-width:1180px) {
+  body:has(.global-appbar) .reader-workspace.view-discover:not(.discover-immersive):not(.annotations-open) { grid-template-columns:280px var(--article-pane-width) minmax(360px,1fr); }
+  body:has(.global-appbar) .reader-workspace.view-discover.sources-collapsed:not(.discover-immersive):not(.annotations-open) { grid-template-columns:56px var(--article-pane-width) minmax(360px,1fr); }
 }
