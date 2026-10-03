@@ -21,6 +21,7 @@ export const authSessions = sqliteTable("auth_sessions", {
   createdAt: text("created_at").notNull(),
   expiresAt: text("expires_at").notNull(),
   lastSeenAt: text("last_seen_at").notNull(),
+  persistent: integer("persistent", { mode: "boolean" }).notNull().default(true),
 });
 
 export const authAttempts = sqliteTable("auth_attempts", {

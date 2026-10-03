@@ -387,7 +387,8 @@ test("ships secure accounts, personal state, source follows, contributors, and d
   assert.match(auth, /value\.normalize\("NFKC"\)\.trim\(\)/);
   assert.match(auth, /toLocaleLowerCase\("en-US"\)/);
   assert.match(auth, /password_salt/);
-  assert.match(auth, /HttpOnly; SameSite=Lax/);
+  assert.match(auth, /buildSessionCookie\(/);
+  assert.match(await readFile(new URL("../lib/session-policy.ts", import.meta.url), "utf8"), /"HttpOnly", "SameSite=Lax"/);
   assert.match(auth, /DELETE FROM auth_sessions WHERE user_id = \? AND token_hash <> \?/);
   assert.doesNotMatch(auth, /INSERT INTO users[^\n]*password[^\n]*\.bind\([^\n]*password,/);
   assert.match(schema, /accountNormalized:[\s\S]*unique\(\)/);
@@ -762,7 +763,7 @@ test("keeps the article review backend, asset route, and sync script wired to th
   assert.match(store, /CREATE TABLE IF NOT EXISTS article_versions/);
   assert.match(store, /CREATE TABLE IF NOT EXISTS review_marks/);
   assert.match(store, /CREATE TABLE IF NOT EXISTS review_rounds/);
-  assert.match(store, /SCHEMA_VERSION = "2026-10-02\.3"/);
+  assert.match(store, /SCHEMA_VERSION = "2026-10-03\.1"/);
   assert.match(schema, /export const articles/);
   assert.match(schema, /export const articleAssets/);
   assert.match(schema, /export const articleVersions/);

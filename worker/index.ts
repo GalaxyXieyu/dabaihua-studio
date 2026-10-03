@@ -3,7 +3,7 @@ import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } fr
 import handler from "vinext/server/app-router-entry";
 import { processPendingItems, promotePendingXArticles, syncDueSources } from "../lib/store";
 import { handleWeeklyRequest } from "../lib/weekly-serve";
-import { getSessionUser } from "../lib/auth";
+import { getSessionUser, refreshSessionCookie } from "../lib/auth";
 import { isPublicPath, loginRedirectResponse } from "../lib/login-gate";
 import { secureRedirectResponse, upgradeForwardedRequestWithFlag } from "../lib/trusted-proxy";
 
@@ -64,7 +64,15 @@ const worker = {
       if (weekly) return secure(weekly);
     }
 
-    const response = secure(await handler.fetch(request, env, ctx));
+    let response = secure(await handler.fetch(request, env, ctx));
+    // 滚动续期：「记住我」会话被使用时（距上次续期超过 1 天），expires_at 推到 30 天后并重发 cookie。
+    if ((request.method === "GET" || request.method === "HEAD") && !url.pathname.startsWith("/api/auth") && !response.headers.has("set-cookie")) {
+      const refreshed = await refreshSessionCookie(env, request).catch(() => null);
+      if (refreshed) {
+        response = new Response(response.body, response);
+        response.headers.append("set-cookie", refreshed);
+      }
+    }
     if (url.pathname === "/career" || url.pathname.startsWith("/career/") || url.pathname === "/daily" || url.pathname.startsWith("/daily/") || url.pathname === "/mirror" || url.pathname.startsWith("/mirror/")) {
       const noindexed = new Response(response.body, response);
       noindexed.headers.set("x-robots-tag", "noindex, nofollow");

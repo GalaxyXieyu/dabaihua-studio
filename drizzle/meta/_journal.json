@@ -148,6 +148,13 @@
       "when": 1791123106044,
       "tag": "0020_private_datasets",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1791163200000,
+      "tag": "0021_session_persistent",
+      "breakpoints": true
     }
   ]
 }

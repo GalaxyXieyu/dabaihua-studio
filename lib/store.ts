@@ -11,14 +11,14 @@ import { readXArticles, readXPost, readXProfile, xPostAddress, xProfileAddress }
 export type AppEnv = { DB: D1Database; AI?: { run: (model: string, input: unknown) => Promise<unknown> } };
 const now = () => new Date().toISOString();
 const day = () => new Date().toISOString().slice(0, 10);
-const SCHEMA_VERSION = "2026-10-02.3";
+const SCHEMA_VERSION = "2026-10-03.1";
 const schemaReady = new WeakMap<object, Promise<void>>();
 
 async function initializeSchema(db: D1Database) {
   await db.batch([
     db.prepare("CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL)"),
     db.prepare("CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, account TEXT NOT NULL, account_normalized TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, password_salt TEXT NOT NULL, password_iterations INTEGER NOT NULL DEFAULT 100000, nickname TEXT NOT NULL, bio TEXT NOT NULL DEFAULT '', avatar_key TEXT, role TEXT NOT NULL DEFAULT 'user', created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"),
-    db.prepare("CREATE TABLE IF NOT EXISTS auth_sessions (token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id))"),
+    db.prepare("CREATE TABLE IF NOT EXISTS auth_sessions (token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL, created_at TEXT NOT NULL, expires_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, persistent INTEGER NOT NULL DEFAULT 1, FOREIGN KEY(user_id) REFERENCES users(id))"),
     db.prepare("CREATE TABLE IF NOT EXISTS auth_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, attempt_key TEXT NOT NULL, action TEXT NOT NULL, succeeded INTEGER NOT NULL DEFAULT 0, attempted_at TEXT NOT NULL)"),
     db.prepare("CREATE TABLE IF NOT EXISTS api_tokens (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, name TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL, last_used_at TEXT, FOREIGN KEY(user_id) REFERENCES users(id))"),
     db.prepare("CREATE TABLE IF NOT EXISTS eval_profiles (id INTEGER PRIMARY KEY AUTOINCREMENT, version INTEGER NOT NULL, content TEXT NOT NULL, note TEXT, is_active INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL)"),
@@ -110,6 +110,8 @@ async function initializeSchema(db: D1Database) {
   if (!itemColumns.results.some((column) => column.name === "content_fetch_status")) await db.prepare("ALTER TABLE items ADD COLUMN content_fetch_status TEXT").run();
   if (!itemColumns.results.some((column) => column.name === "content_fetch_reason")) await db.prepare("ALTER TABLE items ADD COLUMN content_fetch_reason TEXT").run();
   if (!itemColumns.results.some((column) => column.name === "content_fetched_at")) await db.prepare("ALTER TABLE items ADD COLUMN content_fetched_at TEXT").run();
+  const sessionColumns = await db.prepare("PRAGMA table_info(auth_sessions)").all<{ name: string }>();
+  if (!sessionColumns.results.some((column) => column.name === "persistent")) await db.prepare("ALTER TABLE auth_sessions ADD COLUMN persistent INTEGER NOT NULL DEFAULT 1").run();
   const articleColumns = await db.prepare("PRAGMA table_info(articles)").all<{ name: string }>();
   if (!articleColumns.results.some((column) => column.name === "owner_id")) await db.prepare("ALTER TABLE articles ADD COLUMN owner_id INTEGER").run();
   await db.prepare("UPDATE articles SET owner_id = (SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1) WHERE owner_id IS NULL").run();

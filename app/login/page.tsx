@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-html-link-for-pages */
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { BRAND_NAME } from "../../lib/brand";
 import "./login.css";
 
@@ -16,6 +16,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [remember, setRemember] = useState(true);
+  const [inWeChat, setInWeChat] = useState(false);
+
+  useEffect(() => {
+    // 微信内置浏览器的 cookie 经常被清掉，也存不了密码，提示改用系统浏览器。
+    setInWeChat(/MicroMessenger/i.test(navigator.userAgent));
+  }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -28,7 +35,7 @@ export default function LoginPage() {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "login", account, password }),
+        body: JSON.stringify({ action: "login", account, password, remember }),
       });
       const data = await response.json().catch(() => ({})) as { error?: string };
       if (!response.ok) throw new Error(data.error || "登录失败，请稍后再试");
@@ -50,6 +57,11 @@ export default function LoginPage() {
           <p className="login-a-note">登录后即可进入手机审稿页审阅草稿</p>
         </header>
         <div className="login-a-double-rule" />
+        {inWeChat ? (
+          <p className="login-a-wechat" role="note">
+            你正在微信里打开。微信可能不保留登录状态，建议点右上角「···」，选「在浏览器打开」（Safari / Chrome）。
+          </p>
+        ) : null}
         <form method="post" onSubmit={submit} className="login-a-form">
           <div className="login-a-field">
             <label htmlFor="account" className="login-a-label">账号</label>
@@ -76,6 +88,16 @@ export default function LoginPage() {
               className="login-a-input"
             />
           </div>
+          <label className="login-a-remember">
+            <input
+              type="checkbox"
+              name="remember"
+              checked={remember}
+              onChange={(event) => setRemember(event.target.checked)}
+              className="login-a-check"
+            />
+            <span>记住我（30 天）</span>
+          </label>
           {error ? <p className="login-a-error">{error}</p> : null}
           <button type="submit" disabled={busy} className="login-a-submit">
             {busy ? "登录中…" : "登录"}

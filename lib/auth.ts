@@ -1,4 +1,13 @@
 import { ensureSchema } from "./store";
+import {
+  buildSessionCookie,
+  isSecureHost,
+  PERSISTENT_SESSION_SECONDS,
+  rememberFromInput,
+  SESSION_COOKIE,
+  sessionLifetimeSeconds,
+  shouldRefreshSession,
+} from "./session-policy";
 
 export type AuthEnv = { DB: D1Database; DABAIHUA_ALLOW_REGISTER?: string; DABAIHUA_REGISTER_INVITE_CODE?: string };
 export type SessionUser = {
@@ -11,8 +20,6 @@ export type SessionUser = {
   createdAt: string;
 };
 
-const SESSION_COOKIE = "rss_ai_session";
-const SESSION_SECONDS = 60 * 60 * 24 * 30;
 // Cloudflare Workers Web Crypto supports PBKDF2 iteration counts up to 100,000.
 const PASSWORD_ITERATIONS = 100_000;
 const encoder = new TextEncoder();
@@ -65,10 +72,11 @@ function cookieValue(request: Request, name: string) {
   return "";
 }
 
-function sessionCookie(request: Request, token: string, maxAge = SESSION_SECONDS) {
-  const host = new URL(request.url).hostname;
-  const secure = host !== "localhost" && host !== "127.0.0.1" && host !== "::1";
-  return `${SESSION_COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure ? "; Secure" : ""}`;
+/** persistent=true → Max-Age 30 天；false → 浏览器会话 cookie；token 为空表示删除。 */
+function sessionCookie(request: Request, token: string, persistent = true) {
+  const secure = isSecureHost(new URL(request.url).hostname);
+  const maxAge = token === "" ? 0 : persistent ? PERSISTENT_SESSION_SECONDS : null;
+  return buildSessionCookie({ token, secure, maxAge });
 }
 
 export function assertSameOrigin(request: Request) {
@@ -129,14 +137,14 @@ async function recordAttempt(env: AuthEnv, key: string, action: "login" | "regis
   ]);
 }
 
-async function createSession(env: AuthEnv, userId: number) {
+async function createSession(env: AuthEnv, userId: number, persistent = true) {
   const raw = crypto.getRandomValues(new Uint8Array(32));
   const token = bytesToBase64Url(raw);
   const tokenHash = await sha256(token);
   const createdAt = new Date();
-  const expiresAt = new Date(createdAt.getTime() + SESSION_SECONDS * 1000);
-  await env.DB.prepare("INSERT INTO auth_sessions (token_hash, user_id, created_at, expires_at, last_seen_at) VALUES (?, ?, ?, ?, ?)")
-    .bind(tokenHash, userId, createdAt.toISOString(), expiresAt.toISOString(), createdAt.toISOString()).run();
+  const expiresAt = new Date(createdAt.getTime() + sessionLifetimeSeconds(persistent) * 1000);
+  await env.DB.prepare("INSERT INTO auth_sessions (token_hash, user_id, created_at, expires_at, last_seen_at, persistent) VALUES (?, ?, ?, ?, ?, ?)")
+    .bind(tokenHash, userId, createdAt.toISOString(), expiresAt.toISOString(), createdAt.toISOString(), persistent ? 1 : 0).run();
   return token;
 }
 
@@ -203,6 +211,27 @@ export async function getSessionUser(env: AuthEnv, request: Request) {
   return publicUser(row);
 }
 
+/**
+ * 滚动续期：持久会话距上次续期超过 1 天时，把 expires_at 推到「现在 + 30 天」，
+ * 并返回要重发的 Set-Cookie；不需要续期（或没有有效会话）时返回 null。
+ * 由 worker 在页面导航请求上调用。
+ */
+export async function refreshSessionCookie(env: AuthEnv, request: Request): Promise<string | null> {
+  const token = cookieValue(request, SESSION_COOKIE);
+  if (!token) return null;
+  await ensureSchema(env.DB);
+  const tokenHash = await sha256(token);
+  const row = await env.DB.prepare("SELECT expires_at AS expiresAt, persistent FROM auth_sessions WHERE token_hash = ?")
+    .bind(tokenHash).first<{ expiresAt: string; persistent: number }>();
+  if (!row) return null;
+  const now = new Date();
+  if (!shouldRefreshSession({ persistent: Number(row.persistent) !== 0, expiresAt: String(row.expiresAt), now })) return null;
+  const expiresAt = new Date(now.getTime() + PERSISTENT_SESSION_SECONDS * 1000).toISOString();
+  await env.DB.prepare("UPDATE auth_sessions SET expires_at = ? WHERE token_hash = ? AND datetime(expires_at) > datetime('now')")
+    .bind(expiresAt, tokenHash).run();
+  return sessionCookie(request, token, true);
+}
+
 export async function requireSessionUser(env: AuthEnv, request: Request) {
   const user = await getSessionUser(env, request);
   if (!user) throw new AuthError("请先登录后再继续", 401);
@@ -246,7 +275,7 @@ export async function registerUser(env: AuthEnv, request: Request, input: { acco
   }
 }
 
-export async function loginUser(env: AuthEnv, request: Request, input: { account?: string; password?: string }) {
+export async function loginUser(env: AuthEnv, request: Request, input: { account?: string; password?: string; remember?: unknown }) {
   assertSameOrigin(request);
   await ensureSchema(env.DB);
   const { normalized } = normalizeAccount(input.account || "");
@@ -261,8 +290,9 @@ export async function loginUser(env: AuthEnv, request: Request, input: { account
   }
   await recordAttempt(env, key, "login", valid);
   if (!row || !valid) throw new AuthError("账号或密码不正确", 401);
-  const token = await createSession(env, Number(row.id));
-  return { user: publicUser(row), cookie: sessionCookie(request, token) };
+  const persistent = rememberFromInput(input.remember);
+  const token = await createSession(env, Number(row.id), persistent);
+  return { user: publicUser(row), cookie: sessionCookie(request, token, persistent) };
 }
 
 export async function logoutUser(env: AuthEnv, request: Request) {
@@ -270,7 +300,7 @@ export async function logoutUser(env: AuthEnv, request: Request) {
   await ensureSchema(env.DB);
   const token = cookieValue(request, SESSION_COOKIE);
   if (token) await env.DB.prepare("DELETE FROM auth_sessions WHERE token_hash = ?").bind(await sha256(token)).run();
-  return sessionCookie(request, "", 0);
+  return sessionCookie(request, "");
 }
 
 export async function updateProfile(env: AuthEnv, request: Request, input: { nickname?: string; bio?: string }) {
@@ -295,12 +325,15 @@ export async function changePassword(env: AuthEnv, request: Request, input: { cu
   if (!constantTimeEqual(currentHash, String(row.passwordHash))) throw new AuthError("当前密码不正确", 401);
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const passwordHash = await derivePasswordHash(nextPassword, salt);
-  const token = await createSession(env, user.id);
+  const current = await env.DB.prepare("SELECT persistent FROM auth_sessions WHERE token_hash = ?")
+    .bind(await sha256(cookieValue(request, SESSION_COOKIE))).first<{ persistent: number }>();
+  const persistent = current ? Number(current.persistent) !== 0 : true;
+  const token = await createSession(env, user.id, persistent);
   await env.DB.batch([
     env.DB.prepare("UPDATE users SET password_hash = ?, password_salt = ?, password_iterations = ?, updated_at = ? WHERE id = ?").bind(passwordHash, bytesToBase64Url(salt), PASSWORD_ITERATIONS, new Date().toISOString(), user.id),
     env.DB.prepare("DELETE FROM auth_sessions WHERE user_id = ? AND token_hash <> ?").bind(user.id, await sha256(token)),
   ]);
-  return { user, cookie: sessionCookie(request, token) };
+  return { user, cookie: sessionCookie(request, token, persistent) };
 }
 
 export function authErrorResponse(error: unknown, fallback = "操作失败") {
