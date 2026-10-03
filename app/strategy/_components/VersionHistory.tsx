@@ -51,7 +51,7 @@ export function VersionHistory({ versions: initialVersions }: { versions: Versio
         </div>
       )}
 
-      <h2>版本历史</h2>
+      <h2 id="strat-history-title">版本历史</h2>
       <div className="strat-history-list">
         {versions.length === 0 && (
           <div className="strat-history-empty">暂无版本</div>

@@ -2,7 +2,6 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { env } from "cloudflare:workers";
 import { StrategyEditor } from "./_components/StrategyEditor";
-import { VersionHistory } from "./_components/VersionHistory";
 import { SiteAppBar } from "../_components/SiteAppBar";
 import { getSessionUser } from "../../lib/auth";
 import { requestOrigin } from "../../lib/request-origin";
@@ -67,37 +66,25 @@ export default async function StrategyPage() {
     fetchVersions(origin, cookie),
   ]);
 
+  const updatedAt = strategy
+    ? versions.find((entry) => entry.version === strategy.version)?.createdAt ?? null
+    : null;
+
   return (
     <div className="strat-page">
       <SiteAppBar user={user} pathname="/strategy" />
       <main className="strat-main">
-        <header>
-          <p className="page-kicker">内容 · 策略</p>
-          <h1 className="page-title">策略</h1>
-          {strategy && (
-            <p className="page-sub">
-              当前版本 v<span className="strat-num">{strategy.version}</span>
-            </p>
-          )}
-          <div className="double-rule" />
-        </header>
-
-        <div className="strat-layout">
-          <div className="strat-editor">
-            {strategy ? (
-              <StrategyEditor
-                initialVersion={strategy.version}
-                initialNote={strategy.note}
-                initialData={strategy.data}
-              />
-            ) : (
-              <div className="strat-failed">策略加载失败，请检查登录状态</div>
-            )}
-          </div>
-          <aside className="strat-aside">
-            <VersionHistory versions={versions} />
-          </aside>
-        </div>
+        {strategy ? (
+          <StrategyEditor
+            initialVersion={strategy.version}
+            initialNote={strategy.note}
+            initialData={strategy.data}
+            versions={versions}
+            updatedAt={updatedAt}
+          />
+        ) : (
+          <div className="strat-failed">策略加载失败，请检查登录状态</div>
+        )}
       </main>
     </div>
   );
