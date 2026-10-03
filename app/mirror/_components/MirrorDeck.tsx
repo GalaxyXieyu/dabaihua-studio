@@ -9,7 +9,7 @@ import {
   sourceLine,
   type MirrorEntry,
 } from "../../../lib/mirror";
-import { MiniMarkdown } from "../../topics/daily/_components/mini-markdown";
+import { MiniMarkdown } from "../../content/_brief/mini-markdown";
 
 /** 卡片带的类型，决定卡片外观 class `is-<variant>`；trash 是最近删除。 */
 export type MirrorCardVariant = "profile" | "preference" | "method" | "decision" | "adjustment" | "inbox" | "trash";

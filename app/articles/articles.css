@@ -1,5 +1,12 @@
 /* 杂志风文章目录（/articles）。所有选择器挂在根类名 .art-a 下。 */
 
+/* 文章视图走正常文档流，跟随桌面侧栏偏移，不再 fixed inset-0 盖住侧栏。 */
+.art-a-view {
+  min-height: 100dvh;
+  background: var(--canvas);
+  color: var(--ink);
+}
+
 .art-a-header {
   padding: 40px 0 0;
 }
@@ -13,7 +20,8 @@
 .art-a-list {
   max-width: 760px;
   margin: 0 auto;
-  padding: 0 20px 64px;
+  /* 顶部留 20px，让第一行文章不要贴着切换条。 */
+  padding: 20px 20px 64px;
 }
 
 .art-a-rows {
@@ -138,7 +146,7 @@
   }
 
   .art-a-list {
-    padding: 0 40px 96px;
+    padding: 20px 40px 96px;
   }
 
   .art-a-row {

@@ -127,7 +127,7 @@ export default async function TodayPage() {
               ) : (
                 <p className="td-a-empty">还没有选题简报</p>
               )}
-              <a className="td-a-action" href="/topics/daily">
+              <a className="td-a-action" href="/content?view=brief">
                 去看简报 →
               </a>
             </div>
@@ -153,7 +153,7 @@ export default async function TodayPage() {
               <p className="td-a-empty">没有待挑选题</p>
             )}
             {data.candidates.total > 0 && (
-              <a className="td-a-action" href="/topics">
+              <a className="td-a-action" href="/content?view=board">
                 去挑选 →
               </a>
             )}
@@ -183,7 +183,7 @@ export default async function TodayPage() {
               <p className="td-a-empty">没有 AI 简报</p>
             )}
             {(data.digest.today > 0 || data.digest.latestDate) && (
-              <a className="td-a-action" href="/topics">
+              <a className="td-a-action" href="/content?view=board">
                 看选题 →
               </a>
             )}

@@ -5,11 +5,11 @@ import {
   summarizeResponses,
   type DailyBrief as DailyBriefDoc,
   type ShapedBriefResponse,
-} from "../../../../lib/daily-brief-core";
+} from "../../../lib/daily-brief-core";
 import {
   orderBriefTopics,
   type MaterialView,
-} from "../../../../lib/brief-view";
+} from "../../../lib/brief-view";
 import { TopicList } from "./TopicList";
 import { TopicDetail } from "./TopicDetail";
 import { emptyState, type ResponseState } from "./brief-types";
@@ -161,10 +161,11 @@ export function DailyBrief({
   function updateUrl(topicId: string | null, mode: "push" | "replace") {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
+    params.set("view", "brief");
     params.set("date", date);
     if (topicId) params.set("topic", topicId);
     else params.delete("topic");
-    const next = `${window.location.pathname}?${params.toString()}`;
+    const next = `/content?${params.toString()}`;
     if (mode === "push") {
       window.history.pushState({ topic: topicId }, "", next);
       pushedRef.current = true;
@@ -378,7 +379,7 @@ export function DailyBrief({
             <a
               className="db-nav-button"
               data-testid="brief-prev"
-              href={`/topics/daily?date=${older.date}`}
+              href={`/content?view=brief&date=${older.date}`}
             >
               ‹ 上一期
             </a>
@@ -399,7 +400,7 @@ export function DailyBrief({
             onChange={(event) => {
               const next = event.target.value;
               if (next && next !== date)
-                window.location.assign(`/topics/daily?date=${next}`);
+                window.location.assign(`/content?view=brief&date=${next}`);
             }}
           >
             {dates.map((option) => (
@@ -413,7 +414,7 @@ export function DailyBrief({
             <a
               className="db-nav-button"
               data-testid="brief-next"
-              href={`/topics/daily?date=${newer.date}`}
+              href={`/content?view=brief&date=${newer.date}`}
             >
               下一期 ›
             </a>

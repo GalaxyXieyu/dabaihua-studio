@@ -198,7 +198,7 @@ test("names the growth tabs from GROWTH_NAMES and routes old views to ledger", (
 
   // 内容板块的审稿页 /review/[id] 仍是「文章」tab。
   assert.equal(sectionForPath("/review/123"), "content");
-  assert.equal(activeTabKey("/review/123"), "articles");
+  assert.equal(activeTabKey("/review/123"), "content");
 });
 
 test("redirects legacy /daily and /weekly URLs in the worker with the date intact", async () => {
@@ -210,7 +210,7 @@ test("redirects legacy /daily and /weekly URLs in the worker with the date intac
   assert.equal(legacyRedirect(at("/weekly/?date=2026-09-30")), "/ledger?view=week&date=2026-09-30");
   // /weekly/<week>/ 仍是 worker 的原始 HTML 路由，不能被列表重定向吃掉。
   assert.equal(legacyRedirect(at("/weekly/2026-W39/")), null);
-  assert.equal(legacyRedirect(at("/topics/daily")), null);
+  assert.equal(legacyRedirect(at("/topics/daily")), "/content?view=brief");
 
   // worker 必须真正调用这个纯函数，并且插在登录门之后、周报 HTML 处理之前。
   const worker = read("../worker/index.ts");

@@ -415,11 +415,11 @@ test("topicStatusLabel: 已选 / 不要 / 星 / 未处理", () => {
 
 test("DailyBrief 紧凑刊头与宽屏满屏双栏：源码约束", () => {
   const tsx = readFileSync(
-    new URL("../app/topics/daily/_components/DailyBrief.tsx", import.meta.url),
+    new URL("../app/content/_brief/DailyBrief.tsx", import.meta.url),
     "utf8",
   );
   const css = readFileSync(
-    new URL("../app/topics/daily/daily-brief.css", import.meta.url),
+    new URL("../app/content/_brief/daily-brief.css", import.meta.url),
     "utf8",
   );
 

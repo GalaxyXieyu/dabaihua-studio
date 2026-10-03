@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { MaterialView } from "../../../../lib/brief-view";
+import type { MaterialView } from "../../../lib/brief-view";
 import { MiniMarkdown } from "./mini-markdown";
 
 type BriefMaterial = {

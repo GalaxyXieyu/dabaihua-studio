@@ -808,9 +808,9 @@ test("ships the phone-first article reviewer that adapts to desktop and range ma
   const [reviewer, articlePage, articlesList, reviewPage, topicsPage, styles, reviewMode] = await Promise.all([
     readFile(new URL("../app/_components/ArticleReviewer.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/articles/[slug]/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/articles/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/content/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/review/[id]/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/topics/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/content/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../app/_components/review-mode.ts", import.meta.url), "utf8"),
   ]);
@@ -1708,8 +1708,8 @@ test("runs the login gate in the worker before serving weekly reports", async ()
 test("configures primary navigation by role", () => {
   const admin = primaryNavItems("admin");
   assert.deepEqual(admin.map((item) => item.label), ["今天", "内容", "成长"]);
-  assert.deepEqual(admin.map((item) => item.href), ["/", "/topics/daily", "/ledger"]);
-  assert.equal(admin.find((item) => item.key === "content")?.href, "/topics/daily");
+  assert.deepEqual(admin.map((item) => item.href), ["/", "/content", "/ledger"]);
+  assert.equal(admin.find((item) => item.key === "content")?.href, "/content");
 
   for (const role of ["user", null, undefined]) {
     const items = primaryNavItems(role);
@@ -1726,10 +1726,11 @@ test("configures primary navigation by role", () => {
 });
 
 test("configures section tabs by section and role", () => {
-  assert.deepEqual(sectionTabs("content", "user").map((item) => item.label), ["阅读", "选题", "文章", "策略"]);
-  assert.deepEqual(sectionTabs("content", "admin").map((item) => item.href), ["/topics/daily", "/discover", "/topics", "/articles", "/strategy"]);
-  assert.deepEqual(sectionTabs("content", "admin").map((item) => item.label), ["选题简报", "阅读", "选题", "文章", "策略"]);
-  assert.equal(JSON.stringify(sectionTabs("content", "user")).includes("/topics/daily"), false);
+  assert.deepEqual(sectionTabs("content", "user").map((item) => item.label), ["阅读", "憋点干货", "策略"]);
+  assert.deepEqual(sectionTabs("content", "admin").map((item) => item.href), ["/content", "/discover", "/strategy"]);
+  assert.deepEqual(sectionTabs("content", "admin").map((item) => item.label), ["憋点干货", "阅读", "策略"]);
+  assert.equal(JSON.stringify(sectionTabs("content", "user")).includes("/topics"), false);
+  assert.equal(JSON.stringify(sectionTabs("content", "user")).includes("今日简报"), false);
   assert.deepEqual(sectionTabs("growth", "admin").map((item) => item.label), ["翻翻旧账", "攒点筹码", "照照镜子"]);
   assert.deepEqual(sectionTabs("growth", "admin").map((item) => item.href), ["/ledger", "/career", "/mirror"]);
   assert.deepEqual(sectionTabs("growth", "user"), []);
@@ -1739,7 +1740,7 @@ test("configures section tabs by section and role", () => {
 
 test("maps paths to navigation sections and active tabs", () => {
   assert.equal(sectionForPath("/"), "today");
-  for (const pathname of ["/reading", "/discover", "/topics", "/topics/daily", "/articles", "/articles/hello", "/review", "/review/1", "/strategy", "/annotations", "/leaderboard"]) {
+  for (const pathname of ["/reading", "/discover", "/content", "/topics", "/topics/daily", "/articles", "/articles/hello", "/review", "/review/1", "/strategy", "/annotations", "/leaderboard"]) {
     assert.equal(sectionForPath(pathname), "content", `${pathname} should be content`);
   }
   for (const pathname of ["/ledger", "/weekly", "/weekly/2026-W39/", "/daily", "/career", "/mirror"]) {
@@ -1751,12 +1752,13 @@ test("maps paths to navigation sections and active tabs", () => {
 
   assert.equal(activeTabKey("/reading"), "reading");
   assert.equal(activeTabKey("/discover"), "reading");
-  assert.equal(activeTabKey("/topics"), "topics");
-  assert.equal(activeTabKey("/topics/daily"), "brief");
-  assert.equal(activeTabKey("/articles/hello"), "articles");
+  assert.equal(activeTabKey("/content"), "content");
+  assert.equal(activeTabKey("/topics"), "content");
+  assert.equal(activeTabKey("/topics/daily"), "content");
+  assert.equal(activeTabKey("/articles/hello"), "content");
   assert.equal(activeTabKey("/strategy"), "strategy");
-  assert.equal(activeTabKey("/review"), "articles");
-  assert.equal(activeTabKey("/review/1"), "articles");
+  assert.equal(activeTabKey("/review"), "content");
+  assert.equal(activeTabKey("/review/1"), "content");
   assert.equal(activeTabKey("/ledger"), "ledger");
   assert.equal(activeTabKey("/weekly/2026-W39/"), "ledger");
   assert.equal(activeTabKey("/daily"), "ledger");
@@ -1768,12 +1770,11 @@ test("maps paths to navigation sections and active tabs", () => {
 });
 
 test("mounts the shared site app bar on every content and growth subpage", async () => {
-  const [appBar, userMenu, topics, strategy, articles, reviewPage, career, mirror, articleDetail, review, styles] = await Promise.all([
+  const [appBar, userMenu, content, strategy, reviewPage, career, mirror, articleDetail, review, styles] = await Promise.all([
     readFile(new URL("../app/_components/SiteAppBar.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/_components/SiteUserMenu.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/topics/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/content/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/strategy/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/articles/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/ledger/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/career/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/mirror/page.tsx", import.meta.url), "utf8"),
@@ -1796,9 +1797,8 @@ test("mounts the shared site app bar on every content and growth subpage", async
   assert.doesNotMatch(styles, /--appbar-height:93px/);
 
   const pages = [
-    [topics, "/topics"],
+    [content, "/content"],
     [strategy, "/strategy"],
-    [articles, "/articles"],
     [reviewPage, "/ledger"],
     [career, "/career"],
     [mirror, "/mirror"],
@@ -1818,9 +1818,9 @@ test("mounts the shared site app bar on every content and growth subpage", async
   assert.match(review, /has-action-bar/);
   assert.match(styles, /body:has\(\.has-action-bar\) \.global-appbar nav/);
 
-  // topics and strategy had no session lookup before; both must add the same
+  // content and strategy had no session lookup before; both must add the same
   // login defence as the other subpages.
-  for (const page of [topics, strategy]) {
+  for (const page of [content, strategy]) {
     assert.match(page, /getSessionUser/);
     assert.match(page, /redirect\("\/login\?next=/);
   }
@@ -2086,12 +2086,12 @@ test("ships the daily brief storage, API, page and CLI", async () => {
     readFile(new URL("../scripts/brief.mjs", import.meta.url), "utf8"),
     readFile(new URL("../scripts/lib/dabaihua-api.mjs", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
-    readFile(new URL("../app/topics/daily/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/topics/daily/_components/DailyBrief.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/topics/daily/_components/TopicList.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/topics/daily/_components/TopicDetail.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/topics/daily/_components/MaterialItem.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/topics/daily/daily-brief.css", import.meta.url), "utf8"),
+    readFile(new URL("../app/content/page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/content/_brief/DailyBrief.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/content/_brief/TopicList.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/content/_brief/TopicDetail.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/content/_brief/MaterialItem.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/content/_brief/daily-brief.css", import.meta.url), "utf8"),
     readFile(new URL("../lib/site-nav.ts", import.meta.url), "utf8"),
     readFile(new URL("../lib/today.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/topics/page.tsx", import.meta.url), "utf8"),
@@ -2133,9 +2133,10 @@ test("ships the daily brief storage, API, page and CLI", async () => {
   assert.match(core, /export function validateBrief/);
   assert.match(core, /export function shapeResponse/);
 
-  assert.match(nav, /选题简报/);
+  assert.match(nav, /今日简报/);
+  assert.match(nav, /CONTENT_VIEW_NAMES/);
   assert.match(nav, /activeTabKey/);
-  assert.match(topicsPage, /每日选题简报/);
+  assert.match(topicsPage, /\/content\?view=board/);
 
   const pkg = JSON.parse(packageJson);
   assert.equal(pkg.scripts.brief, "node scripts/brief.mjs");
@@ -2148,9 +2149,10 @@ test("ships the daily brief storage, API, page and CLI", async () => {
   assert.doesNotMatch(apiLib, /process\.stdout\.write\([^)]*token/i);
 
   assert.match(page, /dynamic = "force-dynamic"/);
-  assert.match(page, /role !== "admin"/);
-  assert.match(page, /notFound\(\)/);
+  assert.match(page, /isAdmin \? "brief" : "board"/);
+  assert.match(page, /if \(!isAdmin && view === "brief"\) view = "board"/);
   assert.match(page, /SiteAppBar/);
+  assert.match(page, /ContentSwitchBar/);
   assert.match(todayLib, /loadTodayBrief/);
   assert.match(todayLib, /daily_briefs/);
   assert.match(todayLib, /catch \{\s*return null;\s*\}/s);
@@ -2274,7 +2276,7 @@ test("ships an admin-only topic materials import API and pushes digest materials
     readFile(new URL("../lib/store.ts", import.meta.url), "utf8"),
     readFile(new URL("../scripts/daily-ai-digest.mjs", import.meta.url), "utf8"),
     readFile(new URL("../scripts/materials.mjs", import.meta.url), "utf8"),
-    readFile(new URL("../app/topics/daily/_components/MaterialItem.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/content/_brief/MaterialItem.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/daily-brief.ts", import.meta.url), "utf8"),
   ]);
   assert.match(route, /authenticateApiKey/);

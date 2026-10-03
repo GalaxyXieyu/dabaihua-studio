@@ -10,11 +10,12 @@
   width: 100%;
   max-width: 1120px;
   margin: 0 auto;
-  padding: 28px 20px 64px;
+  /* 顶部只留 16px：切换条与筛选行之间不再空出 ~50px。 */
+  padding: 16px 20px 64px;
 }
 
 @media (min-width: 640px) {
-  .tp-main { padding: 40px 32px 80px; }
+  .tp-main { padding: 16px 32px 80px; }
 }
 
 /* ── 页面刊头（统一使用 globals.css 的 .page-* / .double-rule） ── */
@@ -25,7 +26,7 @@
 
 /* ── 筛选行 ───────────────────────────────────────────── */
 .tp-filters {
-  margin: 28px 0 22px;
+  margin: 0 0 22px;
   display: flex;
   flex-direction: column;
   gap: 12px;

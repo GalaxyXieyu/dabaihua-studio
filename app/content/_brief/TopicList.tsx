@@ -1,7 +1,7 @@
 "use client";
 
-import type { DailyBrief } from "../../../../lib/daily-brief-core";
-import { topicStatusLabel } from "../../../../lib/brief-view";
+import type { DailyBrief } from "../../../lib/daily-brief-core";
+import { topicStatusLabel } from "../../../lib/brief-view";
 import { MiniMarkdown } from "./mini-markdown";
 import type { ResponseState } from "./brief-types";
 

@@ -54,7 +54,7 @@ export default async function ArticleDetailPage({ params }: { params: Promise<{ 
           rounds={[]}
           canReview={false}
           currentUserId={null}
-          backHref="/articles"
+          backHref="/content?view=articles"
           updatedAt={article.updatedAt}
         />
       </div>
@@ -79,7 +79,7 @@ export default async function ArticleDetailPage({ params }: { params: Promise<{ 
         rounds={rounds}
         canReview
         currentUserId={user.id}
-        backHref="/articles"
+        backHref="/content?view=articles"
         updatedAt={article.updatedAt}
         extraHeader={
           owner ? <ArticleHeaderActions slug={slug} initialPublic={article.isPublic} latestRound={latestRound} /> : undefined

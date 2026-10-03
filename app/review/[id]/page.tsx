@@ -46,7 +46,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
             <p className="mt-4 text-sm text-[var(--muted)]">
               先运行 <code className="bg-[var(--paper)] px-1.5 py-0.5">npm run draft -- {id}</code> 生成草稿，再回来审稿。
             </p>
-            <a href="/topics" className="mt-5 inline-block text-[13px] tracking-[.06em] text-[var(--ink)] underline decoration-[var(--line)] underline-offset-4">← 返回选题看板</a>
+            <a href="/content?view=board" className="mt-5 inline-block text-[13px] tracking-[.06em] text-[var(--ink)] underline decoration-[var(--line)] underline-offset-4">← 返回选题看板</a>
           </div>
         </div>
       </div>
@@ -73,7 +73,7 @@ export default async function ReviewPage({ params }: { params: Promise<{ id: str
         rounds={rounds}
         canReview
         currentUserId={user.id}
-        backHref="/topics"
+        backHref="/content?view=board"
         backLabel="选题"
         updatedAt={topic.updatedAt ? String(topic.updatedAt) : null}
         extraHeader={

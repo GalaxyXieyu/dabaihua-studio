@@ -1,0 +1,88 @@
+/* 内容页 /content 的细切换条：杂志风，高度不超过 40px。 */
+
+.ct-switchbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 38px;
+  padding: 0 20px;
+  background: var(--canvas);
+  border-bottom: 1px solid var(--ink);
+  font-family: var(--font-serif);
+}
+
+@media (min-width: 761px) {
+  .ct-switchbar { padding: 0 40px; }
+}
+
+.ct-switchbar-title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+
+/* 手机端全局栏目 tab 已显示页面名，视觉上藏掉这里的标签，但保留可访问的 h1。 */
+@media (max-width: 760px) {
+  .ct-switchbar-title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    border: 0;
+  }
+}
+
+.ct-switchbar-tabs {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ct-switchbar-tabs::-webkit-scrollbar { display: none; }
+
+.ct-switch {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--muted);
+  font-family: var(--font-serif);
+  font-size: 14px;
+  white-space: nowrap;
+  transition: color 150ms ease;
+}
+
+.ct-switch:hover { color: var(--ink); }
+
+.ct-switch.is-active {
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 7px;
+}
+
+.ct-switch-count {
+  color: var(--faint);
+  font-family: var(--font-latin);
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* 简报工作台的宽屏一屏布局：切换条固定高度，其余交给 .db 撑满。 */
+@media (min-width: 1024px) {
+  .db-page > .ct-switchbar { flex: 0 0 auto; }
+}

@@ -38,7 +38,7 @@ test("阅读正文 17–18px / 行高 1.75，段落间距 0.8em", () => {
 });
 
 test("简报详情标题不超过 24px", () => {
-  const css = read("../app/topics/daily/daily-brief.css");
+  const css = read("../app/content/_brief/daily-brief.css");
   const sizes = [...css.matchAll(/\.db-detail-title\s*\{([^}]*)\}/g)]
     .map((match) => Number.parseFloat(decl(match[1], "font-size")))
     .filter((value) => Number.isFinite(value));
@@ -53,7 +53,7 @@ test("文章正文首段顶边距归零，双线到正文不再留大段空白",
 });
 
 test("简报详情小节标题收到 15px", () => {
-  const css = read("../app/topics/daily/daily-brief.css");
+  const css = read("../app/content/_brief/daily-brief.css");
   const heading = ruleBody(css, ".db-section-title");
   assert.equal(Number.parseFloat(decl(heading, "font-size")), 15);
 });

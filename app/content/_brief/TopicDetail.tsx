@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { DailyBrief } from "../../../../lib/daily-brief-core";
-import type { MaterialView } from "../../../../lib/brief-view";
+import type { DailyBrief } from "../../../lib/daily-brief-core";
+import type { MaterialView } from "../../../lib/brief-view";
 import { MiniMarkdown } from "./mini-markdown";
 import { MaterialItem } from "./MaterialItem";
 import type { ResponseState } from "./brief-types";

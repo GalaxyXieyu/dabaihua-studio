@@ -13,13 +13,23 @@ export const GROWTH_NAMES = {
   mirror: { label: "照照镜子", monogram: "镜" },
 } as const;
 
+/** 内容板块的名字，只在这里改。monogram = 收起侧栏时的单字。 */
+export const CONTENT_NAMES = {
+  content: { label: "憋点干货", monogram: "货" },
+} as const;
+
+/** /content 一个页面里的三个视图名字，只在这里改。 */
+export const CONTENT_VIEW_NAMES = {
+  brief: "今日简报",
+  board: "选题看板",
+  articles: "文章",
+} as const;
+
 /** 收起态每个导航项显示的单字缩写，键与 NavItem.key 对齐。 */
 export const NAV_MONOGRAMS: Record<string, string> = {
   today: "今",
-  brief: "简",
+  content: CONTENT_NAMES.content.monogram,
   reading: "读",
-  topics: "题",
-  articles: "文",
   strategy: "策",
   ledger: GROWTH_NAMES.ledger.monogram,
   career: GROWTH_NAMES.career.monogram,
@@ -36,17 +46,12 @@ export const HIDDEN_FROM_NAV = ["/annotations", "/leaderboard"];
 
 const TODAY_ITEM: NavItem = { key: "today", label: "今天", href: "/" };
 const CONTENT_ITEM: NavItem = { key: "content", label: "内容", href: "/discover" };
-const ADMIN_CONTENT_ITEM: NavItem = { key: "content", label: "内容", href: "/topics/daily" };
+const ADMIN_CONTENT_ITEM: NavItem = { key: "content", label: "内容", href: "/content" };
 const GROWTH_ITEM: NavItem = { key: "growth", label: "成长", href: "/ledger" };
 
-const CONTENT_TABS: NavItem[] = [
-  { key: "reading", label: "阅读", href: "/discover" },
-  { key: "topics", label: "选题", href: "/topics" },
-  { key: "articles", label: "文章", href: "/articles" },
-  { key: "strategy", label: "策略", href: "/strategy" },
-];
-
-const BRIEF_TAB: NavItem = { key: "brief", label: "选题简报", href: "/topics/daily" };
+const READING_TAB: NavItem = { key: "reading", label: "阅读", href: "/discover" };
+const CONTENT_TAB: NavItem = { key: "content", label: CONTENT_NAMES.content.label, href: "/content" };
+const STRATEGY_TAB: NavItem = { key: "strategy", label: "策略", href: "/strategy" };
 
 const GROWTH_TABS: NavItem[] = [
   { key: "ledger", label: GROWTH_NAMES.ledger.label, href: "/ledger" },
@@ -69,9 +74,9 @@ export function primaryNavItems(role: string | null | undefined): NavItem[] {
 
 export function sectionTabs(section: NavSection, role: string | null | undefined): NavItem[] {
   if (section === "content") {
-    if (!isAdmin(role)) return CONTENT_TABS;
-    // 选题简报 leads the admin content tabs.
-    return [BRIEF_TAB, ...CONTENT_TABS];
+    // 非管理员保持「阅读」在首位；管理员先落到「憋点干货」。
+    if (!isAdmin(role)) return [READING_TAB, CONTENT_TAB, STRATEGY_TAB];
+    return [CONTENT_TAB, READING_TAB, STRATEGY_TAB];
   }
   if (section === "growth") return isAdmin(role) ? GROWTH_TABS : [];
   return [];
@@ -82,6 +87,7 @@ export function sectionForPath(pathname: string): NavSection | null {
   if (
     hasPrefix(pathname, "/reading") ||
     hasPrefix(pathname, "/discover") ||
+    hasPrefix(pathname, "/content") ||
     hasPrefix(pathname, "/topics") ||
     hasPrefix(pathname, "/articles") ||
     hasPrefix(pathname, "/review") ||
@@ -123,9 +129,9 @@ export function navStateFor(
 
 export function activeTabKey(pathname: string): string | null {
   if (hasPrefix(pathname, "/reading") || hasPrefix(pathname, "/discover")) return "reading";
-  if (hasPrefix(pathname, "/topics/daily")) return "brief";
-  if (hasPrefix(pathname, "/topics")) return "topics";
-  if (hasPrefix(pathname, "/articles") || hasPrefix(pathname, "/review")) return "articles";
+  if (hasPrefix(pathname, "/content")) return "content";
+  if (hasPrefix(pathname, "/topics")) return "content";
+  if (hasPrefix(pathname, "/articles") || hasPrefix(pathname, "/review")) return "content";
   if (hasPrefix(pathname, "/strategy")) return "strategy";
   if (hasPrefix(pathname, "/ledger") || hasPrefix(pathname, "/daily") || hasPrefix(pathname, "/weekly")) return "ledger";
   if (hasPrefix(pathname, "/career")) return "career";

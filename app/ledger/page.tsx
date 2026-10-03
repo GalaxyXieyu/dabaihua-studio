@@ -54,7 +54,7 @@ import {
   type WeeklyTakeaway,
 } from "../../lib/review";
 import { SiteAppBar } from "../_components/SiteAppBar";
-import { MiniMarkdown } from "../topics/daily/_components/mini-markdown";
+import { MiniMarkdown } from "../content/_brief/mini-markdown";
 import { DailyTrend } from "./_components/DailyTrend";
 import "./daily.css";
 import "./ledger.css";
