@@ -21,8 +21,8 @@ test("策略页是单栏文档，不再有左右分栏或旧侧栏", () => {
 });
 
 test("刊头有标题、当前版本与两个安静按钮", () => {
-  assert.match(editor, /内容 · 策略/);
-  assert.match(editor, /<h1[^>]*className="strat-title"[^>]*>\s*策略/);
+  assert.match(editor, /内容 · \{CONTENT_NAMES\.strategy\.label\}/);
+  assert.match(editor, /<h1[^>]*className="strat-title"[^>]*>\s*\{CONTENT_NAMES\.strategy\.label\}/);
   assert.match(editor, /当前版本/);
   assert.match(editor, /版本历史/);
   assert.match(editor, /编辑/);

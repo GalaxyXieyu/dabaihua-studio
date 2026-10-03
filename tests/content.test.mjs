@@ -31,16 +31,16 @@ test("legacy /topics/daily, /topics and /articles redirect into /content", () =>
   assert.equal(legacyRedirect(at("/review/5")), null);
 });
 
-test("content section tabs keep the page name and put 阅读 first for non-admins", () => {
+test("content section tabs keep the page name and put 刷刷资讯 first for non-admins", () => {
   const admin = sectionTabs("content", "admin");
   assert.deepEqual(admin.map((item) => item.href), ["/content", "/discover", "/strategy"]);
-  assert.deepEqual(admin.map((item) => item.label), ["憋点干货", "阅读", "策略"]);
+  assert.deepEqual(admin.map((item) => item.label), ["憋点干货", "刷刷资讯", "打打算盘"]);
   assert.equal(admin[0].key, "content");
   assert.equal(admin[0].label, CONTENT_NAMES.content.label);
 
   const user = sectionTabs("content", "user");
   assert.deepEqual(user.map((item) => item.href), ["/discover", "/content", "/strategy"]);
-  assert.deepEqual(user.map((item) => item.label), ["阅读", "憋点干货", "策略"]);
+  assert.deepEqual(user.map((item) => item.label), ["刷刷资讯", "憋点干货", "打打算盘"]);
 
   assert.equal(primaryNavItems("admin").find((item) => item.key === "content")?.href, "/content");
   assert.equal(primaryNavItems("user").find((item) => item.key === "content")?.href, "/discover");
@@ -53,6 +53,14 @@ test("the old topics, articles and review routes all light the content tab", () 
   }
   assert.equal(NAV_MONOGRAMS.content, "货");
   assert.equal(NAV_MONOGRAMS.content, CONTENT_NAMES.content.monogram);
+  assert.equal(CONTENT_NAMES.reading.label, "刷刷资讯");
+  assert.equal(CONTENT_NAMES.reading.monogram, "刷");
+  assert.equal(CONTENT_NAMES.strategy.label, "打打算盘");
+  assert.equal(CONTENT_NAMES.strategy.monogram, "算");
+  assert.equal(NAV_MONOGRAMS.reading, "刷");
+  assert.equal(NAV_MONOGRAMS.reading, CONTENT_NAMES.reading.monogram);
+  assert.equal(NAV_MONOGRAMS.strategy, "算");
+  assert.equal(NAV_MONOGRAMS.strategy, CONTENT_NAMES.strategy.monogram);
   assert.deepEqual(Object.keys(CONTENT_VIEW_NAMES), ["brief", "board", "articles"]);
 });
 
@@ -120,13 +128,17 @@ async function collectSourceFiles(root) {
   return files;
 }
 
-test("only lib/site-nav.ts names the content page", async () => {
+test("only lib/site-nav.ts names the content pages", async () => {
   const files = await collectSourceFiles(new URL("../app/", import.meta.url));
   assert.ok(files.length > 0, "expected to scan app source files");
   for (const file of files) {
     const source = await readFile(file, "utf8");
     assert.doesNotMatch(source, /憋点干货/, `unexpected hard-coded name in ${file.pathname}`);
+    assert.doesNotMatch(source, /刷刷资讯/, `unexpected hard-coded name in ${file.pathname}`);
+    assert.doesNotMatch(source, /打打算盘/, `unexpected hard-coded name in ${file.pathname}`);
   }
   const nav = await read("../lib/site-nav.ts");
   assert.match(nav, /憋点干货/);
+  assert.match(nav, /刷刷资讯/);
+  assert.match(nav, /打打算盘/);
 });

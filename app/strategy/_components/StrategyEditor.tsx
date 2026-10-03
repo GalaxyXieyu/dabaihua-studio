@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { formatShanghaiDateTime } from "../../../lib/datetime";
+import { CONTENT_NAMES } from "../../../lib/site-nav";
 import { StrategyDocument } from "./StrategyDocument";
 import { StrategyEditable } from "./StrategyEditable";
 import { VersionHistory } from "./VersionHistory";
@@ -139,8 +140,8 @@ export function StrategyEditor({
     <div className="strat-column">
       <header className="strat-head">
         <div className="strat-head-row">
-          <p className="strat-kicker">内容 · 策略</p>
-          <h1 className="strat-title">策略</h1>
+          <p className="strat-kicker">内容 · {CONTENT_NAMES.strategy.label}</p>
+          <h1 className="strat-title">{CONTENT_NAMES.strategy.label}</h1>
           <div className="strat-head-actions">
             <button
               type="button"

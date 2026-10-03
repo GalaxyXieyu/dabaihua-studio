@@ -1726,9 +1726,9 @@ test("configures primary navigation by role", () => {
 });
 
 test("configures section tabs by section and role", () => {
-  assert.deepEqual(sectionTabs("content", "user").map((item) => item.label), ["阅读", "憋点干货", "策略"]);
+  assert.deepEqual(sectionTabs("content", "user").map((item) => item.label), ["刷刷资讯", "憋点干货", "打打算盘"]);
   assert.deepEqual(sectionTabs("content", "admin").map((item) => item.href), ["/content", "/discover", "/strategy"]);
-  assert.deepEqual(sectionTabs("content", "admin").map((item) => item.label), ["憋点干货", "阅读", "策略"]);
+  assert.deepEqual(sectionTabs("content", "admin").map((item) => item.label), ["憋点干货", "刷刷资讯", "打打算盘"]);
   assert.equal(JSON.stringify(sectionTabs("content", "user")).includes("/topics"), false);
   assert.equal(JSON.stringify(sectionTabs("content", "user")).includes("今日简报"), false);
   assert.deepEqual(sectionTabs("growth", "admin").map((item) => item.label), ["翻翻旧账", "攒点筹码", "照照镜子"]);
