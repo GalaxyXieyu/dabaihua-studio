@@ -141,7 +141,7 @@ test("registry: 只有简报四个老事件带「线上名为旧别名」的备�
 function setupLogDb() {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(
-    "CREATE TABLE assistant_notify_log (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT NULL, event TEXT NOT NULL, ref TEXT, state TEXT NOT NULL, http_status INTEGER, error TEXT, duration_ms INTEGER NOT NULL DEFAULT 0, target_host TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL)",
+    "CREATE TABLE assistant_notify_log (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT NULL, event TEXT NOT NULL, ref TEXT, state TEXT NOT NULL, http_status INTEGER, error TEXT, duration_ms INTEGER NOT NULL DEFAULT 0, target_host TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, payload_json TEXT)",
   );
   return createFakeD1(sqlite);
 }
@@ -187,6 +187,8 @@ test("sendAssistantEvent: POST URL, headers, byte-identical body, timeout signal
   assert.ok(Number.isInteger(logs[0].duration_ms));
   assert.equal(logs[0].target_host, "hook.example.com");
   assert.ok(!String(logs[0].target_host).includes("/"));
+  // payload 留档：与发送的 body 逐字一致（漏收 webhook 时拉回）。
+  assert.equal(logs[0].payload_json, JSON.stringify(payload));
 });
 
 test("sendAssistantEvent: custom auth header sends the raw secret", async () => {

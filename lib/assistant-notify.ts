@@ -25,6 +25,8 @@ export type SendAssistantEventOptions = {
 
 export const NOTIFY_TIMEOUT_MS = 8000;
 export const NOTIFY_ERROR_MAX = 300;
+/** payload_json 存储上限：超过时存 null 并在 error 为空时记 payload_too_large。 */
+export const NOTIFY_PAYLOAD_MAX_CHARS = 64 * 1024;
 
 /**
  * 默认 Authorization 头使用 `Bearer <secret>`；显式配置了自定义头时原样发送 secret。
@@ -71,6 +73,8 @@ type NotifyLogRow = {
   durationMs: number;
   targetHost: string;
   createdAt: string;
+  payloadJson: string | null;
+  payloadTooLarge: boolean;
 };
 
 /** 每次发送写一行通用日志；没有 DB 或写入失败都不抛。 */
@@ -78,7 +82,7 @@ async function writeNotifyLog(env: AssistantNotifyEnv, row: NotifyLogRow): Promi
   if (!env.DB) return;
   try {
     await env.DB.prepare(
-      "INSERT INTO assistant_notify_log (key, event, ref, state, http_status, error, duration_ms, target_host, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO assistant_notify_log (key, event, ref, state, http_status, error, duration_ms, target_host, created_at, payload_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
     )
       .bind(
         row.key,
@@ -86,14 +90,29 @@ async function writeNotifyLog(env: AssistantNotifyEnv, row: NotifyLogRow): Promi
         row.ref,
         row.state,
         row.httpStatus ?? null,
-        (row.error || "").slice(0, NOTIFY_ERROR_MAX) || null,
+        (row.error || "").slice(0, NOTIFY_ERROR_MAX) || (row.payloadTooLarge ? "payload_too_large" : null),
         row.durationMs,
         row.targetHost,
         row.createdAt,
+        row.payloadJson,
       )
       .run();
   } catch {
     // 日志失败不能影响业务决定。
+  }
+}
+
+/** 序列化 payload 供日志留档：超 64KB 存 null（tooLarge 标记交给调用方写 error）。 */
+function serializePayload(payload: unknown): { json: string | null; tooLarge: boolean } {
+  if (payload === undefined) return { json: null, tooLarge: false };
+  try {
+    const text = JSON.stringify(payload);
+    if (typeof text !== "string") return { json: null, tooLarge: false };
+    if (text.length > NOTIFY_PAYLOAD_MAX_CHARS) return { json: null, tooLarge: true };
+    return { json: text, tooLarge: false };
+  } catch {
+    // 循环引用等无法序列化的 payload：只留空，不算过大。
+    return { json: null, tooLarge: false };
   }
 }
 
@@ -102,6 +121,7 @@ async function writeNotifyLog(env: AssistantNotifyEnv, row: NotifyLogRow): Promi
  *
  * 未知 key 或条目 disabled → state "disabled"，不发请求；目标没配 URL →
  * "unconfigured"；2xx → "delivered"；其余（含超时/网络错误）→ "failed"。
+ * disabled / unconfigured 也照常写一行日志（含 payload），便于排查被关掉的事件。
  */
 export async function sendAssistantEvent(
   env: AssistantNotifyEnv,
@@ -111,6 +131,7 @@ export async function sendAssistantEvent(
 ): Promise<AssistantNotifyResult> {
   const def = getAssistantEvent(key);
   const ref = typeof opts?.ref === "string" ? opts.ref : null;
+  const { json: payloadJson, tooLarge: payloadTooLarge } = serializePayload(payload);
 
   if (!def || !def.enabled) {
     const result: AssistantNotifyResult = { state: "disabled", at: new Date().toISOString() };
@@ -122,6 +143,8 @@ export async function sendAssistantEvent(
       durationMs: 0,
       targetHost: "",
       createdAt: result.at,
+      payloadJson,
+      payloadTooLarge,
     });
     return result;
   }
@@ -143,6 +166,8 @@ export async function sendAssistantEvent(
       durationMs: Date.now() - started,
       targetHost: "",
       createdAt: result.at,
+      payloadJson,
+      payloadTooLarge,
     });
     return result;
   }
@@ -188,6 +213,8 @@ export async function sendAssistantEvent(
     durationMs: Date.now() - started,
     targetHost: host,
     createdAt: result.at,
+    payloadJson,
+    payloadTooLarge,
   });
   return result;
 }

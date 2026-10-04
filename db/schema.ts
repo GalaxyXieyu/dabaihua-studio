@@ -510,6 +510,7 @@ export const assistantNotifyLog = sqliteTable("assistant_notify_log", {
   error: text("error"),
   durationMs: integer("duration_ms").notNull().default(0),
   targetHost: text("target_host").notNull().default(""),
+  payloadJson: text("payload_json"),
   createdAt: text("created_at").notNull(),
 }, (table) => [index("assistant_notify_log_key_ref_idx").on(table.key, table.ref, sql`${table.id} DESC`)]);
 

@@ -2,6 +2,8 @@
 
 Yu 在网页上做的、需要助手接手的决定，都登记在 `lib/assistant-events.ts` 注册表里：新增事件 = 加一条配置。本文由 `scripts/gen-assistant-events-doc.mjs` 从注册表生成（`npm run events:doc`），勿手改。
 
+漏收 webhook 时用 `superme events --follow-state` 拉取事件日志（含 payload）。
+
 ## 命名约定
 
 - 注册表键一律 `domain.action`：domain 是页面 / 业务域（`brief`、`article`、`topic`、`cards`、`itch`，以后的英语页按画饼规格取名，如 `speaking`），action 用过去式或名词短语描述 Yu 做了什么（`review_submitted`、`response_decided`）。

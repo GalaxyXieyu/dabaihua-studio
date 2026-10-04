@@ -38,6 +38,8 @@ export function renderAssistantEventsDoc() {
     "Yu 在网页上做的、需要助手接手的决定，都登记在 `lib/assistant-events.ts` 注册表里：新增事件 = 加一条配置。本文由 `scripts/gen-assistant-events-doc.mjs` 从注册表生成（`npm run events:doc`），勿手改。",
   );
   lines.push("");
+  lines.push("漏收 webhook 时用 `superme events --follow-state` 拉取事件日志（含 payload）。",);
+  lines.push("");
   lines.push("## 命名约定");
   lines.push("");
   lines.push(

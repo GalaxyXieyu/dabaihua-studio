@@ -11,7 +11,7 @@ import { readXArticles, readXPost, readXProfile, xPostAddress, xProfileAddress }
 export type AppEnv = { DB: D1Database; AI?: { run: (model: string, input: unknown) => Promise<unknown> } };
 const now = () => new Date().toISOString();
 const day = () => new Date().toISOString().slice(0, 10);
-const SCHEMA_VERSION = "2026-10-06.1";
+const SCHEMA_VERSION = "2026-10-06.2";
 const schemaReady = new WeakMap<object, Promise<void>>();
 
 async function initializeSchema(db: D1Database) {
@@ -87,7 +87,7 @@ async function initializeSchema(db: D1Database) {
     db.prepare("CREATE INDEX IF NOT EXISTS brief_selections_date_idx ON brief_selections(date, selected_at DESC)"),
     db.prepare("CREATE TABLE IF NOT EXISTS brief_notify_log (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, topic_id TEXT NOT NULL, event TEXT NOT NULL, state TEXT NOT NULL, http_status INTEGER, error TEXT, duration_ms INTEGER NOT NULL DEFAULT 0, target_host TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL)"),
     db.prepare("CREATE INDEX IF NOT EXISTS brief_notify_log_date_topic_idx ON brief_notify_log(date, topic_id, id DESC)"),
-    db.prepare("CREATE TABLE IF NOT EXISTS assistant_notify_log (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT NULL, event TEXT NOT NULL, ref TEXT, state TEXT NOT NULL, http_status INTEGER, error TEXT, duration_ms INTEGER NOT NULL DEFAULT 0, target_host TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL)"),
+    db.prepare("CREATE TABLE IF NOT EXISTS assistant_notify_log (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT NULL, event TEXT NOT NULL, ref TEXT, state TEXT NOT NULL, http_status INTEGER, error TEXT, duration_ms INTEGER NOT NULL DEFAULT 0, target_host TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, payload_json TEXT)"),
     db.prepare("CREATE INDEX IF NOT EXISTS assistant_notify_log_key_ref_idx ON assistant_notify_log(key, ref, id DESC)"),
     db.prepare("CREATE TABLE IF NOT EXISTS private_datasets (name TEXT PRIMARY KEY, json TEXT NOT NULL, sha256 TEXT NOT NULL, bytes INTEGER NOT NULL, generated_at TEXT, summary_json TEXT NOT NULL DEFAULT '{}', uploaded_at TEXT NOT NULL, uploaded_by TEXT)"),
     db.prepare("CREATE INDEX IF NOT EXISTS daily_brief_responses_updated_idx ON daily_brief_responses(updated_at)"),
@@ -157,6 +157,11 @@ async function initializeSchema(db: D1Database) {
   ];
   for (const [name, type] of itchNewColumns) {
     if (!itchExisting.has(name)) await db.prepare(`ALTER TABLE itches ADD COLUMN ${name} ${type}`).run();
+  }
+  // assistant_notify_log 的 payload 留档列（漏收 webhook 时拉取事件日志；幂等 ALTER）。
+  const notifyLogColumns = await db.prepare("PRAGMA table_info(assistant_notify_log)").all<{ name: string }>();
+  if (!notifyLogColumns.results.some((column) => column.name === "payload_json")) {
+    await db.prepare("ALTER TABLE assistant_notify_log ADD COLUMN payload_json TEXT").run();
   }
   await db.batch([
     db.prepare("UPDATE itches SET normalized_body = lower(trim(body)) WHERE normalized_body IS NULL OR normalized_body = ''"),

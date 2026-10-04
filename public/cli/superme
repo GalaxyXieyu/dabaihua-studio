@@ -93,6 +93,10 @@ superme — 个人工作台（内容选题中心）的多端 CLI（云端命令�
   superme brief pipeline <日期> <topicId>              # 某选题的简报流水线状态（JSON）
   superme brief responses [--date D | --since ISO]    # 简报反馈（晴儿的打分/评语，JSON）
 
+事件日志:
+  superme events [--after-id N] [--since ISO] [--key k[,k2]] [--limit N] [--json] [--follow-state]
+                                    # 助手事件日志（漏收 webhook 时兑底；--follow-state 记住游标接着拉）
+
 数据命令:
   superme data put <daily|career> <文件> [--dry-run] [--endpoint URL]   # 上传日报/职业数据到 D1
   superme data status [--endpoint URL]                                  # 看已上传数据的元信息
@@ -2404,6 +2408,107 @@ def cmd_brief(args):
     return 0
 
 
+# ─── 助手事件日志（漏收 webhook 的兜底拉取） ────────────────────────────────
+
+EVENTS_CURSOR = CONFIG_DIR / "events-cursor.json"
+
+
+def _events_load_cursor():
+    """读本机游标（键 = endpoint）；文件不存在 / 均坏 / 值非法时返回 None。"""
+    try:
+        data = json.loads(EVENTS_CURSOR.read_text())
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    value = data.get(endpoint())
+    if isinstance(value, int) and value > 0:
+        return value
+    return None
+
+
+def _events_save_cursor(next_after_id):
+    """把 nextAfterId 存进游标文件（键 = endpoint）；写失败静默，不影响输出。"""
+    try:
+        data = json.loads(EVENTS_CURSOR.read_text())
+    except (OSError, ValueError):
+        data = {}
+    if not isinstance(data, dict):
+        data = {}
+    data[endpoint()] = int(next_after_id)
+    try:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        EVENTS_CURSOR.write_text(json.dumps(data, ensure_ascii=False, indent=1))
+    except OSError:
+        pass
+
+
+def _events_local_time(iso):
+    """createdAt（ISO）→ +08:00 的 YYYY-MM-DD HH:MM:SS；解析失败原样返回。"""
+    text = str(iso or "")
+    try:
+        moment = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return text
+    return moment.astimezone(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def cmd_events(args):
+    after_id = args.after_id
+    if after_id is None:
+        after_id = _events_load_cursor()
+    query = []
+    if after_id is not None:
+        if after_id < 0:
+            sys.exit("--after-id 不能是负数")
+        query.append("afterId=%d" % after_id)
+    if args.since:
+        query.append("since=" + urllib.parse.quote(str(args.since), safe=""))
+    if args.key:
+        keys = [item.strip() for item in str(args.key).split(",") if item.strip()]
+        if not keys:
+            sys.exit("--key 至少要一个非空 key")
+        query.append("key=" + urllib.parse.quote(",".join(keys), safe=","))
+    if args.limit is not None:
+        if not 1 <= args.limit <= 200:
+            sys.exit("--limit 取值 1-200")
+        query.append("limit=%d" % args.limit)
+    path = "/api/assistant-events" + (("?" + "&".join(query)) if query else "")
+    try:
+        status, response = _article_http("GET", path, token_chain=BRIEF_TOKEN_CHAIN)
+    except ArticleError as error:
+        sys.exit(str(error))
+    if status == 401:
+        sys.exit("未登录或 token 无效（事件日志只读接口可用助手 token：检查 HANDBOOK_TOKEN）")
+    if status != 200:
+        sys.exit("服务器返回 %s: %s" % (status, response.get("error") or ""))
+    next_after_id = response.get("nextAfterId")
+    if not isinstance(next_after_id, int):
+        next_after_id = int(after_id or 0)
+    if args.follow_state:
+        _events_save_cursor(next_after_id)
+    if args.json:
+        print(json.dumps(response, ensure_ascii=False, indent=2))
+        return 0
+    events = response.get("events") or []
+    if not events:
+        print("（没有事件）")
+    for event in events:
+        line = "#%s %s %s %s %s" % (
+            event.get("id", "?"),
+            _events_local_time(event.get("createdAt", "")),
+            event.get("key", "?"),
+            event.get("ref") or "-",
+            event.get("state", "?"),
+        )
+        status_code = event.get("httpStatus")
+        if status_code is not None:
+            line += " http %s" % status_code
+        print(line)
+    print("下次用 --after-id %d" % next_after_id)
+    return 0
+
+
 # ─── 私密数据（D1） ─────────────────────────────────────────────────────────
 
 _DATA_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -2832,6 +2937,15 @@ def main():
     br.add_argument("--date", help="brief responses: 只看某一天 YYYY-MM-DD")
     br.add_argument("--since", help="brief responses: 从某个 ISO 时间点起")
 
+    # ─── 助手事件日志 ───
+    ev = sub.add_parser("events", help="助手事件日志（漏收 webhook 的兑底拉取）")
+    ev.add_argument("--after-id", type=int, help="只取 id 大于该值的事件（默认 0，或本机游标）")
+    ev.add_argument("--since", help="从某个 ISO 时间点起")
+    ev.add_argument("--key", help="注册表 key 精确过滤，逗号分隔多个")
+    ev.add_argument("--limit", type=int, help="返回条数 1-200（默认 50）")
+    ev.add_argument("--json", action="store_true", help="原样输出服务端返回的 JSON")
+    ev.add_argument("--follow-state", action="store_true", help="把 nextAfterId 存到本机游标，下次自动接着拉")
+
     # ─── 私密数据 ───
     dta = sub.add_parser("data", help="上传/查看日报与职业数据")
     dta.add_argument("action", choices=["put", "status"])
@@ -2857,7 +2971,7 @@ def main():
         "schedule": cmd_schedule, "unschedule": cmd_unschedule,
         "calendar": cmd_calendar, "publish": cmd_publish, "series": cmd_series,
         "retro": cmd_retro, "version": cmd_version, "update": cmd_update,
-        "article": cmd_article, "data": cmd_data, "brief": cmd_brief,
+        "article": cmd_article, "data": cmd_data, "brief": cmd_brief, "events": cmd_events,
     }
     result = handlers[args.cmd](args)
     if isinstance(result, int) and result:
