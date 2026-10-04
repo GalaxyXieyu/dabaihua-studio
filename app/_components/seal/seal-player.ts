@@ -692,21 +692,42 @@ export async function playReplay(
     await wait2(Math.max(0, tl.dockAt - (tl.dateAt + tl.date.total)));
 
     // 收起：角色淡出 120ms；纸以右下角为原点 FLIP 到 card 的位置和大小，背景同步淡出
-    const actorFade = anim(actor, [{ opacity: 1 }, { opacity: 0 }], { duration: QUEUE.swap, easing: EASE.fade }, replayCtx).catch(() => {});
-    const bgFade = anim(bg, [{ opacity: 1 }, { opacity: 0 }], { duration: tl.dockDuration, easing: EASE.out }, replayCtx).catch(() => {});
+    const actorFade = anim(actor, [{ opacity: 1 }, { opacity: 0 }], { duration: QUEUE.swap, easing: EASE.fade }, replayCtx)
+      .then(() => {
+        // anim 结束会 cancel，WAAPI 效果被移除元素回到原样式：把终态写进样式，避免小章闪回
+        actor.style.opacity = "0";
+      })
+      .catch(() => {});
+    const bgFade = anim(bg, [{ opacity: 1 }, { opacity: 0 }], { duration: tl.dockDuration, easing: EASE.out }, replayCtx)
+      .then(() => {
+        // 同上：终态落地，cleanup 移除遮罩前不闪回
+        bg.style.opacity = "0";
+      })
+      .catch(() => {});
     if (card) {
+      // 变换原点是 scaleWrap 的右下角（wrap 里还有标题和小章，所以 O 用 wrap 的 rect，尺寸用纸的 rect），
+      // 位移按通用公式算：P' = O + S(P - O) + t，令纸的左上角映射到 card 的左上角
+      const wrapRect = scaleWrap.getBoundingClientRect();
+      const o = { x: wrapRect.right, y: wrapRect.bottom };
       const from = sheet.getBoundingClientRect();
       const to = card.getBoundingClientRect();
+      const sx = from.width ? to.width / from.width : 1;
+      const sy = from.height ? to.height / from.height : 1;
+      const tx = to.left - o.x - sx * (from.left - o.x);
+      const ty = to.top - o.y - sy * (from.top - o.y);
+      const end = `translate(${tx}px, ${ty}px) scale(${sx}, ${sy})`;
       scaleWrap.style.transformOrigin = "right bottom";
       await anim(
         scaleWrap,
-        [
-          { transform: "translate(0, 0) scale(1, 1)" },
-          { transform: `translate(${to.left - from.left}px, ${to.top - from.top}px) scale(${from.width ? to.width / from.width : 1}, ${from.height ? to.height / from.height : 1})` },
-        ],
+        [{ transform: "translate(0, 0) scale(1, 1)" }, { transform: end }],
         { duration: tl.dockDuration, easing: EASE.out },
         replayCtx,
-      ).catch(() => {});
+      )
+        .then(() => {
+          // 同上：终帧 transform 落到样式上，保证 cleanup 移除遮罩前不跳回原位
+          scaleWrap.style.transform = end;
+        })
+        .catch(() => {});
     } else {
       await anim(sheet, [{ opacity: 1 }, { opacity: 0 }], { duration: tl.dockDuration, easing: EASE.fade }, replayCtx).catch(() => {});
     }

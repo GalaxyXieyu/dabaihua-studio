@@ -336,6 +336,12 @@
   pointer-events: none;
 }
 
+/* 最深档格子底色是深印泥红，红印痕压上去几乎看不见：印痕换成纸色，其余档位不变 */
+.review-a-heatmap-cell.is-level-4 .review-a-heatmap-seal {
+  --seal-red: var(--paper);
+  --seal-dry: var(--paper);
+}
+
 /* 有记录的格子像日视图的小日历那样，在日号下再压一个提交数。 */
 .review-a-heatmap-count {
   color: var(--muted);
