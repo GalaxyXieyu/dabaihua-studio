@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="圆章印痕 · 习">
+<title>圆章印痕 · 习</title>
+<!-- 朱文印痕：边框 2.5 格，笔画 2 格。印文为占位几何路径，定稿后替换 #glyph。 -->
+<style>.frame{fill:none;stroke:var(--seal-red,#B23A2B);stroke-width:2.5;stroke-linejoin:round}.ink{fill:none;stroke:var(--seal-red,#B23A2B);stroke-width:2;stroke-linecap:square;stroke-linejoin:miter}</style>
+<g id="impression"><circle class="frame" cx="24" cy="24" r="16.75"/><g id="glyph" class="ink"><path d="M16.5 16H31.5V31Q31.5 33 29.5 32.5L27 31.5M19 20.5L25 23.5M18 29.5L26 25.5"/></g></g>
+</svg>

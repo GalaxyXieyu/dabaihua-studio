@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="日期章印痕（小椭圆章） · 10·03">
+<title>日期章印痕（小椭圆章） · 10·03</title>
+<!-- 朱文印痕：边框 2.5 格，笔画 2 格。日期章：小椭圆章的框，印文换成日期数字。数字是几何路径，4.5×9 格，笔画 1.75。 -->
+<style>.frame{fill:none;stroke:var(--seal-red,#B23A2B);stroke-width:2.5;stroke-linejoin:round}.ink{fill:none;stroke:var(--seal-red,#B23A2B);stroke-width:2;stroke-linecap:square;stroke-linejoin:miter}</style>
+<g id="impression"><ellipse class="frame" cx="24" cy="24" rx="17.75" ry="12.75"/><g id="glyph" class="ink" style="stroke-width:1.75"><path transform="translate(10.90 19.5)" d="M1 1.4L2.25 0V9"/><path transform="translate(17.20 19.5)" d="M0 0H4.5V9H0Z"/><path transform="translate(23.50 19.5)" d="M0.5 4.5H0.5"/><path transform="translate(26.30 19.5)" d="M0 0H4.5V9H0Z"/><path transform="translate(32.60 19.5)" d="M0 0H4.5V9H0M0 4.5H4.5"/></g></g>
+</svg>

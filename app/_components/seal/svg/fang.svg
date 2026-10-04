@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="方章 · 日常工作">
+<title>方章 · 日常工作</title>
+<!-- 48 格网格，地线 y=44，中轴 x=24。印文是占位几何路径，定稿书法后替换 #fang-glyph。 -->
+<style>.body{fill:var(--seal-body,#FBF8F1)}.face{fill:var(--seal-red,#B23A2B)}.line{fill:none;stroke:var(--seal-line,#1B1915);stroke-width:var(--seal-stroke,1.5);stroke-linejoin:round;stroke-linecap:round}.solid{fill:var(--seal-body,#FBF8F1);stroke:var(--seal-line,#1B1915);stroke-width:var(--seal-stroke,1.5);stroke-linejoin:round}.eye{fill:var(--seal-line,#1B1915)}.ink{fill:none;stroke:var(--seal-red,#B23A2B);stroke-width:2;stroke-linecap:square;stroke-linejoin:miter}</style>
+<defs>
+<clipPath id="fang-clip"><path d="M13 12H35Q37 12 37 14V42Q37 44 35 44H13Q11 44 11 42V14Q11 12 13 12Z"/></clipPath>
+<symbol id="fang-glyph" viewBox="0 0 48 48"><g class="ink"><path d="M15 15.5H33M24 15.5V32.5M13.5 32.5H34.5"/></g></symbol>
+</defs>
+<g id="body"><path class="solid" d="M16 13V11Q16 9 18 9H30Q32 9 32 11V13Z"/><path class="solid" d="M13 12H35Q37 12 37 14V42Q37 44 35 44H13Q11 44 11 42V14Q11 12 13 12Z"/></g>
+<g id="face" clip-path="url(#fang-clip)"><rect class="face" x="0" y="37" width="48" height="11"/></g>
+<path id="outline" class="line" d="M13 12H35Q37 12 37 14V42Q37 44 35 44H13Q11 44 11 42V14Q11 12 13 12Z"/>
+
+<g id="eyes"><circle class="eye" cx="21" cy="22" r="1.5"/><circle class="eye" cx="27" cy="22" r="1.5"/></g>
+</svg>

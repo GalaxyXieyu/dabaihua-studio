@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="小椭圆章印痕 · 日">
+<title>小椭圆章印痕 · 日</title>
+<!-- 朱文印痕：边框 2.5 格，笔画 2 格。印文为占位几何路径，定稿后替换 #glyph。 -->
+<style>.frame{fill:none;stroke:var(--seal-red,#B23A2B);stroke-width:2.5;stroke-linejoin:round}.ink{fill:none;stroke:var(--seal-red,#B23A2B);stroke-width:2;stroke-linecap:square;stroke-linejoin:miter}</style>
+<g id="impression"><ellipse class="frame" cx="24" cy="24" rx="17.75" ry="12.75"/><g id="glyph" class="ink"><path d="M17.5 16.5H30.5V31.5H17.5ZM17.5 24H30.5"/></g></g>
+</svg>

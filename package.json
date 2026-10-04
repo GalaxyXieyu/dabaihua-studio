@@ -12,7 +12,7 @@
     "prod:start": "bash scripts/serve-prod.sh start",
     "prod:stop": "bash scripts/serve-prod.sh stop",
     "prod:status": "bash scripts/serve-prod.sh status",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/ledger.test.mjs tests/nav-slim.test.mjs tests/nav-sidebar.test.mjs tests/content.test.mjs tests/cards-api.test.mjs tests/brief-materials.test.mjs tests/brief-pipeline.test.mjs tests/outline-structured.test.mjs tests/brief-ui.test.mjs tests/outline-ui.test.mjs tests/articles-access.test.mjs tests/cli-article.test.mjs tests/private-data.test.mjs tests/session-remember.test.mjs tests/typography.test.mjs tests/strategy-page.test.mjs",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/ledger.test.mjs tests/nav-slim.test.mjs tests/nav-sidebar.test.mjs tests/content.test.mjs tests/cards-api.test.mjs tests/brief-materials.test.mjs tests/brief-pipeline.test.mjs tests/outline-structured.test.mjs tests/brief-ui.test.mjs tests/outline-ui.test.mjs tests/articles-access.test.mjs tests/cli-article.test.mjs tests/private-data.test.mjs tests/session-remember.test.mjs tests/typography.test.mjs tests/strategy-page.test.mjs tests/seal-core.test.mjs tests/seal-static.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate",
     "digest": "node scripts/daily-ai-digest.mjs",

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="长条引首章 · 清单收官">
+<title>长条引首章 · 清单收官</title>
+<!-- 48 格网格，地线 y=44，中轴 x=24。印文是占位几何路径，定稿书法后替换 #yinshou-glyph。 -->
+<style>.body{fill:var(--seal-body,#FBF8F1)}.face{fill:var(--seal-red,#B23A2B)}.line{fill:none;stroke:var(--seal-line,#1B1915);stroke-width:var(--seal-stroke,1.5);stroke-linejoin:round;stroke-linecap:round}.solid{fill:var(--seal-body,#FBF8F1);stroke:var(--seal-line,#1B1915);stroke-width:var(--seal-stroke,1.5);stroke-linejoin:round}.eye{fill:var(--seal-line,#1B1915)}.ink{fill:none;stroke:var(--seal-red,#B23A2B);stroke-width:2;stroke-linecap:square;stroke-linejoin:miter}</style>
+<defs>
+<clipPath id="yinshou-clip"><path d="M21 6H27Q30 6 30 9V42.5Q30 44 28.5 44H19.5Q18 44 18 42.5V9Q18 6 21 6Z"/></clipPath>
+<symbol id="yinshou-glyph" viewBox="0 0 48 48"><g class="ink"><path d="M17.5 10V18.5H21.5M21.5 7.5V21.5M25 7.5L24 11M24 11H30.5M29.5 11Q28.5 17.5 23.5 21M25.5 14Q27.5 19 31 21"/><path d="M24 24.5V26.5M17 29.5V27H31V29.5M20 30.5V40.5M20 30.5H27.5V34.5H20M20 36H28.5V40.5H20"/></g></symbol>
+</defs>
+<g id="body"><path class="solid" d="M21 6H27Q30 6 30 9V42.5Q30 44 28.5 44H19.5Q18 44 18 42.5V9Q18 6 21 6Z"/></g>
+<g id="face" clip-path="url(#yinshou-clip)"><rect class="face" x="0" y="37" width="48" height="11"/></g>
+<path id="outline" class="line" d="M21 6H27Q30 6 30 9V42.5Q30 44 28.5 44H19.5Q18 44 18 42.5V9Q18 6 21 6Z"/>
+
+<g id="eyes"><circle class="eye" cx="21" cy="13.5" r="1.5"/><circle class="eye" cx="27" cy="13.5" r="1.5"/></g>
+</svg>

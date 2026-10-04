@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="葫芦章印痕 · 力">
+<title>葫芦章印痕 · 力</title>
+<!-- 朱文印痕：边框 2.5 格，笔画 2 格。印文为占位几何路径，定稿后替换 #glyph。 -->
+<style>.frame{fill:none;stroke:var(--seal-red,#B23A2B);stroke-width:2.5;stroke-linejoin:round}.ink{fill:none;stroke:var(--seal-red,#B23A2B);stroke-width:2;stroke-linecap:square;stroke-linejoin:miter}</style>
+<g id="impression"><path class="frame" d="M19.1 18.5A7 7 0 1 1 28.9 18.5C28.26 19.13 30.54 20.28 31.5 21A12.5 12.5 0 1 1 16.5 21C17.46 20.28 19.74 19.13 19.1 18.5Z"/><g id="glyph" class="ink"><path d="M18.5 27H30V37Q30 39 28 38.5L26.5 38M24.5 22.5V29Q24 35.5 18 39"/></g></g>
+</svg>

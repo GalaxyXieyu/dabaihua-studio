@@ -1,0 +1,145 @@
+/* 印章 IP 静态样式（规范第 4.1 颜色、第 5 节姿态、6.5 呼吸、7.5 reduced-motion）。
+   颜色变量写在 :root；姿态只用 transform，挂在 .seal-actor[data-pose=...] 上，
+   眼睛用 .seal-eye 的 scaleY。不改 globals.css 的全局兜底。 */
+
+:root {
+  --seal-red: #B23A2B;   /* 朱砂：印面、印痕 */
+  --seal-dry: #906752;   /* 干印：断更时的灰红印痕 */
+  --seal-body: #FBF8F1;  /* 印身（= --paper） */
+  --seal-line: #1B1915;  /* 外轮廓、眼睛（= --ink） */
+}
+
+/* ---------- 角色 ---------- */
+
+/* 外层固定宽高 = size；位移原点统一在印面底边中点（规范第 5 节：50% 92%） */
+.seal-actor {
+  display: inline-block;
+  width: var(--seal-size);
+  height: var(--seal-size);
+  transform-origin: 50% 92%;
+  line-height: 0;
+}
+
+/* 呼吸层：和角色同尺寸、同原点，动画只走这一层，不打断姿态 */
+.seal-breath {
+  display: block;
+  width: var(--seal-size);
+  height: var(--seal-size);
+  transform-origin: 50% 92%;
+}
+
+.seal-svg { display: block; }
+
+/* 眼睛眨眼/半闭按自身几何中心缩放 */
+.seal-eye { transform-box: fill-box; transform-origin: center; }
+
+/* idle 打盹：向左歪 7°，眼睛半闭，呼吸 3400ms（规范 5 / 2.2） */
+.seal-actor[data-pose="idle"] { transform: rotate(-7deg); }
+.seal-actor[data-pose="idle"] .seal-eye { transform: scaleY(.35); }
+.seal-actor[data-kind="fang"][data-pose="idle"] { transform: rotate(-5deg); }
+.seal-actor[data-kind="yinshou"][data-pose="idle"] { transform: rotate(-3deg); }
+.seal-actor[data-kind="tuoyuan"][data-pose="idle"] { transform: rotate(-7deg) scaleY(.97); }
+.seal-actor[data-pose="idle"] .seal-breath {
+  animation: seal-breath-idle 3400ms cubic-bezier(.45, 0, .55, 1) infinite;
+}
+@keyframes seal-breath-idle {
+  0% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(calc(-1.5 * var(--seal-px))) scale(1.012); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+/* pending 待盖：站直，抬起 3px，朝目标前倾 4°，眼睛睁开（2.2 各章差异） */
+.seal-actor[data-pose="pending"] { transform: translateY(calc(-3 * var(--seal-px))) rotate(4deg); }
+.seal-actor[data-kind="yuan"][data-pose="pending"] { transform: translateY(calc(-3 * var(--seal-px))) rotate(6deg); }
+.seal-actor[data-kind="hulu"][data-pose="pending"] { transform: translateY(calc(-5 * var(--seal-px))) rotate(4deg); }
+.seal-actor[data-kind="tuoyuan"][data-pose="pending"] { transform: translateY(calc(-3 * var(--seal-px))) rotate(3deg); }
+
+/* stamped 已盖：站直，眼睛睁开 */
+.seal-actor[data-pose="stamped"] { transform: none; }
+
+/* rest 空白日（6.5）：坐着，歪 4°，压到 0.97，眼睛半闭，慢呼吸 4800ms */
+.seal-actor[data-pose="rest"] { transform: rotate(-4deg) scaleY(.97); }
+.seal-actor[data-pose="rest"] .seal-eye { transform: scaleY(.35); }
+.seal-actor[data-pose="rest"] .seal-breath {
+  animation: seal-breath-rest 4800ms cubic-bezier(.45, 0, .55, 1) infinite;
+}
+@keyframes seal-breath-rest {
+  0% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(calc(-1 * var(--seal-px))) scale(1.008); }
+  100% { transform: translateY(0) scale(1); }
+}
+
+/* offline 数据缺失（5）：整只向左躺倒贴地线，印面朝右，眼睛闭上，不动。
+   原点挪到章自身的左下角，旋转后再平移回框内（位移按 size/64 缩放）。 */
+.seal-actor[data-pose="offline"] {
+  transform: translateX(calc(24 * var(--seal-px))) rotate(-90deg);
+  transform-origin: 23% 92%;
+}
+.seal-actor[data-pose="offline"] .seal-eye { transform: scaleY(.2); }
+
+/* 页面切后台时由客户端代码设置 data-seal-paused，呼吸暂停（6.5） */
+html[data-seal-paused] .seal-breath { animation-play-state: paused; }
+
+/* ---------- 印痕 ---------- */
+
+.seal-mark {
+  display: inline-block;
+  line-height: 0;
+  opacity: var(--seal-mark-opacity, 1);
+}
+
+.seal-mark-svg { display: block; }
+
+/* ---------- 印位 ---------- */
+
+.seal-slot {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+}
+
+/* 服务端初始/待盖/空白：印痕不显示（stamped 时用 --seal-mark-opacity 的目标值） */
+.seal-slot[data-state="unknown"] .seal-mark,
+.seal-slot[data-state="pending"] .seal-mark,
+.seal-slot[data-state="blank"] .seal-mark { opacity: 0; }
+
+/* 待盖：虚线空印位（规范第 5 节） */
+.seal-slot[data-state="pending"]::before {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border: 1px dashed var(--line, #D8CFBE);
+  border-radius: 3px;
+}
+
+/* ---------- 可选文案（第 6 节） ---------- */
+
+.seal-copy {
+  color: var(--muted, #4A453C);
+  font-family: var(--font-serif);
+  font-size: 15px;
+  letter-spacing: .2em;
+}
+
+/* ---------- 导航 24px 方章（规范第 10 节，静态永远不动） ---------- */
+
+.global-brand .seal-actor {
+  flex: 0 0 auto;
+  margin-right: 8px; /* 规范：章与文字的间距不小于章宽 1/4 */
+  transform: none;
+}
+
+/* 侧栏收起态只显示"白"字，这枚章跟着文字一起隐藏（globals.css 的 font-size:0 方案） */
+html[data-nav="collapsed"] .global-brand .seal-actor { display: none; }
+
+/* ---------- reduced-motion（规范 7.5） ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .seal-breath { animation: none; }
+  /* idle 和 pending 显示成 stamped 姿态：站直、眼睛睁开 */
+  .seal-actor[data-pose="idle"],
+  .seal-actor[data-pose="pending"] { transform: none; }
+  .seal-actor[data-pose="idle"] .seal-eye,
+  .seal-actor[data-pose="pending"] .seal-eye { transform: scaleY(1); }
+  /* rest 保留坐姿但不呼吸（动画已 none）；offline 不变 */
+}

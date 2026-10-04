@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="小椭圆章 · 习惯">
+<title>小椭圆章 · 习惯</title>
+<!-- 48 格网格，地线 y=44，中轴 x=24。印文是占位几何路径，定稿书法后替换 #tuoyuan-glyph。 -->
+<style>.body{fill:var(--seal-body,#FBF8F1)}.face{fill:var(--seal-red,#B23A2B)}.line{fill:none;stroke:var(--seal-line,#1B1915);stroke-width:var(--seal-stroke,1.5);stroke-linejoin:round;stroke-linecap:round}.solid{fill:var(--seal-body,#FBF8F1);stroke:var(--seal-line,#1B1915);stroke-width:var(--seal-stroke,1.5);stroke-linejoin:round}.eye{fill:var(--seal-line,#1B1915)}.ink{fill:none;stroke:var(--seal-red,#B23A2B);stroke-width:2;stroke-linecap:square;stroke-linejoin:miter}</style>
+<defs>
+<clipPath id="tuoyuan-clip"><path d="M14 40C14 27.5 18 20.5 24 20.5C30 20.5 34 27.5 34 40Q34 44 30 44H18Q14 44 14 40Z"/></clipPath>
+<symbol id="tuoyuan-glyph" viewBox="0 0 48 48"><g class="ink"><path d="M17.5 16.5H30.5V31.5H17.5ZM17.5 24H30.5"/></g></symbol>
+</defs>
+<g id="body"><path class="solid" d="M14 40C14 27.5 18 20.5 24 20.5C30 20.5 34 27.5 34 40Q34 44 30 44H18Q14 44 14 40Z"/></g>
+<g id="face" clip-path="url(#tuoyuan-clip)"><rect class="face" x="0" y="37" width="48" height="11"/></g>
+<path id="outline" class="line" d="M14 40C14 27.5 18 20.5 24 20.5C30 20.5 34 27.5 34 40Q34 44 30 44H18Q14 44 14 40Z"/>
+
+<g id="eyes"><circle class="eye" cx="21" cy="28" r="1.5"/><circle class="eye" cx="27" cy="28" r="1.5"/></g>
+</svg>

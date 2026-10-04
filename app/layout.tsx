@@ -4,6 +4,7 @@ import "@fontsource-variable/noto-serif-sc";
 import "@fontsource-variable/newsreader";
 import "@fontsource-variable/newsreader/wght-italic.css";
 import "./globals.css";
+import "./_components/seal/seal.css";
 import { BRAND_NAME, BRAND_TITLE } from "../lib/brand";
 import { requestOrigin } from "../lib/request-origin";
 

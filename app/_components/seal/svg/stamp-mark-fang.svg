@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" role="img" aria-label="方章印痕 · 工">
+<title>方章印痕 · 工</title>
+<!-- 朱文印痕：边框 2.5 格，笔画 2 格。印文为占位几何路径，定稿后替换 #glyph。 -->
+<style>.frame{fill:none;stroke:var(--seal-red,#B23A2B);stroke-width:2.5;stroke-linejoin:round}.ink{fill:none;stroke:var(--seal-red,#B23A2B);stroke-width:2;stroke-linecap:square;stroke-linejoin:miter}</style>
+<g id="impression"><rect class="frame" x="7.25" y="7.25" width="33.5" height="33.5" rx="2.5"/><g id="glyph" class="ink"><path d="M15 15.5H33M24 15.5V32.5M13.5 32.5H34.5"/></g></g>
+</svg>
