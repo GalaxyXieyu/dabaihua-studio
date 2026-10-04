@@ -6,6 +6,7 @@ import { requestOrigin } from "../lib/request-origin";
 import { getTodayData } from "../lib/today";
 import { dateLabel } from "../lib/today-core";
 import { loadDailyData } from "../lib/daily-data";
+import { SEAL_CREDIT } from "../lib/seal-credit";
 import { SiteAppBar } from "./_components/SiteAppBar";
 import { Seal } from "./_components/seal";
 import { TodaySeals } from "./_components/seal/TodaySeals";
@@ -300,6 +301,7 @@ export default async function TodayPage() {
       <footer className="td-a-footer">
         <div className="td-a-footer-rule" />
         <p className="td-a-footer-text">大白话工作室 · 每日简报</p>
+        <p className="td-a-footer-credit">{SEAL_CREDIT}</p>
       </footer>
     </div>
   );

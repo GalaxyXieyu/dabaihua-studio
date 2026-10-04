@@ -8,6 +8,8 @@ import { readFileSync } from "node:fs";
 
 import { cssId, markSvg, sealSvg } from "../app/_components/seal/seal-svg.ts";
 import { SEAL_KINDS } from "../app/_components/seal/seal-tokens.ts";
+import { replaySheetHtml } from "../app/_components/seal/seal-sheet.ts";
+import { SEAL_CREDIT } from "../lib/seal-credit.ts";
 import { V3_MARKS } from "../app/_components/seal/seal-marks-v3.ts";
 import { renderSealMarksModule } from "../scripts/gen-seal-marks.mjs";
 
@@ -343,4 +345,35 @@ test("seal.css：变量、姿态、reduced-motion、收起态隐藏方章", () =
   assert.ok(css.includes("html[data-seal-paused] .seal-breath"));
   assert.ok(css.includes("prefers-reduced-motion: reduce"));
   assert.ok(css.includes('html[data-nav="collapsed"] .global-brand .seal-actor'));
+});
+
+// ---------- 印谱小字颜色与页脚致谢 ----------
+
+test("globals.css：--seal-date 令牌在，仍是浅色模式，没有 prefers-color-scheme", () => {
+  const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.ok(css.includes("--seal-date:#71695C"), "缺少 --seal-date:#71695C");
+  assert.ok(css.includes("color-scheme:light"), "color-scheme 应保持 light");
+  assert.ok(!css.includes("prefers-color-scheme"), "不该出现 prefers-color-scheme");
+});
+
+test("page.tsx 从 lib/seal-credit 引入页脚致谢", () => {
+  const src = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.ok(src.includes('import { SEAL_CREDIT } from "../lib/seal-credit";'), "应 import SEAL_CREDIT");
+  assert.ok(src.includes('className="td-a-footer-credit"'), "页脚应有 td-a-footer-credit 段落");
+});
+
+test("SEAL_CREDIT 含授权要求的关键来源与印文字样", () => {
+  for (const part of ["Richard Sears", "事", "LXGW Seal，SIL OFL 1.1"]) {
+    assert.ok(SEAL_CREDIT.includes(part), `SEAL_CREDIT 缺少「${part}」`);
+  }
+});
+
+test("回放纸的小字用 --seal-date，不再用 --faint", () => {
+  const events = [
+    { key: "read:a", kind: "yuan", at: "2026-10-03T09:14:00+08:00", label: "测试", targetId: "seal-slot-a" },
+    { key: "git:2026-10-03", kind: "fang", at: "2026-10-03T23:59:00+08:00", label: "测试", targetId: "seal-slot-git" },
+  ];
+  const html = replaySheetHtml({ date: "2026-10-03", events, streak: 5, prefix: "t" });
+  assert.ok(html.includes("var(--seal-date,#71695C)"), "纸的小字该用 --seal-date");
+  assert.ok(!html.includes("--faint"), "纸的输出不该再用 --faint");
 });

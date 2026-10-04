@@ -15,6 +15,10 @@ export const SEAL_NAMES: Record<SealKind, string> = {
   yinshou: "长条引首章",
 };
 
+// 印文与用途，方向 A；方章 2026-10-04 由工改事
+export const SEAL_GLYPHS: Record<SealKind, string> = { fang: "事", yuan: "習", hulu: "力", tuoyuan: "日", yinshou: "收官" };
+export const SEAL_PURPOSES: Record<SealKind, string> = { fang: "做事 / 提交", yuan: "学习", hulu: "健身", tuoyuan: "日报", yinshou: "收官" };
+
 // 缓动曲线（规范 7.1 / 动效计划）
 export const EASE = {
   wake: "cubic-bezier(.34,1.3,.64,1)",

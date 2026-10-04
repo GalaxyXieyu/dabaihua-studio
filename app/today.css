@@ -315,7 +315,7 @@ body:has(.td-a) {
   margin: 0 0 4px;
   font-size: 12px;
   letter-spacing: 0.04em;
-  color: var(--a-ink-3);
+  color: var(--seal-date, #71695C);
 }
 
 .td-a-seal-card {
@@ -372,7 +372,7 @@ body:has(.td-a) {
   text-align: center;
   font-size: 11px;
   line-height: 1.4;
-  color: var(--a-ink-3);
+  color: var(--seal-date, #71695C);
   white-space: nowrap;
 }
 
@@ -392,7 +392,7 @@ body:has(.td-a) {
 .td-a-seal-strip-note {
   font-size: 12px;
   letter-spacing: 0.04em;
-  color: var(--a-ink-3);
+  color: var(--seal-date, #71695C);
 }
 
 .td-a-seal-strip-marks {
@@ -404,7 +404,7 @@ body:has(.td-a) {
 
 .td-a-seal-strip-plus {
   font-size: 12px;
-  color: var(--a-ink-3);
+  color: var(--seal-date, #71695C);
 }
 
 .td-a-seal-note {
@@ -429,6 +429,16 @@ body:has(.td-a) {
   font-size: 12px;
   letter-spacing: 0.04em;
   color: var(--a-ink-3);
+}
+
+/* 印文与日期字形的授权致谢：小字、窄栏，颜色同印谱日期小字，不加重页面。 */
+.td-a-footer-credit {
+  margin: 6px 0 0;
+  max-width: 640px;
+  font-size: 11px;
+  line-height: 1.7;
+  letter-spacing: 0.02em;
+  color: var(--seal-date, #71695C);
 }
 
 /* ── 手机 ─────────────────────────────────────────────── */

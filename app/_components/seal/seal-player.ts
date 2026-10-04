@@ -547,7 +547,7 @@ export async function playReplay(
   title.style.fontFamily = "var(--font-serif, serif)";
   title.style.fontSize = "13px";
   title.style.letterSpacing = ".06em";
-  title.style.color = "var(--faint, #8A8274)";
+  title.style.color = "var(--seal-date, #71695C)";
   fit.appendChild(title);
 
   const sheet = document.createElement("div");

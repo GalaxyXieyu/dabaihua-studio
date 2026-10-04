@@ -12,6 +12,8 @@
   --ink:#1B1915;
   --muted:#4A453C;
   --faint:#8A8274;
+  --seal-date:#71695C; /* 印谱日期与印章小字；--faint #8A8274 对叶面对比只有 3.58，这个 5.11 */
+  --wash:#F6EFE2;      /* 昨日纸底色 */
   --line:#D8CFBE;
   --line-strong:#C4B8A2;
   --accent:#9A3412;
