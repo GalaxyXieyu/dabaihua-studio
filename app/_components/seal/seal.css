@@ -139,12 +139,13 @@ html[data-nav="collapsed"] .global-brand .seal-actor { display: none; }
 /* ---------- 页内盖章（第 5 部分）：阅读 tabs 行右端的圆章角色 ---------- */
 
 /* tabs 是两列 grid，角色用绝对定位挂右端，不占格子、不挤按钮；纯装饰不接指针 */
-.article-status-tabs { position: relative; }
+.article-status-tabs:has(.article-tabs-seal-actor) { position: relative; padding-right: 60px; }
 .article-tabs-seal-actor {
   position: absolute;
   right: 14px;
-  top: 50%;
-  transform: translateY(-50%);
+  top: auto;
+  bottom: 3px;
+  transform: none;
   line-height: 0;
   pointer-events: none;
 }

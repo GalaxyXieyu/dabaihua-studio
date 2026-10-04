@@ -900,3 +900,16 @@ body:has(.mirror-a) {
     padding-left: 36px;
   }
 }
+
+/* ---------- 照照镜子：深色提示条里的印位（第 6-3 部分） ---------- */
+
+/* ce-toast 是深色底，印泥红压上去几乎看不见；限定在提示条内把印痕翻成纸色，别处不受影响 */
+.ce-toast .seal-slot {
+  --seal-red: var(--paper, #FBF8F1);
+  --seal-dry: var(--paper, #FBF8F1);
+}
+
+/* 待盖的虚线空印位也偏暗：边框换成半透明纸色 */
+.ce-toast .seal-slot[data-state="pending"]::before {
+  border-color: rgba(251, 248, 241, 0.45);
+}
