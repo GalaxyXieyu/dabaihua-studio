@@ -1,5 +1,6 @@
 // 印章 IP 静态组件测试（seal-svg 字符串真源 / Seal / StampMark / StampSlot / seal.css / 导航方章）。
-// 核心断言：svg/ 目录文件的几何逐字出现在 sealSvg / markSvg 的输出里，
+// 核心断言：角色和 phase-1 印痕的 svg/ 目录几何逐字出现在 sealSvg / markSvg 的输出里；
+// v3 定稿印痕（fang/yuan/hulu/yinshou）的 svg/v3/ 几何逐字出现在输出里，
 // id 加 prefix 后不重复、url(#) 引用有效、没有 <style> 块和 emoji。
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -7,9 +8,15 @@ import { readFileSync } from "node:fs";
 
 import { cssId, markSvg, sealSvg } from "../app/_components/seal/seal-svg.ts";
 import { SEAL_KINDS } from "../app/_components/seal/seal-tokens.ts";
+import { V3_MARKS } from "../app/_components/seal/seal-marks-v3.ts";
+import { renderSealMarksModule } from "../scripts/gen-seal-marks.mjs";
 
 const SVG_DIR = new URL("../app/_components/seal/svg/", import.meta.url);
 const read = (name) => readFileSync(new URL(name, SVG_DIR), "utf8");
+const V3_DIR = new URL("v3/", SVG_DIR);
+const readV3 = (name) => readFileSync(new URL(name, V3_DIR), "utf8");
+// 已接入 v3 定稿印痕的 kind；其余（tuoyuan）仍走 phase-1
+const V3_KINDS = SEAL_KINDS.filter((k) => V3_MARKS[k]);
 
 // emoji 粗查（含常见区块；印章图形只用 ASCII 路径，不该出现任何 emoji）
 const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE0F}]/u;
@@ -25,7 +32,6 @@ test("五个角色文件的每个 d 路径都能在 sealSvg 输出里找到", ()
     for (const d of ds) assert.ok(out.includes(`d="${d}"`), `${kind} 缺少路径 ${d}`);
   }
 });
-
 test("五个角色文件的 circle/rect 几何属性都能在 sealSvg 输出里找到", () => {
   for (const kind of SEAL_KINDS) {
     const file = read(`${kind}.svg`);
@@ -43,8 +49,8 @@ test("五个角色文件的 circle/rect 几何属性都能在 sealSvg 输出里�
   }
 });
 
-test("五个印痕文件的每个 d 路径和几何属性都能在 markSvg 输出里找到", () => {
-  for (const kind of SEAL_KINDS) {
+test("phase-1 印痕（未接 v3 的 kind）的每个 d 路径和几何属性都能在 markSvg 输出里找到", () => {
+  for (const kind of SEAL_KINDS.filter((k) => !V3_MARKS[k])) {
     const file = read(`stamp-mark-${kind}.svg`);
     const out = markSvg(kind, { size: 48, prefix: "test" });
     for (const m of file.matchAll(/\sd="([^"]+)"/g)) {
@@ -58,6 +64,93 @@ test("五个印痕文件的每个 d 路径和几何属性都能在 markSvg 输�
       assert.ok(geo && out.includes(geo), `mark-${kind} 缺少 ${geo}`);
     }
   }
+});
+
+// ---------- v3 最终印痕 ----------
+
+test("v3 印痕：大文件路径都在 size 48 输出里，小文件路径都在 size 24 输出里且无 filter", () => {
+  for (const kind of V3_KINDS) {
+    const large = readV3(`stamp-mark-${kind}.svg`);
+    const small = readV3(`stamp-mark-${kind}-small.svg`);
+    const out48 = markSvg(kind, { size: 48, prefix: "t" });
+    const out24 = markSvg(kind, { size: 24, prefix: "t" });
+    assert.ok(out48.includes('width="48" height="48"'));
+    assert.ok(out24.includes('width="24" height="24"'));
+    assert.ok(out48.includes('aria-hidden="true"'));
+    assert.ok(out48.includes('focusable="false"'));
+    assert.ok(out48.includes('class="seal-mark-svg"'));
+    assert.notEqual(out48, out24, `${kind} 大小两档输出应不同`);
+    for (const m of large.matchAll(/\sd="([^"]+)"/g)) {
+      assert.ok(out48.includes(`d="${m[1]}"`), `v3 large ${kind} 缺少路径 ${m[1]}`);
+    }
+    for (const m of small.matchAll(/\sd="([^"]+)"/g)) {
+      assert.ok(out24.includes(`d="${m[1]}"`), `v3 small ${kind} 缺少路径 ${m[1]}`);
+    }
+    // 小尺寸（<= 28）用干净版：不带纹理 filter
+    assert.ok(!out24.includes("<filter"), `v3 small ${kind} 不该有 filter`);
+    // title 插在开标签后面
+    const titled = markSvg(kind, { size: 48, prefix: "t", title: "印痕<方章>" });
+    assert.ok(titled.includes("<title>印痕&lt;方章&gt;</title>"));
+  }
+});
+
+test("v3 印痕的 id 都带 prefix，两个 prefix 无交集，url(#) 引用都在同一字符串里", () => {
+  for (const kind of V3_KINDS) {
+    for (const size of [48, 24]) {
+      const a = markSvg(kind, { size, prefix: "pa" });
+      const b = markSvg(kind, { size, prefix: "pb" });
+      const ia = [...a.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]);
+      assert.ok(ia.length >= 1, `${kind} 应至少有一个 id`);
+      for (const id of ia) assert.ok(id.startsWith("pa-"), `${kind} id ${id} 应带 prefix`);
+      const ib = new Set([...b.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
+      assert.equal(ia.filter((x) => ib.has(x)).length, 0, `${kind} 两个 prefix 的 id 有交集`);
+      const ids = new Set(ia);
+      for (const ref of a.matchAll(/url\(#([^)]+)\)/g)) {
+        assert.ok(ids.has(ref[1]), `${kind} 引用了不存在的 id ${ref[1]}`);
+      }
+    }
+  }
+});
+
+test("v3 印痕 dry 用 --seal-dry，不再有 --seal-red", () => {
+  for (const kind of V3_KINDS) {
+    for (const size of [48, 24]) {
+      const dry = markSvg(kind, { size, prefix: "t", dry: true });
+      assert.ok(dry.includes("var(--seal-dry,#906752)"), `${kind} size ${size} 缺 dry 色`);
+      assert.ok(!dry.includes("var(--seal-red"), `${kind} size ${size} dry 后不该有 seal-red`);
+    }
+  }
+});
+
+test("tuoyuan 印痕（带/不带 date）仍是 phase-1 输出，逐字不变", () => {
+  const noDate = markSvg("tuoyuan", { size: 48, prefix: "t" });
+  assert.equal(
+    noDate,
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" aria-hidden="true" focusable="false" class="seal-mark-svg"><g id="t-impression"><ellipse style="fill:none;stroke:var(--seal-red,#B23A2B);stroke-width:2.5;stroke-linejoin:round" cx="24" cy="24" rx="17.75" ry="12.75"/><g id="t-glyph" style="fill:none;stroke:var(--seal-red,#B23A2B);stroke-width:2;stroke-linecap:square;stroke-linejoin:miter"><path d="M17.5 16.5H30.5V31.5H17.5ZM17.5 24H30.5"/></g></g></svg>',
+  );
+  const withDate = markSvg("tuoyuan", { size: 48, prefix: "t", date: "10·03" });
+  assert.equal(
+    withDate,
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" aria-hidden="true" focusable="false" class="seal-mark-svg"><g id="t-impression"><ellipse style="fill:none;stroke:var(--seal-red,#B23A2B);stroke-width:2.5;stroke-linejoin:round" cx="24" cy="24" rx="17.75" ry="12.75"/><g id="t-glyph" style="fill:none;stroke:var(--seal-red,#B23A2B);stroke-width:1.75;stroke-linecap:square;stroke-linejoin:miter"><path transform="translate(10.9 19.5)" d="M1 1.4L2.25 0V9"/><path transform="translate(17.2 19.5)" d="M0 0H4.5V9H0Z"/><path transform="translate(23.5 19.5)" d="M0.5 4.5H0.5"/><path transform="translate(26.3 19.5)" d="M0 0H4.5V9H0Z"/><path transform="translate(32.6 19.5)" d="M0 0H4.5V9H0M0 4.5H4.5"/></g></g></svg>',
+  );
+  // 带字母 glyph 的旧占位几何（重刻前保持不变）
+  assert.ok(noDate.includes('d="M17.5 16.5H30.5V31.5H17.5ZM17.5 24H30.5"'));
+});
+
+test("seal-marks-v3.ts 与 svg/v3/ 源文件同步（renderSealMarksModule 重放一致）", () => {
+  const files = {};
+  for (const kind of SEAL_KINDS) {
+    try {
+      files[kind] = {
+        large: readV3(`stamp-mark-${kind}.svg`),
+        small: readV3(`stamp-mark-${kind}-small.svg`),
+      };
+    } catch {
+      // 还没定稿的 kind（两个文件缺一）跳过
+    }
+  }
+  const committed = readFileSync(new URL("../app/_components/seal/seal-marks-v3.ts", import.meta.url), "utf8");
+  assert.equal(renderSealMarksModule(files), committed, "seal-marks-v3.ts 与 svg/v3/ 不同步，跑 npm run seal:marks");
 });
 
 // ---------- id 前缀与引用 ----------
@@ -157,9 +250,13 @@ test("dry 用 --seal-dry，正常印痕用 --seal-red", () => {
   const wet = markSvg("yuan", { size: 48, prefix: "t" });
   assert.ok(wet.includes("var(--seal-red,#B23A2B)"));
   assert.ok(!wet.includes("var(--seal-dry"));
-  // 印痕笔画 2、边框 2.5
-  assert.ok(wet.includes("stroke-width:2.5"));
-  assert.ok(wet.includes("stroke-width:2;"));
+  // phase-1 印痕（tuoyuan）笔画 2、边框 2.5 的老规格不变
+  const p1 = markSvg("tuoyuan", { size: 48, prefix: "t" });
+  assert.ok(p1.includes("stroke-width:2.5"));
+  assert.ok(p1.includes("stroke-width:2;"));
+  // v3 印痕的笔画宽度来自源文件（yuan 大号 2.4/1.9），不应被改写
+  assert.ok(wet.includes("stroke-width:2.4"));
+  assert.ok(wet.includes("stroke-width:1.9"));
 });
 
 // ---------- 日期章 ----------
@@ -188,6 +285,19 @@ test("markSvg 的日期章和样张的 5 个 translate 数值一致", () => {
 test("public/favicon.svg 与组件目录的 favicon.svg 内容相同", () => {
   const pub = readFileSync(new URL("../public/favicon.svg", import.meta.url), "utf8");
   assert.equal(pub, read("favicon.svg"));
+  // 由 v3 小号方章独立成文件：无 CSS 变量、颜色写死、带 superme 标题
+  assert.ok(!pub.includes("var("), "favicon 不该有 CSS 变量");
+  assert.ok(pub.includes("#B23A2B"));
+  assert.ok(pub.includes('<title>superme · 方章白文 · 事</title>'));
+  assert.ok(pub.includes('role="img"'));
+  assert.ok(pub.includes('aria-label="superme"'));
+  assert.ok(pub.includes('width="48" height="48"'));
+  assert.ok(!pub.includes("aria-hidden"), "favicon 不该藏起来");
+  // 路径与 v3 小号方章逐字一致
+  const small = readV3("stamp-mark-fang-small.svg");
+  for (const m of small.matchAll(/\sd="([^"]+)"/g)) {
+    assert.ok(pub.includes(`d="${m[1]}"`), `favicon 缺少路径 ${m[1]}`);
+  }
 });
 
 // ---------- 源码断言（导航方章 / 服务端组件 / css 接入） ----------
