@@ -15,11 +15,13 @@ export type StampMarkProps = {
   dry?: boolean;
   /** 日期章印文（"MM·DD"，只给 tuoyuan 用） */
   date?: string;
+  /** 事件键（渲染成 data-key，收工印条靠它把条目印痕和印条印痕对应） */
+  dataKey?: string;
   className?: string;
 };
 
 /** 一枚印痕。本身是装饰（印痕旁必须有文字，规范 4.1），所以内层 SVG aria-hidden。 */
-export function StampMark({ kind, size, streak, dry, date, className }: StampMarkProps) {
+export function StampMark({ kind, size, streak, dry, date, dataKey, className }: StampMarkProps) {
   const uid = useId();
   const opacity = dry ? DRY_OPACITY : streakOpacity(streak ?? 1);
   const tier = tierOf(streak ?? 1);
@@ -27,6 +29,7 @@ export function StampMark({ kind, size, streak, dry, date, className }: StampMar
     <span
       className={className ? `seal-mark ${className}` : "seal-mark"}
       data-kind={kind}
+      data-key={dataKey}
       style={{ "--seal-mark-opacity": opacity, width: size, height: size } as CSSProperties}
       dangerouslySetInnerHTML={{ __html: markSvg(kind, { size, prefix: cssId(uid), tier, dry, date }) }}
     />

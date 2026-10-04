@@ -5,7 +5,10 @@ import { getSessionUser } from "../lib/auth";
 import { requestOrigin } from "../lib/request-origin";
 import { getTodayData } from "../lib/today";
 import { dateLabel } from "../lib/today-core";
+import { loadDailyData } from "../lib/daily-data";
 import { SiteAppBar } from "./_components/SiteAppBar";
+import { Seal } from "./_components/seal";
+import { TodaySeals } from "./_components/seal/TodaySeals";
 import "./today.css";
 
 export const dynamic = "force-dynamic";
@@ -51,7 +54,12 @@ export default async function TodayPage() {
   if (!user) redirect("/login?next=/");
 
   const isAdmin = user.role === "admin";
-  const data = await getTodayData(env, { isAdmin, userId: user.id });
+  // 日报数据只有管理员才读，和页面数据并行取；传给浏览器的只有 date/commits 和 generatedAt
+  const [data, daily] = await Promise.all([
+    getTodayData(env, { isAdmin, userId: user.id }),
+    isAdmin ? loadDailyData(env.DB) : Promise.resolve(null),
+  ]);
+  const sealDays = daily ? daily.days.map((d) => ({ date: d.date, commits: d.commits })) : null;
 
   return (
     <div className="td-a">
@@ -65,11 +73,19 @@ export default async function TodayPage() {
           </time>
           <h1 className="td-a-wordmark">今天</h1>
           <p className="td-a-subtitle">今日需要你拍板的事</p>
+          {isAdmin && (
+            <div className="td-a-seal-mount" aria-hidden="true">
+              <Seal id="seal-actor-today" kind="fang" size={160} pose="idle" />
+              <span id="seal-hint-today" className="td-a-seal-hint" />
+            </div>
+          )}
         </header>
         <div className="td-a-double-rule" />
       </div>
 
       <main className="td-a-briefing">
+        {isAdmin && <TodaySeals days={sealDays} generatedAt={daily?.generatedAt ?? null} />}
+
         <section className="td-a-row" aria-labelledby="td-a-row-drafts">
           <div className="td-a-col-label">
             <span className="td-a-roman" aria-hidden="true">{ROMAN[0]}</span>

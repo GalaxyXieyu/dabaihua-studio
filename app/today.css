@@ -69,9 +69,38 @@ body:has(.td-a) {
   content: "";
 }
 
+/* 刊头（叠在双线上的印章角色挂载点需要 relative） */
 .td-a-masthead {
+  position: relative;
   padding: 18px 0 22px;
   text-align: center;
+}
+
+/* 160px 角色站在刊头下面那条双线上：印面地线在 y=44/48，
+   往下挪 size×4/48 让地线贴着刊头底边；右边对齐栏目右边缘。
+   纯装饰，不拦截点击。 */
+.td-a-seal-mount {
+  position: absolute;
+  right: 0;
+  bottom: calc(-1 * 160px * 4 / 48);
+  line-height: 0;
+  pointer-events: none;
+}
+
+/* "还有 N 个"：角色左下方，12px --faint，tabular-nums（内容用 portal 注入） */
+.td-a-seal-hint {
+  position: absolute;
+  left: -4px;
+  bottom: 8px;
+  line-height: 1;
+}
+
+.td-a-seal-hint-text {
+  display: inline-block;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--a-ink-3);
+  white-space: nowrap;
 }
 
 .td-a-kicker {
@@ -275,6 +304,115 @@ body:has(.td-a) {
   color: var(--a-accent);
 }
 
+/* ── 新盖的章（印章栏目） ────────────────────────────── */
+
+/* 昨日小卡：200×95 的纸，内容是 400×190 的回放纸缩到 50% */
+.td-a-seal-card-wrap {
+  margin: 0 0 14px;
+}
+
+.td-a-seal-card-note {
+  margin: 0 0 4px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--a-ink-3);
+}
+
+.td-a-seal-card {
+  position: relative;
+  display: block;
+  box-sizing: border-box;
+  width: 200px;
+  height: 95px;
+  background: #fffdf8;
+  border: 1px solid var(--a-rule);
+  overflow: hidden;
+}
+
+.td-a-seal-card:hover {
+  border-color: var(--a-accent);
+}
+
+/* 回放收起飞进来之前先占位（visibility 保位，FLIP 目标有几何） */
+.td-a-seal-card[data-state="pending"] {
+  visibility: hidden;
+}
+
+.td-a-seal-card-sheet {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  transform: scale(0.5);
+  transform-origin: 0 0;
+}
+
+/* 印位一行：48px 印位 + 11px 小字，整格不超 64px，可换行不出横向滚动 */
+.td-a-seal-cells {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.td-a-seal-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 56px;
+}
+
+.td-a-seal-cell-note {
+  margin-top: 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--a-ink-3);
+  white-space: nowrap;
+}
+
+/* 当天印条：收工时条目印痕 FLIP 滑进来排成一行 */
+.td-a-seal-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.td-a-seal-strip[data-state="pending"] {
+  visibility: hidden;
+}
+
+.td-a-seal-strip-note {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--a-ink-3);
+}
+
+.td-a-seal-strip-marks {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 0;
+}
+
+.td-a-seal-strip-plus {
+  font-size: 12px;
+  color: var(--a-ink-3);
+}
+
+.td-a-seal-note {
+  margin: 14px 0 0;
+  font-size: 13px;
+  color: var(--a-ink-3);
+}
+
 /* ── 页脚 ─────────────────────────────────────────────── */
 .td-a-footer {
   margin-top: 18px;
@@ -340,6 +478,18 @@ body:has(.td-a) {
 
   .td-a-index {
     font-size: 44px;
+  }
+
+  /* 手机：只缩挂载点（不改 size，动画参数不受影响），
+     地线偏移也按缩放比例减半；"还有 N 个"字号加倍抵消缩放 */
+  .td-a-seal-mount {
+    bottom: calc(-1 * 160px * 2 / 48);
+    transform: scale(0.5);
+    transform-origin: right bottom;
+  }
+
+  .td-a-seal-hint-text {
+    font-size: 24px;
   }
 
   .td-a-footer {

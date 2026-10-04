@@ -561,12 +561,12 @@ export async function playReplay(
   sheet.innerHTML = replaySheetHtml({ date, events, streak, prefix });
   fit.appendChild(sheet);
 
-  // 小椭圆章角色：站在纸底边那条线上；宽屏在纸左侧，窄屏在纸上方
+  // 小椭圆章角色：站在纸底边那条线上；宽屏在纸左侧，窄屏（≤640px）在纸上方
   const actor = document.createElement("span");
   actor.className = "seal-actor";
   actor.dataset.kind = "tuoyuan";
   actor.dataset.pose = "stamped";
-  const narrow = window.innerWidth < 560;
+  const narrow = window.innerWidth <= 640;
   actor.style.position = "absolute";
   if (narrow) {
     actor.style.top = "-108px";
