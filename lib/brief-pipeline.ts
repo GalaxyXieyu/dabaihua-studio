@@ -14,6 +14,15 @@ import {
   type PipelineNotifyEvent,
   type PipelineStatus,
 } from "./brief-pipeline-core.ts";
+import {
+  checkBaseRev,
+  clearFeedback,
+  outlineToMarkdown,
+  validateOutlineJson,
+  validateRegenerateBlocks,
+  type OutlineV01,
+  type RegenerateBlock,
+} from "./outline-core.ts";
 import { deliverBriefNotification, type BriefNotifyResult } from "./brief-notify.ts";
 
 export type BriefPipelineEnv = {
@@ -31,6 +40,9 @@ export type SelectionView = {
   status: string;
   statusLabel: string;
   outlineMd: string;
+  outlineJson: OutlineV01 | null;
+  outlineRev: number;
+  regenerating: RegenerateBlock[];
   outlineBy: string;
   outlineAt: string | null;
   statusBy: string;
@@ -46,7 +58,7 @@ export type SelectionView = {
   updatedAt: string;
 };
 
-export type PipelineFailure = { ok: false; status: number; error: string };
+export type PipelineFailure = { ok: false; status: number; error: string; field?: string; rev?: number };
 export type PipelineSuccess = {
   ok: true;
   selection: SelectionView;
@@ -57,7 +69,7 @@ export type PipelineSuccess = {
 const now = () => new Date().toISOString();
 
 const SELECTION_COLUMNS =
-  "id, date, topic_id AS topicId, board_topic_id AS boardTopicId, status, outline_md AS outlineMd, outline_by AS outlineBy, outline_at AS outlineAt, status_by AS statusBy, status_at AS statusAt, selected_by AS selectedBy, selected_at AS selectedAt, notify_event AS notifyEvent, notify_state AS notifyState, notify_http_status AS notifyHttpStatus, notify_error AS notifyError, notify_at AS notifyAt, created_at AS createdAt, updated_at AS updatedAt";
+  "id, date, topic_id AS topicId, board_topic_id AS boardTopicId, status, outline_md AS outlineMd, outline_json AS outlineJson, outline_rev AS outlineRev, outline_regen_json AS outlineRegenJson, outline_by AS outlineBy, outline_at AS outlineAt, status_by AS statusBy, status_at AS statusAt, selected_by AS selectedBy, selected_at AS selectedAt, notify_event AS notifyEvent, notify_state AS notifyState, notify_http_status AS notifyHttpStatus, notify_error AS notifyError, notify_at AS notifyAt, created_at AS createdAt, updated_at AS updatedAt";
 
 type SelectionRow = {
   id: number;
@@ -66,6 +78,9 @@ type SelectionRow = {
   boardTopicId: number | null;
   status: string;
   outlineMd: string;
+  outlineJson: string;
+  outlineRev: number;
+  outlineRegenJson: string;
   outlineBy: string;
   outlineAt: string | null;
   statusBy: string;
@@ -81,8 +96,36 @@ type SelectionRow = {
   updatedAt: string;
 };
 
+function parseOutlineJson(value: unknown): OutlineV01 | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const result = validateOutlineJson(value);
+  return result.ok ? result.outline : null;
+}
+
+function parseRegenerating(value: unknown): RegenerateBlock[] {
+  if (typeof value !== "string" || !value.trim()) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    const result: RegenerateBlock[] = [];
+    for (const item of parsed) {
+      if (!item || typeof item !== "object") continue;
+      const blockId = typeof (item as { blockId?: unknown }).blockId === "string" ? (item as { blockId: string }).blockId : "";
+      const suggestion =
+        typeof (item as { suggestion?: unknown }).suggestion === "string" ? (item as { suggestion: string }).suggestion : "";
+      if (blockId) result.push({ blockId, suggestion });
+    }
+    return result;
+  } catch {
+    return [];
+  }
+}
+
 function toView(row: SelectionRow): SelectionView {
   const parsed = parsePipelineStatus(row.status);
+  const outlineRev = typeof row.outlineRev === "number" ? row.outlineRev : 0;
+  const outlineJson = parseOutlineJson(row.outlineJson);
+  if (outlineJson) outlineJson.rev = outlineRev;
   return {
     date: String(row.date ?? ""),
     topicId: String(row.topicId ?? ""),
@@ -90,6 +133,9 @@ function toView(row: SelectionRow): SelectionView {
     status: String(row.status ?? ""),
     statusLabel: parsed ? PIPELINE_LABELS[parsed] : "",
     outlineMd: String(row.outlineMd ?? ""),
+    outlineJson,
+    outlineRev,
+    regenerating: parseRegenerating(row.outlineRegenJson),
     outlineBy: String(row.outlineBy ?? ""),
     outlineAt: row.outlineAt ?? null,
     statusBy: String(row.statusBy ?? ""),
@@ -187,6 +233,7 @@ async function notifySaved(
   const selection = await getSelection(env, date, topicId);
   const stored = await getBrief(env, date);
   const context = await loadResponseContext(env, date, topicId, selection?.selectedBy ?? null);
+  const carriesOutlineJson = event === "confirm_outline" || event === "regenerate_outline";
   return deliverBriefNotification(env, {
     date,
     topicId,
@@ -196,7 +243,10 @@ async function notifySaved(
     scenarioText: context.scenarioText,
     scenarioCustom: context.scenarioCustom,
     answers: context.answers,
-    outline: event === "confirm_outline" && selection?.outlineMd ? selection.outlineMd : null,
+    outline: carriesOutlineJson ? selection?.outlineMd || null : null,
+    outlineJson: carriesOutlineJson ? selection?.outlineJson ?? null : null,
+    baseRev: carriesOutlineJson ? selection?.outlineRev : undefined,
+    blocks: event === "regenerate_outline" ? selection?.regenerating ?? [] : undefined,
     status: selection?.status ?? "selected",
     boardTopicId: selection?.boardTopicId ?? null,
     baseUrl,
@@ -310,9 +360,9 @@ export async function undoBriefTopic(env: BriefPipelineEnv, input: UndoInput): P
   return { ok: true, selection: updated, response, notify };
 }
 
-export type ConfirmOutlineInput = { date: string; topicId: string; baseUrl: string };
+export type ConfirmOutlineInput = { date: string; topicId: string; baseUrl: string; outlineJson?: unknown; baseRev?: unknown };
 
-/** 确认大纲（仅 outline_pending 且已有大纲）→ drafting，并通知 confirm_outline。 */
+/** 确认大纲（仅 outline_pending 且有 JSON 或 Markdown）→ drafting，并通知 confirm_outline。 */
 export async function confirmBriefOutline(
   env: BriefPipelineEnv,
   input: ConfirmOutlineInput,
@@ -321,16 +371,166 @@ export async function confirmBriefOutline(
   const selection = await getSelection(env, input.date, input.topicId);
   if (!selection) return { ok: false, status: 409, error: "not_selected" };
   if (selection.status !== "outline_pending") return { ok: false, status: 409, error: "not_outline_pending" };
-  if (!selection.outlineMd.trim()) return { ok: false, status: 409, error: "outline_required" };
+
+  // 可选：Yu 确认时带上的完整 outlineJson。
+  let normalizedOutline: OutlineV01 | null = null;
+  if (input.outlineJson !== undefined && input.outlineJson !== null) {
+    const validated = validateOutlineJson(input.outlineJson);
+    if (!validated.ok) {
+      const failure: PipelineFailure = { ok: false, status: 422, error: validated.error };
+      if (validated.field) failure.field = validated.field;
+      return failure;
+    }
+    const base = checkBaseRev(selection.outlineRev, input.baseRev);
+    if (!base.ok) {
+      return base.error === "bad_base_rev"
+        ? { ok: false, status: 422, error: base.error }
+        : { ok: false, status: 409, error: base.error, rev: selection.outlineRev };
+    }
+    normalizedOutline = validated.outline;
+  }
+
+  // JSON 为准：有 JSON 就用它重新生成 Markdown；没有 JSON 的老流程仍要求 Markdown 非空。
+  const effectiveOutline = normalizedOutline ?? selection.outlineJson;
+  const markdown = effectiveOutline ? outlineToMarkdown(effectiveOutline) : selection.outlineMd;
+  if (!markdown.trim()) return { ok: false, status: 409, error: "outline_required" };
 
   const timestamp = now();
-  await env.DB.prepare(
-    "UPDATE brief_selections SET status = 'drafting', status_by = ?, status_at = ?, updated_at = ? WHERE date = ? AND topic_id = ?",
-  )
-    .bind("Yu", timestamp, timestamp, input.date, input.topicId)
-    .run();
+  const sets: string[] = [];
+  const binds: unknown[] = [];
+  if (normalizedOutline) {
+    sets.push("outline_json = ?", "outline_rev = outline_rev + 1");
+    binds.push(JSON.stringify(normalizedOutline));
+  }
+  if (effectiveOutline) {
+    sets.push("outline_md = ?", "outline_by = ?", "outline_at = ?");
+    binds.push(markdown, "Yu", timestamp);
+  }
+  sets.push("status = 'drafting'", "status_by = ?", "status_at = ?", "outline_regen_json = '[]'", "updated_at = ?");
+  binds.push("Yu", timestamp, timestamp, input.date, input.topicId);
+  let sql = `UPDATE brief_selections SET ${sets.join(", ")} WHERE date = ? AND topic_id = ?`;
+  if (normalizedOutline) {
+    sql += " AND outline_rev = ?";
+    binds.push(selection.outlineRev);
+  }
+  const result = await env.DB.prepare(sql).bind(...binds).run();
+  if (normalizedOutline && Number(result.meta?.changes ?? 0) === 0) {
+    const latest = await getSelection(env, input.date, input.topicId);
+    return { ok: false, status: 409, error: "rev_conflict", rev: latest?.outlineRev ?? selection.outlineRev };
+  }
 
   const notify = await notifySaved(env, input.date, input.topicId, "confirm_outline", input.baseUrl);
+  const updated = await getSelection(env, input.date, input.topicId);
+  if (!updated) return { ok: false, status: 500, error: "保存失败" };
+  return { ok: true, selection: updated, notify };
+}
+
+export type OutlineDraftInput = { date: string; topicId: string; outlineJson?: unknown; baseRev?: unknown };
+
+/**
+ * Yu 页面侧自动保存：只更新 outline_json（rev+1），保留 feedback，不动 Markdown、不发通知。
+ */
+export async function saveOutlineDraft(
+  env: BriefPipelineEnv,
+  input: OutlineDraftInput,
+): Promise<PipelineSuccess | PipelineFailure> {
+  await ensureSchema(env.DB);
+  const selection = await getSelection(env, input.date, input.topicId);
+  if (!selection) return { ok: false, status: 409, error: "not_selected" };
+  if (input.baseRev === undefined || input.baseRev === null) return { ok: false, status: 422, error: "base_rev_required" };
+  if (selection.status !== "outline_pending") return { ok: false, status: 409, error: "not_outline_pending" };
+  if (!selection.outlineJson) return { ok: false, status: 409, error: "outline_json_required" };
+
+  const validated = validateOutlineJson(input.outlineJson);
+  if (!validated.ok) {
+    const failure: PipelineFailure = { ok: false, status: 422, error: validated.error };
+    if (validated.field) failure.field = validated.field;
+    return failure;
+  }
+  const base = checkBaseRev(selection.outlineRev, input.baseRev);
+  if (!base.ok) {
+    return base.error === "bad_base_rev"
+      ? { ok: false, status: 422, error: base.error }
+      : { ok: false, status: 409, error: base.error, rev: selection.outlineRev };
+  }
+
+  const result = await env.DB.prepare(
+    "UPDATE brief_selections SET outline_json = ?, outline_rev = outline_rev + 1, updated_at = ? WHERE date = ? AND topic_id = ? AND outline_rev = ?",
+  )
+    .bind(JSON.stringify(validated.outline), now(), input.date, input.topicId, selection.outlineRev)
+    .run();
+  if (Number(result.meta?.changes ?? 0) === 0) {
+    const latest = await getSelection(env, input.date, input.topicId);
+    return { ok: false, status: 409, error: "rev_conflict", rev: latest?.outlineRev ?? selection.outlineRev };
+  }
+
+  const updated = await getSelection(env, input.date, input.topicId);
+  if (!updated) return { ok: false, status: 500, error: "保存失败" };
+  return { ok: true, selection: updated };
+}
+
+export type RegenerateOutlineInput = {
+  date: string;
+  topicId: string;
+  outlineJson?: unknown;
+  baseRev?: unknown;
+  blocks: unknown;
+  baseUrl: string;
+};
+
+/**
+ * 「按建议重生成」：先落 Yu 的最新 outlineJson（可选），再登记重写中的 blocks 并发通知。
+ * 一次只能有一批；diagram 块在同一写里标成 redo。通知失败不回滚。
+ */
+export async function regenerateBriefOutline(
+  env: BriefPipelineEnv,
+  input: RegenerateOutlineInput,
+): Promise<PipelineSuccess | PipelineFailure> {
+  await ensureSchema(env.DB);
+  const selection = await getSelection(env, input.date, input.topicId);
+  if (!selection) return { ok: false, status: 409, error: "not_selected" };
+  if (selection.status !== "outline_pending") return { ok: false, status: 409, error: "not_outline_pending" };
+  if (!selection.outlineJson) return { ok: false, status: 409, error: "outline_json_required" };
+  if (selection.regenerating.length) return { ok: false, status: 409, error: "regenerating" };
+
+  let normalizedOutline: OutlineV01 | null = null;
+  if (input.outlineJson !== undefined && input.outlineJson !== null) {
+    const validated = validateOutlineJson(input.outlineJson);
+    if (!validated.ok) {
+      const failure: PipelineFailure = { ok: false, status: 422, error: validated.error };
+      if (validated.field) failure.field = validated.field;
+      return failure;
+    }
+    const base = checkBaseRev(selection.outlineRev, input.baseRev);
+    if (!base.ok) {
+      return base.error === "bad_base_rev"
+        ? { ok: false, status: 422, error: base.error }
+        : { ok: false, status: 409, error: base.error, rev: selection.outlineRev };
+    }
+    normalizedOutline = validated.outline;
+  }
+
+  const working = normalizedOutline ?? selection.outlineJson;
+  const validatedBlocks = validateRegenerateBlocks(working, input.blocks);
+  if (!validatedBlocks.ok) return { ok: false, status: 422, error: validatedBlocks.error };
+
+  const redoIds = new Set(validatedBlocks.blocks.map((block) => block.blockId));
+  const toStore: OutlineV01 = {
+    ...working,
+    diagrams: working.diagrams.map((diagram) => (redoIds.has(diagram.id) ? { ...diagram, status: "redo" as const } : { ...diagram })),
+  };
+
+  const result = await env.DB.prepare(
+    "UPDATE brief_selections SET outline_json = ?, outline_rev = outline_rev + 1, outline_regen_json = ?, updated_at = ? WHERE date = ? AND topic_id = ? AND outline_rev = ?",
+  )
+    .bind(JSON.stringify(toStore), JSON.stringify(validatedBlocks.blocks), now(), input.date, input.topicId, selection.outlineRev)
+    .run();
+  if (Number(result.meta?.changes ?? 0) === 0) {
+    const latest = await getSelection(env, input.date, input.topicId);
+    return { ok: false, status: 409, error: "rev_conflict", rev: latest?.outlineRev ?? selection.outlineRev };
+  }
+
+  const notify = await notifySaved(env, input.date, input.topicId, "regenerate_outline", input.baseUrl);
   const updated = await getSelection(env, input.date, input.topicId);
   if (!updated) return { ok: false, status: 500, error: "保存失败" };
   return { ok: true, selection: updated, notify };
@@ -348,6 +548,9 @@ export async function notifyBriefTopic(env: BriefPipelineEnv, input: NotifyInput
   if (!(PIPELINE_NOTIFY_EVENTS as readonly string[]).includes(event)) {
     return { ok: false, status: 400, error: "bad_event" };
   }
+  if (event === "regenerate_outline" && selection.regenerating.length === 0) {
+    return { ok: false, status: 409, error: "nothing_to_regenerate" };
+  }
   const notify = await notifySaved(env, input.date, input.topicId, event as PipelineNotifyEvent, input.baseUrl);
   const updated = await getSelection(env, input.date, input.topicId);
   if (!updated) return { ok: false, status: 500, error: "保存失败" };
@@ -360,10 +563,13 @@ export type PipelineUpdateInput = {
   actorName: string;
   status?: unknown;
   outline?: unknown;
+  outlineJson?: unknown;
+  baseRev?: unknown;
 };
 
 /**
- * 漱芳斋助手的写回：只允许改 status 和 outline。规则见 assistantStatusRule。
+ * 漱芳斋助手的写回：改 status、Markdown outline，或结构化 outlineJson。
+ * 规则见 assistantStatusRule；带 outlineJson 时用 outline_rev 条件更新防并发。
  */
 export async function updateBriefPipeline(
   env: BriefPipelineEnv,
@@ -390,7 +596,39 @@ export async function updateBriefPipeline(
     newOutline = input.outline.trim();
   }
 
-  const hasOutline = newOutline.length > 0 || selection.outlineMd.trim().length > 0;
+  // 可选的结构化大纲：校验、并发检查，并清掉原来在重写中的块的 feedback。
+  let outlineJsonProvided = false;
+  let normalizedOutline: OutlineV01 | null = null;
+  if (input.outlineJson !== undefined && input.outlineJson !== null) {
+    const validated = validateOutlineJson(input.outlineJson);
+    if (!validated.ok) {
+      const failure: PipelineFailure = { ok: false, status: 422, error: validated.error };
+      if (validated.field) failure.field = validated.field;
+      return failure;
+    }
+    const base = checkBaseRev(selection.outlineRev, input.baseRev);
+    if (!base.ok) {
+      return base.error === "bad_base_rev"
+        ? { ok: false, status: 422, error: base.error }
+        : { ok: false, status: 409, error: base.error, rev: selection.outlineRev };
+    }
+    normalizedOutline = selection.regenerating.length
+      ? clearFeedback(validated.outline, selection.regenerating.map((block) => block.blockId))
+      : validated.outline;
+    outlineJsonProvided = true;
+  }
+
+  // 只给 outlineJson 时服务器生成 Markdown（JSON 为准）。
+  let markdownToWrite: string | null = null;
+  let writeOutline = outlineProvided;
+  if (outlineJsonProvided && !outlineProvided) {
+    markdownToWrite = outlineToMarkdown(normalizedOutline as OutlineV01);
+    writeOutline = true;
+  } else if (outlineProvided) {
+    markdownToWrite = newOutline;
+  }
+
+  const hasOutline = (markdownToWrite ?? "").trim().length > 0 || selection.outlineMd.trim().length > 0;
   const rule = assistantStatusRule(selection.status, nextStatus, hasOutline);
   if (!rule.ok) {
     const status = rule.code === "owner_only" ? 403 : rule.code === "not_selected" || rule.code === "shelved" ? 409 : 422;
@@ -405,13 +643,26 @@ export async function updateBriefPipeline(
     sets.push("status_by = ?", "status_at = ?");
     binds.push(input.actorName, timestamp);
   }
-  if (outlineProvided) {
+  if (outlineJsonProvided) {
+    sets.push("outline_json = ?", "outline_rev = outline_rev + 1", "outline_regen_json = '[]'");
+    binds.push(JSON.stringify(normalizedOutline));
+  }
+  if (writeOutline) {
     sets.push("outline_md = ?", "outline_by = ?", "outline_at = ?");
-    binds.push(newOutline, input.actorName, timestamp);
+    binds.push(markdownToWrite ?? "", input.actorName, timestamp);
   }
   sets.push("updated_at = ?");
   binds.push(timestamp, input.date, input.topicId);
-  await env.DB.prepare(`UPDATE brief_selections SET ${sets.join(", ")} WHERE date = ? AND topic_id = ?`).bind(...binds).run();
+  let sql = `UPDATE brief_selections SET ${sets.join(", ")} WHERE date = ? AND topic_id = ?`;
+  if (outlineJsonProvided) {
+    sql += " AND outline_rev = ?";
+    binds.push(selection.outlineRev);
+  }
+  const result = await env.DB.prepare(sql).bind(...binds).run();
+  if (outlineJsonProvided && Number(result.meta?.changes ?? 0) === 0) {
+    const latest = await getSelection(env, input.date, input.topicId);
+    return { ok: false, status: 409, error: "rev_conflict", rev: latest?.outlineRev ?? selection.outlineRev };
+  }
 
   const updated = await getSelection(env, input.date, input.topicId);
   if (!updated) return { ok: false, status: 500, error: "保存失败" };

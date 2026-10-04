@@ -1,5 +1,7 @@
 // Shared client-side state for the daily brief reply form.
 
+import type { OutlineV01 } from "../../../lib/outline-core";
+
 export type ResponseState = {
   rating: number | null;
   ratingComment: string;
@@ -35,6 +37,9 @@ export type BriefSelection = {
   status: string;
   statusLabel: string;
   outlineMd: string;
+  outlineJson: OutlineV01 | null;
+  outlineRev: number;
+  regenerating: { blockId: string; suggestion: string }[];
   outlineBy: string;
   outlineAt: string | null;
   statusBy: string;

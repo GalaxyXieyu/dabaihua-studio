@@ -1,0 +1,743 @@
+/* 结构化大纲编辑器（outline/v0.1）的样式。选择器都以 .ol- 开头，沿用站点杂志风变量。 */
+
+.ol-editor {
+  --ol-gold: #BA9500;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ol-block {
+  position: relative;
+  min-width: 0;
+}
+
+/* ── 块头 ─────────────────────────────────────────────── */
+.ol-block-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-bottom: 6px;
+}
+
+.ol-block-label {
+  color: var(--faint);
+  font-size: 12px;
+  letter-spacing: .12em;
+}
+
+.ol-block-head-spacer {
+  flex: 1 1 auto;
+}
+
+.ol-badge {
+  padding: 0 6px;
+  color: var(--accent);
+  background: var(--accent-wash);
+  border-radius: var(--r-pill);
+  font-size: 10px;
+  letter-spacing: .04em;
+}
+
+.ol-badge.is-locked {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent);
+  background: var(--accent-wash);
+  border: 0;
+}
+
+.ol-badge.is-locked::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  background: var(--accent);
+  border-radius: 50%;
+  animation: ol-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes ol-pulse {
+  0%,
+  100% {
+    opacity: .35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.ol-text-btn {
+  padding: 0;
+  color: var(--accent);
+  background: transparent;
+  border: 0;
+  font-size: 12px;
+  letter-spacing: .02em;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ol-text-btn:hover:not(:disabled) {
+  color: var(--ink);
+}
+
+.ol-text-btn:disabled {
+  color: var(--faint);
+  text-decoration: none;
+}
+
+/* ── 头部块：meta + 保存指示 + 整份重生成 ─────────────── */
+.ol-head {
+  padding: 10px 12px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+}
+
+.ol-head-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 10px;
+}
+
+.ol-head-identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.ol-head-regen {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ol-meta {
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.ol-conflict {
+  margin-top: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  background: var(--accent-wash);
+  border-left: 2px solid var(--accent);
+}
+
+.ol-conflict-text {
+  color: var(--accent);
+  font-size: 12px;
+}
+
+/* ── 建议输入 ─────────────────────────────────────────── */
+.ol-suggest {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 3px 4px 3px 8px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+}
+
+.ol-suggest-always {
+  margin-top: 0;
+}
+
+.ol-suggest-label {
+  flex: 0 0 auto;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.ol-suggest-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 4px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  font-size: 13px;
+}
+
+.ol-suggest-input:focus,
+.ol-suggest-input:focus-visible {
+  outline: none;
+}
+
+.ol-locked-hint {
+  margin: 6px 0 0;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+/* ── chip ─────────────────────────────────────────────── */
+.ol-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ol-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  font-family: var(--font-serif);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.ol-chip:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+
+.ol-chip.is-on {
+  border-color: var(--ol-gold);
+}
+
+.ol-chip:disabled {
+  opacity: .55;
+}
+
+.ol-dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  background: var(--ol-gold);
+  border-radius: 50%;
+}
+
+.ol-default-tag {
+  color: var(--faint);
+  font-family: var(--font-sans);
+  font-size: 10px;
+}
+
+/* ── 行内可编辑正文 ───────────────────────────────────── */
+.ol-core,
+.ol-body,
+.ol-answer,
+.ol-point-text {
+  display: block;
+  width: 100%;
+  padding: 2px 0;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  font-family: var(--font-serif);
+  font-size: 16px;
+  line-height: 1.75;
+  resize: none;
+  overflow: hidden;
+  transition: border-color 150ms ease;
+}
+
+.ol-core {
+  font-size: 17px;
+}
+
+.ol-core:focus,
+.ol-body:focus,
+.ol-answer:focus,
+.ol-point-text:focus,
+.ol-core:focus-visible,
+.ol-body:focus-visible,
+.ol-answer:focus-visible,
+.ol-point-text:focus-visible {
+  outline: none;
+  border-bottom-color: var(--ol-gold);
+}
+
+.ol-input {
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 10px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+  font-family: var(--font-serif);
+  font-size: 14px;
+}
+
+/* ── 开头分段按钮 ─────────────────────────────────────── */
+.ol-seg {
+  display: inline-flex;
+  margin-bottom: 8px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+}
+
+.ol-seg-btn {
+  padding: 3px 12px;
+  color: var(--muted);
+  background: var(--paper);
+  border: 0;
+  font-family: var(--font-serif);
+  font-size: 13px;
+}
+
+.ol-seg-btn.is-on {
+  color: var(--ink);
+  background: var(--accent-wash);
+}
+
+.ol-sources {
+  margin: 6px 0 0;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+/* ── 小节卡片 ─────────────────────────────────────────── */
+.ol-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ol-section-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 金色插入线画在包裹层（小节卡片 + 它的图）的上沿或下沿。 */
+.ol-section-wrap[data-drop="before"] {
+  box-shadow: 0 -2px 0 var(--ol-gold);
+}
+
+.ol-section-wrap[data-drop="after"] {
+  box-shadow: 0 2px 0 var(--ol-gold);
+}
+
+.ol-card {
+  position: relative;
+  padding: 12px 14px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--ol-gold);
+  border-radius: var(--r-xs);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, .03);
+}
+
+.ol-card.is-off {
+  border-left-color: var(--line);
+  opacity: .6;
+}
+
+.ol-card.is-off .ol-section-title {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.ol-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ol-num {
+  flex: 0 0 auto;
+  color: var(--ol-gold);
+  font-family: var(--font-serif);
+  font-size: 15px;
+}
+
+.ol-section-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 2px 0;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.ol-section-title:focus,
+.ol-section-title:focus-visible {
+  outline: none;
+  border-bottom-color: var(--ol-gold);
+}
+
+.ol-card-tools {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+/* 「勾掉」与「不好，重新生成」之间留 12px，桌面与窄屏一致。 */
+.ol-card-tools .ol-text-btn ~ .ol-text-btn {
+  margin-left: 12px;
+}
+
+.ol-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-xs);
+}
+
+.ol-icon-btn:hover:not(:disabled) {
+  color: var(--ink);
+  border-color: var(--line);
+}
+
+.ol-icon-btn:disabled {
+  opacity: .4;
+}
+
+.ol-handle {
+  cursor: grab;
+}
+
+.ol-strike {
+  margin-left: 4px;
+}
+
+.ol-points {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ol-point {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.ol-point::before {
+  content: "\00b7";
+  color: var(--ol-gold);
+  line-height: 1.9;
+}
+
+.ol-point-text {
+  flex: 1 1 auto;
+  font-size: 15px;
+}
+
+.ol-point-delete {
+  flex: 0 0 auto;
+  margin-top: 6px;
+}
+
+.ol-add-point {
+  margin-top: 6px;
+}
+
+/* ── 配图 ─────────────────────────────────────────────── */
+.ol-diagram {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-left: 14px;
+  padding: 10px 12px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+}
+
+.ol-diagram.is-redo {
+  border-color: var(--ol-gold);
+}
+
+.ol-fig-badge {
+  padding: 0 4px;
+  color: var(--ol-gold);
+  border: 1px solid var(--ol-gold);
+  border-radius: var(--r-xs);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+}
+
+.ol-diagram-status {
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.ol-diagram-status.is-draft {
+  color: var(--faint);
+}
+
+.ol-diagram-status.is-ok {
+  color: var(--ol-gold);
+}
+
+.ol-diagram-status.is-redo {
+  color: var(--accent);
+}
+
+.ol-diagram-toggle {
+  padding: 1px 8px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.ol-mermaid {
+  padding: 8px;
+  overflow-x: auto;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+}
+
+.ol-mermaid-svg svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+
+.ol-mermaid-placeholder {
+  height: 80px;
+  background: var(--accent-wash);
+  border-radius: var(--r-xs);
+  opacity: .5;
+}
+
+.ol-mermaid-source {
+  margin: 0;
+  overflow-x: auto;
+  font-size: 12px;
+}
+
+.ol-caption {
+  color: var(--muted);
+  font-family: var(--font-serif);
+  font-size: 13px;
+  font-style: italic;
+}
+
+/* ── 问题 ─────────────────────────────────────────────── */
+.ol-questions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ol-question-text {
+  margin: 0 0 6px;
+  font-family: var(--font-serif);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ol-question-resolved {
+  margin: 6px 0 0;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+/* ── 素材 ─────────────────────────────────────────────── */
+.ol-material-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ol-material {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.ol-material::before {
+  content: "\00b7";
+  margin-right: 6px;
+  color: var(--ol-gold);
+}
+
+/* ── 重写中：淡一点 + 慢扫光 ──────────────────────────── */
+.ol-block[data-locked="true"],
+.ol-diagram[data-locked="true"] {
+  overflow: hidden;
+  opacity: .72;
+}
+
+.ol-block[data-locked="true"]::after,
+.ol-diagram[data-locked="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(100deg, transparent 30%, rgba(186, 149, 0, .1) 50%, transparent 70%);
+  background-size: 220% 100%;
+  animation: ol-sweep 2.8s linear infinite;
+}
+
+@keyframes ol-sweep {
+  0% {
+    background-position: 140% 0;
+  }
+  100% {
+    background-position: -40% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ol-block[data-locked="true"]::after,
+  .ol-diagram[data-locked="true"]::after {
+    animation: none;
+  }
+
+  .ol-badge.is-locked::before {
+    animation: none;
+  }
+}
+
+/* ── 底部粘性栏（在 .db-actionbar 内） ────────────────── */
+.ol-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xs);
+}
+
+.ol-bar-feedback {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+.ol-bar-count {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ol-bar-hint {
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.ol-bar-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ol-bar-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 4px 1px 8px;
+  background: var(--accent-wash);
+  border-radius: var(--r-pill);
+  font-size: 12px;
+}
+
+.ol-bar-chip-clear {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.ol-bar-rewriting {
+  color: var(--accent);
+  font-size: 12px;
+}
+
+.ol-bar-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+}
+
+.ol-bar-error {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+/* ── 窄屏 ─────────────────────────────────────────────── */
+@media (max-width: 760px) {
+  /* 第一行始终是「编号 + 标题」，操作组独占第二行右对齐。 */
+  .ol-card-head {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    row-gap: 6px;
+  }
+
+  .ol-card-tools {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+    margin-top: 4px;
+  }
+
+  .ol-bar-actions {
+    flex: 1 1 100%;
+  }
+
+  .ol-bar-actions .db-btn {
+    flex: 1 1 0;
+  }
+
+  .ol-bar-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 520px) {
+  .ol-section-title {
+    font-size: 15px;
+  }
+
+  .ol-diagram {
+    margin-left: 6px;
+  }
+}

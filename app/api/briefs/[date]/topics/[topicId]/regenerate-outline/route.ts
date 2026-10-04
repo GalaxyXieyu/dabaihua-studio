@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { assertSameOrigin, authenticateApiKey, getSessionUser, type SessionUser } from "../../../../../../../lib/auth";
 import { isValidBriefDate } from "../../../../../../../lib/daily-brief-core";
-import { confirmBriefOutline } from "../../../../../../../lib/brief-pipeline";
+import { regenerateBriefOutline } from "../../../../../../../lib/brief-pipeline";
 import { publicBaseUrl } from "../../../../../../../lib/weekly";
 
 type Params = { params: Promise<{ date: string; topicId: string }> };
@@ -30,7 +30,10 @@ async function authorize(request: Request, write: boolean): Promise<{ user: Sess
   return { user };
 }
 
-/** 确认大纲（仅 outline_pending 且有 JSON 或 Markdown）→ drafting + confirm_outline 通知。 */
+/**
+ * Yu 点「按建议重生成」：可选带上最新 outlineJson，登记重写中的 blocks，
+ * 并给漱芳斋发 regenerate_outline 通知。
+ */
 export async function POST(request: Request, { params }: Params) {
   const { date, topicId } = await params;
   const auth = await authorize(request, true);
@@ -42,12 +45,13 @@ export async function POST(request: Request, { params }: Params) {
   const body =
     parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
 
-  const result = await confirmBriefOutline(env, {
+  const result = await regenerateBriefOutline(env, {
     date,
     topicId,
-    baseUrl: publicBaseUrl(env, request),
     outlineJson: body ? body.outlineJson : undefined,
     baseRev: body ? body.baseRev : undefined,
+    blocks: body ? body.blocks : undefined,
+    baseUrl: publicBaseUrl(env, request),
   });
   if (!result.ok) {
     const errorBody: Record<string, unknown> = { error: result.error };

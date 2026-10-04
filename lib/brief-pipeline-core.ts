@@ -1,6 +1,8 @@
 // 简报生产管线（brief → 漱芳斋）的纯函数与常量。
 // 只依赖类型/纯模块，import 带 .ts 后缀，便于 node 的类型擦除测试直接加载。
 
+import type { OutlineV01 } from "./outline-core.ts";
+
 /** 管线状态（按流程顺序）。数据库只存 code，展示只看 label。 */
 export const PIPELINE_STATUSES = [
   "selected",
@@ -27,8 +29,8 @@ export const PIPELINE_LABELS: Record<PipelineStatus, string> = {
   shelved: "搁置",
 };
 
-/** 通知事件：选题、确认大纲、撤销。 */
-export const PIPELINE_NOTIFY_EVENTS = ["select", "confirm_outline", "cancel"] as const;
+/** 通知事件：选题、确认大纲、撤销、按建议重生成。 */
+export const PIPELINE_NOTIFY_EVENTS = ["select", "confirm_outline", "cancel", "regenerate_outline"] as const;
 export type PipelineNotifyEvent = (typeof PIPELINE_NOTIFY_EVENTS)[number];
 
 /** 通知状态。 */
@@ -72,6 +74,9 @@ export type NotifyPayload = {
   scenario: NotifyScenario;
   answers: NotifyAnswer[];
   outline: string | null;
+  outlineJson?: OutlineV01 | null;
+  baseRev?: number;
+  blocks?: { blockId: string; suggestion: string }[];
   status: { code: string; label: string };
   boardTopicId: number | null;
   links: { topic: string; board: string };
@@ -97,6 +102,9 @@ export type BuildNotifyPayloadInput = {
   scenarioCustom?: string;
   answers?: string[];
   outline?: string | null;
+  outlineJson?: OutlineV01 | null;
+  baseRev?: number;
+  blocks?: { blockId: string; suggestion: string }[];
   status: string;
   boardTopicId?: number | null;
   baseUrl: string;
@@ -146,7 +154,7 @@ export function buildNotifyPayload(input: BuildNotifyPayloadInput): NotifyPayloa
   const boardTopicId =
     typeof input.boardTopicId === "number" && Number.isInteger(input.boardTopicId) ? input.boardTopicId : null;
   const status = parsePipelineStatus(input.status) ?? input.status;
-  return {
+  const payload: NotifyPayload = {
     protocol: "dabaihua.brief-notify/v1",
     event: input.event,
     eventId: input.eventId,
@@ -173,6 +181,16 @@ export function buildNotifyPayload(input: BuildNotifyPayloadInput): NotifyPayloa
           : `${base}/content?view=board&card=${boardTopicId}`,
     },
   };
+  // select / cancel 保持原样；confirm_outline 有 JSON 时补上；regenerate_outline 一定带上。
+  if (input.event === "regenerate_outline") {
+    payload.blocks = Array.isArray(input.blocks) ? input.blocks : [];
+    payload.outlineJson = input.outlineJson ?? null;
+    if (typeof input.baseRev === "number" && Number.isInteger(input.baseRev)) payload.baseRev = input.baseRev;
+  } else if (input.event === "confirm_outline" && input.outlineJson) {
+    payload.outlineJson = input.outlineJson;
+    if (typeof input.baseRev === "number" && Number.isInteger(input.baseRev)) payload.baseRev = input.baseRev;
+  }
+  return payload;
 }
 
 export type AssistantRuleCode =

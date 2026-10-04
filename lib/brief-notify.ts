@@ -10,6 +10,7 @@ import {
   type PipelineNotifyEvent,
   type PipelineNotifyState,
 } from "./brief-pipeline-core.ts";
+import type { OutlineV01 } from "./outline-core.ts";
 
 export type BriefNotifyEnv = {
   DB: D1Database;
@@ -28,6 +29,9 @@ export type BriefNotifyInput = {
   scenarioCustom?: string;
   answers?: string[];
   outline?: string | null;
+  outlineJson?: OutlineV01 | null;
+  baseRev?: number;
+  blocks?: { blockId: string; suggestion: string }[];
   status: string;
   boardTopicId?: number | null;
   baseUrl: string;
@@ -137,6 +141,9 @@ export async function deliverBriefNotification(
     scenarioCustom: input.scenarioCustom,
     answers: input.answers,
     outline: input.outline,
+    outlineJson: input.outlineJson,
+    baseRev: input.baseRev,
+    blocks: input.blocks,
     status: input.status,
     boardTopicId: input.boardTopicId,
     baseUrl: input.baseUrl,

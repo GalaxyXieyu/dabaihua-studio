@@ -1,5 +1,30 @@
 import type { ResponseState } from "./brief-types";
 
+/**
+ * `2026-10-03T21:10:00+08:00` → `10月3日 21:10`。
+ * 带 `Z` 或 `±hh:mm` 偏移的时间先换算成 Asia/Shanghai（固定 +8，不依赖运行环境时区）
+ * 再格式化；不带时区的保持原来的截取逻辑；解析不了原样返回。
+ */
+export function shortMoment(value: string | null): string {
+  if (!value) return "";
+  const match = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::\d{2}(?:\.\d+)?)?(Z|[+-]\d{2}:\d{2})?$/.exec(value);
+  if (!match) return value;
+  const [, year, month, day, hour, minute, timezone] = match;
+  if (!timezone) {
+    // 没有时区信息：保持原来的字符串截取，不假设任何时区。
+    return `${Number(month)}月${Number(day)}日 ${hour}:${minute}`;
+  }
+  const offsetMinutes =
+    timezone === "Z"
+      ? 0
+      : (timezone[0] === "+" ? 1 : -1) * (Number(timezone.slice(1, 3)) * 60 + Number(timezone.slice(4, 6)));
+  const utcMs = Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute)) - offsetMinutes * 60000;
+  const beijing = new Date(utcMs + 8 * 60 * 60000);
+  const beijingHour = String(beijing.getUTCHours()).padStart(2, "0");
+  const beijingMinute = String(beijing.getUTCMinutes()).padStart(2, "0");
+  return `${beijing.getUTCMonth() + 1}月${beijing.getUTCDate()}日 ${beijingHour}:${beijingMinute}`;
+}
+
 /** 与 mini-markdown 的标题规则一致：# 到 ###### 后跟空白。 */
 const DUPLICATE_OUTLINE_HEADING = /^#{1,6}\s+大纲\s*$/;
 

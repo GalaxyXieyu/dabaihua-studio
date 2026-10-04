@@ -1,8 +1,7 @@
 import { env } from "cloudflare:workers";
 import { assertSameOrigin, authenticateApiKey, getSessionUser, type SessionUser } from "../../../../../../../lib/auth";
 import { isValidBriefDate } from "../../../../../../../lib/daily-brief-core";
-import { confirmBriefOutline } from "../../../../../../../lib/brief-pipeline";
-import { publicBaseUrl } from "../../../../../../../lib/weekly";
+import { saveOutlineDraft } from "../../../../../../../lib/brief-pipeline";
 
 type Params = { params: Promise<{ date: string; topicId: string }> };
 
@@ -30,8 +29,11 @@ async function authorize(request: Request, write: boolean): Promise<{ user: Sess
   return { user };
 }
 
-/** 确认大纲（仅 outline_pending 且有 JSON 或 Markdown）→ drafting + confirm_outline 通知。 */
-export async function POST(request: Request, { params }: Params) {
+/**
+ * Yu 页面侧自动保存 outlineJson：只更新 JSON（rev 条件更新），保留 feedback，
+ * 不动 Markdown、不发通知、不改 outline_by。
+ */
+export async function PUT(request: Request, { params }: Params) {
   const { date, topicId } = await params;
   const auth = await authorize(request, true);
   if (auth instanceof Response) return auth;
@@ -42,10 +44,9 @@ export async function POST(request: Request, { params }: Params) {
   const body =
     parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : null;
 
-  const result = await confirmBriefOutline(env, {
+  const result = await saveOutlineDraft(env, {
     date,
     topicId,
-    baseUrl: publicBaseUrl(env, request),
     outlineJson: body ? body.outlineJson : undefined,
     baseRev: body ? body.baseRev : undefined,
   });
@@ -55,5 +56,5 @@ export async function POST(request: Request, { params }: Params) {
     if (result.rev !== undefined) errorBody.rev = result.rev;
     return json(errorBody, result.status);
   }
-  return json({ selection: result.selection, notify: result.notify });
+  return json({ selection: result.selection });
 }

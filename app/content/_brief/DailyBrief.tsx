@@ -135,6 +135,9 @@ function optimisticSelection(topicId: string): BriefSelection {
     status: "selected",
     statusLabel: PIPELINE_LABELS.selected,
     outlineMd: "",
+    outlineJson: null,
+    outlineRev: 0,
+    regenerating: [],
     outlineBy: "",
     outlineAt: null,
     statusBy: "Yu",
@@ -652,10 +655,12 @@ export function DailyBrief({
         onSelect={selectNow}
         onUndoSelection={undoSelection}
         onConfirmOutline={confirmOutline}
+        onSelection={(next) => applySelection(topic.id, next)}
         onNotifyRetry={retryNotify}
         rejectOpen={tray === "reject"}
         onRejectToggle={(open) => setTray(open ? "reject" : null)}
         onSave={save}
+        date={date}
       />
     );
   }

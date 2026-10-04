@@ -162,6 +162,13 @@
       "when": 1791249600000,
       "tag": "0022_brief_pipeline",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1791336000000,
+      "tag": "0023_outline_structured",
+      "breakpoints": true
     }
   ]
 }

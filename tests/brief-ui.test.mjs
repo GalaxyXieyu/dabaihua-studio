@@ -10,6 +10,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import {
   hasDecisionContent,
+  shortMoment,
   stripDuplicateOutlineHeading,
 } from "../app/content/_brief/detail-helpers.ts";
 
@@ -19,6 +20,7 @@ function read(path) {
 
 const dailyBrief = read("../app/content/_brief/DailyBrief.tsx");
 const topicDetail = read("../app/content/_brief/TopicDetail.tsx");
+const editor = read("../app/content/_brief/OutlineEditor.tsx");
 const topicList = read("../app/content/_brief/TopicList.tsx");
 const briefTypes = read("../app/content/_brief/brief-types.ts");
 const contentPage = read("../app/content/page.tsx");
@@ -174,4 +176,24 @@ test("brief: 决策结果没有内容时不渲染空条", () => {
   // 区块由内容决定，不再只看 picked/rejected。
   assert.match(topicDetail, /hasDecisionContent\(state\)/);
   assert.match(topicDetail, /showDecisionResult &&/);
+});
+
+test("brief: shortMoment 带时区时换算成北京时间", () => {
+  // Z 输入：UTC 07:15 → 北京时间 15:15。
+  assert.equal(shortMoment("2026-10-04T07:15:00.000Z"), "10月4日 15:15");
+  // ±hh:mm 偏移：+08:00 已是北京时间，原样展示。
+  assert.equal(shortMoment("2026-10-03T21:10:00+08:00"), "10月3日 21:10");
+  // 跨日：UTC 18:30 → 北京时间次日 02:30。
+  assert.equal(shortMoment("2026-10-04T18:30:00Z"), "10月5日 02:30");
+  // 不带时区的保持原来的字符串截取。
+  assert.equal(shortMoment("2026-10-03T21:10:00"), "10月3日 21:10");
+  assert.equal(shortMoment("2026-10-03 21:10"), "10月3日 21:10");
+  // 空值与乱字符串原样返回。
+  assert.equal(shortMoment(null), "");
+  assert.equal(shortMoment(""), "");
+  assert.equal(shortMoment("not-a-time"), "not-a-time");
+  // TopicDetail（目的地条、Markdown 大纲 meta）与 OutlineEditor 头部 meta 都用它。
+  assert.match(topicDetail, /import \{[^}]*shortMoment[^}]*\} from "\.\/detail-helpers"/);
+  assert.doesNotMatch(topicDetail, /function shortMoment/);
+  assert.match(editor, /shortMoment\(selection\.outlineAt\)/);
 });

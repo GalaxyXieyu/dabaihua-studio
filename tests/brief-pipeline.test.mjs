@@ -44,7 +44,7 @@ test("pipeline statuses: exactly eight codes in order, labels defined once, pars
     ["selected", "outline_pending", "drafting", "pending_review", "reviewing", "typesetting", "published", "shelved"],
   );
   assert.deepEqual(Object.values(PIPELINE_LABELS), ["已选", "大纲待确认", "写稿中", "待审", "审稿中", "排版中", "已发", "搁置"]);
-  assert.deepEqual([...PIPELINE_NOTIFY_EVENTS], ["select", "confirm_outline", "cancel"]);
+  assert.deepEqual([...PIPELINE_NOTIFY_EVENTS], ["select", "confirm_outline", "cancel", "regenerate_outline"]);
 
   for (const code of PIPELINE_STATUSES) assert.equal(parsePipelineStatus(code), code);
   assert.equal(parsePipelineStatus("已选"), "selected");

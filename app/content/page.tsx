@@ -18,6 +18,7 @@ import { ContentSwitchBar, type ContentCounts, type ContentView } from "./_compo
 import { DailyBrief } from "./_brief/DailyBrief";
 import "./content.css";
 import "./_brief/daily-brief.css";
+import "./_brief/outline-editor.css";
 import "../topics/topics.css";
 import "../articles/articles.css";
 

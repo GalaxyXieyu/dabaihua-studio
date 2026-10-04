@@ -93,7 +93,14 @@ export async function PATCH(request: Request, { params }: Params) {
     actorName: auth.kind === "assistant" ? auth.name : "Yu",
     status: body ? body.status : undefined,
     outline: body ? body.outline : undefined,
+    outlineJson: body ? body.outlineJson : undefined,
+    baseRev: body ? body.baseRev : undefined,
   });
-  if (!result.ok) return json({ error: result.error }, result.status);
+  if (!result.ok) {
+    const errorBody: Record<string, unknown> = { error: result.error };
+    if (result.field) errorBody.field = result.field;
+    if (result.rev !== undefined) errorBody.rev = result.rev;
+    return json(errorBody, result.status);
+  }
   return json({ selection: result.selection });
 }

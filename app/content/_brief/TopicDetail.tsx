@@ -6,8 +6,10 @@ import { PIPELINE_LABELS, type PipelineStatus } from "../../../lib/brief-pipelin
 import type { MaterialView } from "../../../lib/brief-view";
 import { MiniMarkdown } from "./mini-markdown";
 import { MaterialItem } from "./MaterialItem";
-import { hasDecisionContent, stripDuplicateOutlineHeading } from "./detail-helpers";
+import { hasDecisionContent, shortMoment, stripDuplicateOutlineHeading } from "./detail-helpers";
 import type { AutosaveStatus, BriefSelection, ResponseState } from "./brief-types";
+import { OutlineBar, OutlineEditor } from "./OutlineEditor";
+import { useOutlineDraft } from "./use-outline-draft";
 
 const STARS = [1, 2, 3, 4, 5];
 const STAR = "\u2605";
@@ -36,10 +38,12 @@ type Props = {
   onSelect: (topicId: string) => void;
   onUndoSelection: (topicId: string) => void;
   onConfirmOutline: (topicId: string) => void;
+  onSelection: (selection: BriefSelection) => void;
   onNotifyRetry: (topicId: string) => void;
   rejectOpen: boolean;
   onRejectToggle: (open: boolean) => void;
   onSave: (topicId: string, patch: Record<string, unknown>, optimistic: Partial<ResponseState>) => Promise<void>;
+  date: string;
 };
 
 /** 管线状态 code → 展示标签，退回到后端给的 label。 */
@@ -47,14 +51,6 @@ function pipelineLabel(selection: BriefSelection): string {
   const label = PIPELINE_LABELS[selection.status as PipelineStatus];
   if (label) return label;
   return selection.statusLabel || selection.status;
-}
-
-/** `2026-10-03T21:10:00+08:00` → `10月3日 21:10`；解析不了就原样返回。 */
-function shortMoment(value: string | null): string {
-  if (!value) return "";
-  const match = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(value);
-  if (!match) return value;
-  return `${Number(match[2])}月${Number(match[3])}日 ${match[4]}:${match[5]}`;
 }
 
 function scenarioSource(topic: DailyBrief["topics"][number], index: number): string {
@@ -204,15 +200,21 @@ export function TopicDetail({
   onSelect,
   onUndoSelection,
   onConfirmOutline,
+  onSelection,
   onNotifyRetry,
   rejectOpen,
   onRejectToggle,
   onSave,
+  date,
 }: Props) {
   const [comment, setComment] = useState(state.ratingComment);
   const [rejectReason, setRejectReason] = useState(state.rejectReason);
   // 「都不是，我自己说」的展开态是纯 UI 状态，文本本身走自动保存。
   const [customOpen, setCustomOpen] = useState(() => state.scenarioCustom.trim().length > 0);
+
+  // 结构化大纲编辑器只在 outline_pending 且有 outlineJson 时接管；其余走旧 Markdown 视图。
+  const structuredOutline = Boolean(selection && selection.status === "outline_pending" && selection.outlineJson);
+  const outlineDraft = useOutlineDraft({ date, topicId: topic.id, selection, onSelection });
 
   const picked = state.decision === "pick";
   const rejected = state.decision === "reject";
@@ -295,7 +297,10 @@ export function TopicDetail({
       </header>
 
       {selection && <DestinationStrip selection={selection} onNotifyRetry={() => onNotifyRetry(topic.id)} busy={selectionBusy} />}
-      {selection && <OutlineSection selection={selection} busy={selectionBusy} onConfirm={() => onConfirmOutline(topic.id)} />}
+      {selection && !structuredOutline && (
+        <OutlineSection selection={selection} busy={selectionBusy} onConfirm={() => onConfirmOutline(topic.id)} />
+      )}
+      {selection && structuredOutline && <OutlineEditor draft={outlineDraft} selection={selection} />}
 
       {showDecisionResult && (
         <section className="db-decision-result" data-testid="brief-status" data-decision={state.decision || ""}>
@@ -450,6 +455,7 @@ export function TopicDetail({
       </div>
 
       <div className="db-actionbar">
+        {selection && structuredOutline && <OutlineBar draft={outlineDraft} selection={selection} />}
         {rejectOpen && (
           <div
             className="db-tray"
