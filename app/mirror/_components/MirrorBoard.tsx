@@ -133,7 +133,8 @@ export function MirrorBoard({
   }, [entries, decidedEntries]);
 
   // 小椭圆章（GROWTH_NAMES.mirror）：卡片区写操作成功后当场盖一次（规范 8.5/8.6）
-  const mirrorStamp = useInPageStamp({ kind: "tuoyuan", actorId: "seal-actor-mirror", size: 48 });
+  // 只解构 stamp：useInPageStamp 每次渲染都返回新对象，整个对象进依赖数组会让回调天天重建
+  const { stamp: mirrorStampFn } = useInPageStamp({ kind: "tuoyuan", actorId: "seal-actor-mirror", size: 48 });
 
   // sealKey 可选：成功提示文字前带一枚 24px 印位（先 pending，由播放器盖成 stamped）
   const notify = useCallback((text: string, undo?: () => void, duration = 6000, sealKey?: string) => {
@@ -248,9 +249,9 @@ export function MirrorBoard({
       notify(text(result), undo ? () => void withUndo(undo)(result) : undefined, undo ? 6000 : 4000, sealKey);
       // 印位随 toast 渲染（pending）：等一帧让它先进 DOM，再交给播放器盖成 stamped；
       // 不阻塞主流程，任何异常都由 hook 自己吞掉
-      if (sealKey) window.setTimeout(() => { void mirrorStamp.stamp({ key: sealKey, slotId: slotId(sealKey) }); }, 50);
+      if (sealKey) window.setTimeout(() => { void mirrorStampFn({ key: sealKey, slotId: slotId(sealKey) }); }, 50);
     },
-    [notify, withUndo, mirrorStamp.stamp],
+    [notify, withUndo, mirrorStampFn],
   );
 
   const runSimple = useCallback(

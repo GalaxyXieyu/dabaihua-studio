@@ -159,12 +159,12 @@ export function useSealQueue(input: UseSealQueueInput) {
     persist((s) => skipAll(s, p));
   }, [persist]);
 
-  const onDone = useCallback((_summary: { stamped: number; skipped: boolean }): void => {
+  const onDone = useCallback((): void => {
     // 键都已在 onStamped / onMoment 里逐个写过，这里没有要写的
   }, []);
 
-  const onOverflow = useCallback((_n: number): void => {
-    // "还有 N 个" 由页面用返回值 overflow 自行渲染
+  const onOverflow = useCallback((): void => {
+    // “还有 N 个” 由页面用返回值 overflow 自行渲染
   }, []);
 
   const stageProps = useMemo<SealStageCallbacks>(

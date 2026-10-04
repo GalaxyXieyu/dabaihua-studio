@@ -130,7 +130,7 @@ test("MirrorBoard：盖章走 succeed/runSimple 的 seal 参数，undo 回调里
   // seal 参数可选地穿 succeed / runSimple，成功才生成 key 并延时盖章
   assert.match(MIRROR, /seal\?: \(result: WriteResult\) => string/, "succeed 的 seal 参数可选");
   assert.match(MIRROR, /const sealKey = seal\?\.\(result\)/, "成功后由 seal 函数生成 key");
-  assert.match(MIRROR, /if \(sealKey\) window\.setTimeout\(\(\) => \{ void mirrorStamp\.stamp\(\{ key: sealKey, slotId: slotId\(sealKey\) \}\); \}, 50\)/, "盖章带 slotId 且不阻塞");
+  assert.match(MIRROR, /if \(sealKey\) window\.setTimeout\(\(\) => \{ void mirrorStampFn\(\{ key: sealKey, slotId: slotId\(sealKey\) \}\); \}, 50\)/, "盖章带 slotId 且不阻塞");
   // undo（withUndo）只 notify，不盖章
   const undoAt = MIRROR.indexOf("const withUndo = ");
   const undoEnd = MIRROR.indexOf("const succeed = ", undoAt);

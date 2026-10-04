@@ -5,7 +5,7 @@
 // SealStage 用 lazy 按需加载，没有新事件时不加载那个 chunk（规范 11.3）。
 // 跳过/打断的监听都在 SealStage 和 useSealQueue 里，本组件不另外监听。
 import { lazy } from "react";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { useSealQueue } from "./useSealQueue.ts";
 import { usePauseWhenHidden } from "./usePauseWhenHidden.ts";
@@ -20,6 +20,11 @@ const SealStage = lazy(() => import("./SealStage"));
 
 const ACTOR_ID = "seal-actor-today";
 const HINT_ID = "seal-hint-today";
+
+/** useSyncExternalStore 的空订阅：从不通知，客户端快照恒为 true */
+function noopSubscribe(): () => void {
+  return () => {};
+}
 
 export type TodaySealsProps = {
   days: SealDay[] | null;
@@ -54,8 +59,8 @@ export function TodaySeals({ days, generatedAt }: TodaySealsProps) {
 
   // "还有 N 个"：onOverflow 时显示，队列结束后保留（规范 7.4 第 5 条）
   const [overflowN, setOverflowN] = useState<number | null>(null);
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  // 客户端判定不走 effect setState：空订阅的 external store，服务端/水合前 false、客户端 true
+  const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
 
   // 角色姿态：ready 前不动；ready 后摆 plan.pose（offline / rest / idle / stamped）
   useEffect(() => {

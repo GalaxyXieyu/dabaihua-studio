@@ -17,10 +17,10 @@ npm run build && PORT=3100 bash scripts/serve-prod.sh start
 ## 2. 生成并上传假日报数据
 
 ```bash
-node scripts/seal-mock-daily.mjs > /tmp/seal-mock.json
+node scripts/seal-mock-daily.mjs > /tmp/seal-mock-daily.json
 curl -X PUT http://localhost:3100/api/daily/data \
   -H "x-import-token: $IMPORT_TOKEN" \
-  --data-binary @/tmp/seal-mock.json
+  --data-binary @/tmp/seal-mock-daily.json
 ```
 
 `IMPORT_TOKEN` 配在 `.wrangler/prod/prod.env`（gitignore 的 KEY=VALUE 文件）里，先 `source` 或手动 export 到当前 shell；没有就自己生成一个随机值填进去再重启服务。**不要把真实 token 写进任何文件。**
