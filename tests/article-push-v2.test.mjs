@@ -18,6 +18,7 @@ import {
   handleArticlePut,
   parseAssistantName,
   resolveArticlesOwnerId,
+  stageLabel,
   validatePushBody,
 } from "../lib/article-push.ts";
 
@@ -116,7 +117,7 @@ test("computeArticleHash reproduces every shared hash vector, old and new", asyn
   const vectors = JSON.parse(
     readFileSync(new URL("./fixtures/article-push/hash-vectors.json", import.meta.url), "utf8"),
   );
-  assert.equal(vectors.cases.length, 4);
+  assert.equal(vectors.cases.length, 6);
   for (const vector of vectors.cases) {
     const hash = await computeArticleHash({
       title: vector.body.title,
@@ -130,6 +131,8 @@ test("computeArticleHash reproduces every shared hash vector, old and new", asyn
       qaReport: vector.body.qaReport,
       boardTopicId: vector.body.boardTopicId,
       brief: vector.body.brief ? { date: vector.body.brief.date, topicId: vector.body.brief.topicId } : undefined,
+      stage: vector.body.stage,
+      covers: vector.body.covers,
     });
     assert.equal(hash, vector.contentHash, vector.name);
   }
@@ -430,6 +433,227 @@ test("topk_/session pushes without assistant keep the old behaviour", async () =
   const meta = JSON.parse(row.meta_json);
   assert.equal(meta.pushedBy, "owner");
   assert.equal(meta.assistant, undefined);
+});
+
+// ─── 阶段写回 stage（§4.2）────────────────────────
+
+test("stageLabel covers every stage branch", () => {
+  assert.equal(stageLabel("drafted"), "初稿完成");
+  assert.equal(stageLabel("drafted", 2), "初稿完成");
+  assert.equal(stageLabel("revised", 2), "已按第 2 轮改完");
+  assert.equal(stageLabel("rewritten", 3), "已按第 3 轮重写");
+  assert.equal(stageLabel("typeset"), "排版完成，待审");
+  assert.equal(stageLabel("typeset", 1), "已按第 1 轮改完排版");
+});
+
+test("validatePushBody validates stage with 422 invalid_stage", async () => {
+  const bad = async (stage) => {
+    const result = await validatePushBody("s", pushBody({ stage }));
+    assert.equal(result.code, "invalid_stage", JSON.stringify(stage));
+    assert.equal(result.status, 422);
+    return result;
+  };
+  assert.equal((await bad("x")).code, "invalid_stage");
+  await bad([]);
+  await bad({});
+  await bad({ name: "approved" });
+  await bad({ name: "revised" });
+  await bad({ name: "rewritten" });
+  await bad({ name: "drafted", round: 0 });
+  await bad({ name: "drafted", round: -1 });
+  await bad({ name: "drafted", round: 1.5 });
+  await bad({ name: "drafted", round: "3" });
+
+  assert.deepEqual((await validatePushBody("s", pushBody({ stage: { name: "revised", round: 2 } }))).stage, {
+    name: "revised",
+    round: 2,
+  });
+  assert.deepEqual((await validatePushBody("s", pushBody({ stage: { name: "typeset" } }))).stage, { name: "typeset" });
+  for (const blank of [undefined, null, ""]) {
+    const skipped = await validatePushBody("s", pushBody({ stage: blank }));
+    assert.equal(skipped.stage, undefined);
+  }
+});
+
+test("stage with round requires that review round to be submitted", async () => {
+  const { sqlite, db, assets } = setup();
+  const userA = addUser(sqlite, { account: "user-a", nickname: "A" });
+  const viewerA = { id: userA, role: "user" };
+  const deps = { db, assets };
+
+  // 新文章还没有审稿轮次：带 round 的阶段直接拒，不建文章。
+  const fresh = await put(deps, viewerA, "stage-a", pushBody({ markdown: "初稿", stage: { name: "revised", round: 1 } }));
+  assert.equal(fresh.status, 422);
+  assert.equal(fresh.json.code, "round_not_reviewed");
+  assert.equal(fresh.json.error, "第 1 轮还没有提交审稿");
+  assert.equal(rowOf(sqlite, "stage-a"), undefined);
+
+  await put(deps, viewerA, "stage-a", pushBody({ markdown: "初稿" }));
+  // review_round 默认 1（第 1 轮还没提交）：内容相同也拒。
+  const notReviewed = await put(deps, viewerA, "stage-a", pushBody({ markdown: "初稿", stage: { name: "revised", round: 1 } }), "2026-10-02T01:00:00.000Z");
+  assert.equal(notReviewed.status, 422);
+  assert.equal(notReviewed.json.code, "round_not_reviewed");
+  assert.equal(rowOf(sqlite, "stage-a").final_md, "初稿");
+
+  // 第 1 轮提交后 review_round 变成 2 → 通过。
+  sqlite.prepare("UPDATE articles SET review_round = 2 WHERE slug = ?").run("stage-a");
+  const ok = await put(deps, viewerA, "stage-a", pushBody({ markdown: "初稿", stage: { name: "revised", round: 1 } }), "2026-10-02T02:00:00.000Z");
+  assert.equal(ok.status, 200);
+  assert.equal(ok.json.result, "updated");
+
+  // 只写大于已审轮次的 round 仍拒。
+  const tooFar = await put(deps, viewerA, "stage-a", pushBody({ markdown: "初稿", stage: { name: "revised", round: 2 } }), "2026-10-02T03:00:00.000Z");
+  assert.equal(tooFar.status, 422);
+  assert.equal(tooFar.json.code, "round_not_reviewed");
+});
+
+test("stage push writes meta.stage and appends stageHistory", async () => {
+  const { sqlite, db, assets } = setup();
+  const owner = addUser(sqlite, { account: "owner@example.com", role: "admin" });
+  const ownerViewer = { id: owner, role: "admin" };
+  const deps = { db, assets };
+
+  await put(deps, ownerViewer, "stage-b", pushBody({ markdown: "初稿", stage: { name: "drafted" } }), "2026-10-02T01:00:00.000Z", "小燕子");
+  let meta = JSON.parse(rowOf(sqlite, "stage-b").meta_json);
+  assert.deepEqual(meta.stage, {
+    name: "drafted",
+    round: null,
+    label: "初稿完成",
+    assistant: "小燕子",
+    at: "2026-10-02T01:00:00.000Z",
+  });
+  assert.equal(meta.stageHistory.length, 1);
+  assert.deepEqual(meta.stageHistory[0], meta.stage);
+
+  sqlite.prepare("UPDATE articles SET review_round = 3 WHERE slug = ?").run("stage-b");
+  await put(deps, ownerViewer, "stage-b", pushBody({ markdown: "改完", stage: { name: "rewritten", round: 2 } }), "2026-10-02T02:00:00.000Z", "小燕子");
+  meta = JSON.parse(rowOf(sqlite, "stage-b").meta_json);
+  assert.equal(meta.stage.label, "已按第 2 轮重写");
+  assert.equal(meta.stage.round, 2);
+  assert.equal(meta.stageHistory.length, 2);
+  assert.equal(meta.stageHistory[0].label, "初稿完成");
+  assert.equal(meta.stageHistory[1].label, "已按第 2 轮重写");
+});
+
+test("push without stage keeps the old stageHistory but drops meta.stage", async () => {
+  const { sqlite, db, assets } = setup();
+  const userA = addUser(sqlite, { account: "user-a", nickname: "A" });
+  const viewerA = { id: userA, role: "user" };
+  const deps = { db, assets };
+
+  await put(deps, viewerA, "stage-c", pushBody({ markdown: "初稿", stage: { name: "drafted" } }));
+  const updated = await put(deps, viewerA, "stage-c", pushBody({ markdown: "改稿" }), "2026-10-02T01:00:00.000Z");
+  assert.equal(updated.json.result, "updated");
+  const meta = JSON.parse(rowOf(sqlite, "stage-c").meta_json);
+  assert.equal(meta.stage, undefined);
+  assert.equal(meta.stageHistory.length, 1);
+  assert.equal(meta.stageHistory[0].name, "drafted");
+});
+
+test("changing only the stage is not unchanged", async () => {
+  const { sqlite, db, assets } = setup();
+  const userA = addUser(sqlite, { account: "user-a", nickname: "A" });
+  const viewerA = { id: userA, role: "user" };
+  const deps = { db, assets };
+
+  await put(deps, viewerA, "stage-d", pushBody({ markdown: "初稿" }));
+  const before = rowOf(sqlite, "stage-d");
+  const staged = await put(deps, viewerA, "stage-d", pushBody({ markdown: "初稿", stage: { name: "drafted" } }), "2026-10-02T01:00:00.000Z");
+  assert.equal(staged.status, 200);
+  assert.equal(staged.json.result, "updated");
+  assert.notEqual(staged.json.contentHash, before.content_hash);
+  const meta = JSON.parse(rowOf(sqlite, "stage-d").meta_json);
+  assert.equal(meta.stage.label, "初稿完成");
+  // 相同请求再推一次 → stage 也进了 hash，这次才是 unchanged。
+  const again = await put(deps, viewerA, "stage-d", pushBody({ markdown: "初稿", stage: { name: "drafted" } }), "2026-10-02T02:00:00.000Z");
+  assert.equal(again.json.result, "unchanged");
+});
+
+// ─── 封面 covers（§4.3）─────────────────────────
+
+test("validatePushBody validates covers with 422 invalid_covers", async () => {
+  const asset = { name: "images/0123456789ab.png", sha256: "0123456789ab0000000000000000000000000000000000000000000000000000" };
+  const bad = async (covers, overrides = {}) => {
+    const result = await validatePushBody("s", pushBody({ covers, assets: [asset], ...overrides }));
+    assert.equal(result.code, "invalid_covers", JSON.stringify(covers));
+    assert.equal(result.status, 422);
+    return result;
+  };
+  assert.equal((await bad("x")).code, "invalid_covers");
+  await bad([{ role: "hero", path: asset.name }]);
+  await bad([{ role: "1x1" }]);
+  await bad([{ role: "1x1", path: "images/not-uploaded.png" }]);
+  await bad([
+    { role: "21x9", path: asset.name },
+    { role: "21x9", path: asset.name },
+  ]);
+  await bad([{ role: "21x9" }, { role: "1x1" }, { role: "cover" }, { role: "cover" }]);
+
+  // 合法：三角色不重复、path 都在 assets 里；null 视同没给。
+  const ok = await validatePushBody("s", pushBody({
+    assets: [asset],
+    covers: [
+      { role: "21x9", path: asset.name },
+      { role: "1x1", path: asset.name },
+      { role: "cover", path: asset.name },
+    ],
+  }));
+  assert.deepEqual(ok.covers, [
+    { role: "21x9", path: asset.name },
+    { role: "1x1", path: asset.name },
+    { role: "cover", path: asset.name },
+  ]);
+  const skipped = await validatePushBody("s", pushBody({ covers: null }));
+  assert.equal(skipped.covers, undefined);
+});
+
+test("covers are stored in meta.covers and follow the content", async () => {
+  const { sqlite, db, assets } = setup();
+  const userA = addUser(sqlite, { account: "user-a", nickname: "A" });
+  const viewerA = { id: userA, role: "user" };
+  const deps = { db, assets };
+  const assetA = assetWithBytes(Buffer.from("cover-image-a"));
+
+  const created = await put(deps, viewerA, "cover-a", pushBody({
+    markdown: "正文",
+    assets: [assetA],
+    covers: [{ role: "21x9", path: assetA.name }, { role: "1x1", path: assetA.name }],
+  }));
+  assert.equal(created.status, 201);
+  let meta = JSON.parse(rowOf(sqlite, "cover-a").meta_json);
+  assert.deepEqual(meta.covers, [{ role: "21x9", path: assetA.name }, { role: "1x1", path: assetA.name }]);
+
+  // 下一次推送不带 covers → 旧封面不保留（封面跟着内容走）。
+  const updated = await put(deps, viewerA, "cover-a", pushBody({ markdown: "正文改", assets: [assetA] }), "2026-10-02T01:00:00.000Z");
+  assert.equal(updated.json.result, "updated");
+  meta = JSON.parse(rowOf(sqlite, "cover-a").meta_json);
+  assert.equal(meta.covers, undefined);
+});
+
+test("replacing only the cover image counts as changed", async () => {
+  const { sqlite, db, assets } = setup();
+  const userA = addUser(sqlite, { account: "user-a", nickname: "A" });
+  const viewerA = { id: userA, role: "user" };
+  const deps = { db, assets };
+  const assetA = assetWithBytes(Buffer.from("cover-image-a"));
+  const assetB = assetWithBytes(Buffer.from("cover-image-b"));
+
+  await put(deps, viewerA, "cover-b", pushBody({ markdown: "正文", assets: [assetA], covers: [{ role: "1x1", path: assetA.name }] }));
+  const before = rowOf(sqlite, "cover-b");
+  const replaced = await put(
+    deps,
+    viewerA,
+    "cover-b",
+    pushBody({ markdown: "正文", assets: [assetB], covers: [{ role: "1x1", path: assetB.name }] }),
+    "2026-10-02T01:00:00.000Z",
+  );
+  assert.equal(replaced.status, 200);
+  assert.equal(replaced.json.result, "updated");
+  assert.notEqual(replaced.json.contentHash, before.content_hash);
+  assert.equal(replaced.json.assets.stored, 1);
+  assert.equal(replaced.json.assets.removed, 1);
+  const meta = JSON.parse(rowOf(sqlite, "cover-b").meta_json);
+  assert.deepEqual(meta.covers, [{ role: "1x1", path: assetB.name }]);
 });
 
 // ─── 路由源码静态断言 ────────────────────────────────

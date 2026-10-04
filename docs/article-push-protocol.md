@@ -60,6 +60,11 @@
   "qaReport": "## QA\n…",
   "boardTopicId": 12,
   "brief": { "date": "2026-10-01", "topicId": "t-quiet-desk-01" },
+  "stage": { "name": "revised", "round": 2 },
+  "covers": [
+    { "role": "21x9", "path": "images/0123456789ab.png" },
+    { "role": "1x1", "path": "images/2109876543ba.png" }
+  ],
   "assistant": "尔康"
 }
 ```
@@ -76,6 +81,14 @@
 - `boardTopicId` 可选，正整数：看板 topic id，存入 `articles.topic_id`。新建时没给 → NULL；**更新时没给则保留原值**。
 - `brief` 可选，`{ "date": "YYYY-MM-DD", "topicId": "…" }`，`topicId` 匹配
   `^[A-Za-z0-9][A-Za-z0-9._-]{0,59}$`：这篇文章出自哪个简报的哪个选题，写进 `meta_json.brief`。
+- `stage` 可选，`{ "name": "drafted" | "revised" | "rewritten" | "typeset", "round": 正整数 }`（助手事件设计 §4.2 的
+  阶段写回）：写进 `meta_json.stage`（`{ name, round, label, assistant, at }`，`label` 由服务端生成）并追加到
+  `meta_json.stageHistory`（跨推送保留，最多 20 条；没带 `stage` 的推送也把旧历史带过去，但 `meta.stage` 只在本次带时写）。
+  `revised` / `rewritten` 必须带 `round`；带 `round` 时要求那一轮已经提交过审稿（`articles.review_round > round`，
+  新文章不行），否则 `422 round_not_reviewed`。name / round 不合法 → `422 invalid_stage`。
+- `covers` 可选，≤ 3 条 `[{ "role": "21x9" | "1x1" | "cover", "path": "…" }]`（§4.3 的封面）：`path` 必须等于
+  本次 `assets` 里的某个 `name`，`role` 不能重复，否则 `422 invalid_covers`。存 `meta_json.covers`；
+  **没带 `covers` 的推送不保留旧封面**（封面跟着内容走）。
 - `assistant` 只在助手 token 请求里有意义（§1）：助手名字，必填，≤ 20 字，不含换行；其他认证方式忽略它。
   `assistant` **不参与 contentHash**。
 - `assets`：本次文章引用的全部本地图片，≤ 50 个。
@@ -101,15 +114,18 @@ board:<boardTopicId 十进制>        ← 可选扩展行，只在字段给出�
 brief:<brief.date>\t<brief.topicId>
 html:<articleHtml 的 UTF-8 字节 sha256，hex 小写>
 qa:<qaReport 的 UTF-8 字节 sha256，hex 小写>
+stage:<name>:<round 十进制，没有为空>   ← stage 给出时才出现
+cover:<role>:<path>        ← 每个封面一行，按 role 排序；covers 给出时才出现
 asset:<name> <sha256>        ← 按 name 排序，每张一行，没有图片则没有这行
                              ← 一个空行
 <markdown 原文>
 ```
 
-四个可选扩展行（`board:`、`brief:`、`html:`、`qa:`）插在 `tags:` 与 `asset:` 之间，
-按上面列出的顺序出现，**只在对应字段给出时才有那一行**（`undefined` / `null` / `""` 都算没给）。
-`html:` / `qa:` 存的是原文（清洗前）的字节 sha256。没有这四个字段时，输出与旧算法**逐字节相同**，
-旧客户端算出的 hash 不变；`assistant` 永远不参与 hash。
+六个可选扩展行（`board:`、`brief:`、`html:`、`qa:`、`stage:`、`cover:`）插在 `tags:` 与 `asset:` 之间，
+按上面列出的顺序出现，**只在对应字段给出时才有那一行**（`undefined` / `null` / `""` 都算没给；
+`covers: []` 算给出但没有行）。`html:` / `qa:` 存的是原文（清洗前）的字节 sha256。没有这六个字段时，
+输出与旧算法**逐字节相同**，旧客户端算出的 hash 不变；`assistant` 永远不参与 hash。
+`stage:` / `cover:` 行意味着只改阶段或只换封面也算内容变化（不会返回 `unchanged`）。
 
 ## 4. 图片与链接（客户端归一）
 
@@ -148,7 +164,10 @@ asset:<name> <sha256>        ← 按 name 排序，每张一行，没有图片�
   `400 hash_mismatch`、`403 assistant_draft_only`（助手试图发布 / 公开）、
   `409 slug_taken`、`409 slug_managed`、`409 article_locked`（附 `"status": "…"`，助手想覆盖
   已被改成非草稿状态的文章）、`413 too_large`、`422 missing_assets`（附 `"missingAssets": ["images/…"]`）、
-  `422 assistant_required`（助手 token 推送没带 assistant 名字）、
+  `422 assistant_required`（助手 token 推送没带 assistant 名字）、`422 invalid_stage`
+  （`stage` 的 name / round 不合法，或 `revised` / `rewritten` 缺 `round`）、`422 round_not_reviewed`
+  （`第 N 轮还没有提交审稿`：stage 带的 `round` 还没提交过审稿）、`422 invalid_covers`（`covers` 的
+  role 不合法 / 重复、条数超过 3，或 path 不在本次 `assets` 里）、
   `503 owner_unavailable`（文章归属账号解析不出来）。
 
 ## 7. 存储

@@ -158,6 +158,29 @@ export async function getArticle(env: Env, slug: string) {
   const finalMd = row.final_md ? String(row.final_md) : "";
   const draftMd = row.draft_md ? String(row.draft_md) : "";
   const assetBase = `/api/articles/${targetId}/assets`;
+  // 阶段与封面（docs/assistant-events-design.md §4.2 / §4.3）：坏 JSON 当空。
+  const metaJson = row.meta_json ? String(row.meta_json) : "{}";
+  let stage: Record<string, unknown> | null = null;
+  let stageHistory: unknown[] = [];
+  const covers: Array<{ role: string; path: string }> = [];
+  try {
+    const parsed = JSON.parse(metaJson) as Record<string, unknown>;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      if (parsed.stage && typeof parsed.stage === "object" && !Array.isArray(parsed.stage)) {
+        stage = parsed.stage as Record<string, unknown>;
+      }
+      if (Array.isArray(parsed.stageHistory)) stageHistory = parsed.stageHistory.slice(-20);
+      if (Array.isArray(parsed.covers)) {
+        for (const raw of parsed.covers) {
+          if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+          const cover = raw as Record<string, unknown>;
+          if (typeof cover.role === "string" && typeof cover.path === "string") covers.push({ role: cover.role, path: cover.path });
+        }
+      }
+    }
+  } catch {
+    stage = null;
+  }
   // 页面头部显示的就是这个标题（app/articles/[slug]/page.tsx：article.title || slug）。
   const titleForPage = row.title ? String(row.title) : targetId;
   let renderedHtml = "";
@@ -178,7 +201,10 @@ export async function getArticle(env: Env, slug: string) {
     title: row.title ? String(row.title) : null,
     topic: row.topic ? String(row.topic) : null,
     status: row.status ? String(row.status) : null,
-    metaJson: row.meta_json ? String(row.meta_json) : "{}",
+    metaJson,
+    stage,
+    stageHistory,
+    covers: covers.map((cover) => ({ ...cover, url: `${assetBase}/${cover.path}` })),
     draftMd,
     finalMd,
     qaReport: row.qa_report ? String(row.qa_report) : "",

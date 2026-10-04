@@ -79,6 +79,54 @@
         ]
       },
       "contentHash": "88eea7c1806287ea54e2d827678c97206f414dd506e659a13bb5f13adee494f6"
+    },
+    {
+      "name": "with-stage-revised",
+      "body": {
+        "title": "阶段写回示例",
+        "status": "draft",
+        "tags": [
+          "agent"
+        ],
+        "date": "2026-10-04",
+        "markdown": "# 阶段写回示例\n\n正文第一段。\n",
+        "stage": {
+          "name": "revised",
+          "round": 2
+        }
+      },
+      "contentHash": "529157f93851ada52293ac09d89ed82762d2352a155cf8e2143e82daf27f3ea9"
+    },
+    {
+      "name": "with-covers",
+      "body": {
+        "title": "封面写回示例",
+        "status": "draft",
+        "tags": [],
+        "date": "2026-10-05",
+        "markdown": "# 封面写回示例\n\n正文第一段。\n",
+        "assets": [
+          {
+            "name": "images/0123456789ab.png",
+            "sha256": "0123456789ab0000000000000000000000000000000000000000000000000000"
+          },
+          {
+            "name": "images/2109876543ba.png",
+            "sha256": "2109876543ba0000000000000000000000000000000000000000000000000000"
+          }
+        ],
+        "covers": [
+          {
+            "role": "21x9",
+            "path": "images/0123456789ab.png"
+          },
+          {
+            "role": "1x1",
+            "path": "images/2109876543ba.png"
+          }
+        ]
+      },
+      "contentHash": "0687c45b2ce032846814708033db565b674ae6ba1fb9f4395eee051998a2dad1"
     }
   ]
 }

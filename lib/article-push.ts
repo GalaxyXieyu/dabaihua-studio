@@ -18,6 +18,10 @@ export const MAX_ASSET_BYTES = 2 * 1024 * 1024;
 export const MAX_ASSETS = 50;
 export const MAX_TAGS = 20;
 export const MAX_TAG_LENGTH = 40;
+export const MAX_COVERS = 3;
+
+const STAGE_NAMES = ["drafted", "revised", "rewritten", "typeset"] as const;
+const COVER_ROLES = ["21x9", "1x1", "cover"] as const;
 
 const ASSET_NAME_RE = /^images\/[a-f0-9]{12}\.(png|jpe?g|gif|webp|svg)$/;
 const SHA_RE = /^[a-f0-9]{64}$/;
@@ -35,6 +39,8 @@ const CONTENT_TYPES: Record<string, string> = {
 };
 
 export type ArticleHashAsset = { name: string; sha256: string };
+export type ArticleHashStage = { name: string; round?: number | null };
+export type ArticleHashCover = { role: string; path: string };
 
 export type ArticleHashInput = {
   title: string;
@@ -48,7 +54,12 @@ export type ArticleHashInput = {
   qaReport?: string;
   boardTopicId?: number;
   brief?: { date: string; topicId: string };
+  stage?: ArticleHashStage;
+  covers?: ArticleHashCover[];
 };
+
+export type PushStage = { name: string; round?: number };
+export type PushCover = { role: string; path: string };
 
 export type PushAssetInput = { name: string; sha256: string; base64?: string };
 
@@ -64,6 +75,8 @@ export type NormalizedPushBody = {
   qaReport: string | undefined;
   boardTopicId: number | undefined;
   brief: { date: string; topicId: string } | undefined;
+  stage: PushStage | undefined;
+  covers: PushCover[] | undefined;
   protocol: string;
   contentHash: string;
   assets: PushAssetInput[];
@@ -77,6 +90,10 @@ export function isPushError(value: NormalizedPushBody | PushError): value is Pus
 
 function invalid(error: string): PushError {
   return { status: 400, code: "invalid", error };
+}
+
+function pushError(status: number, code: string, error: string): PushError {
+  return { status, code, error };
 }
 
 /** 协议约定：undefined / null / "" 都视为没给。 */
@@ -123,6 +140,12 @@ export async function computeArticleHash(input: ArticleHashInput): Promise<strin
   if (input.brief) lines.push(`brief:${input.brief.date}\t${input.brief.topicId}`);
   if (input.articleHtml) lines.push(`html:${await sha256Hex(utf8Bytes(input.articleHtml))}`);
   if (input.qaReport) lines.push(`qa:${await sha256Hex(utf8Bytes(input.qaReport))}`);
+  // 阶段与封面扩展行：跟在 board/brief/html/qa 扩展行之后、asset 之前，只在给出时追加。
+  if (input.stage) lines.push(`stage:${input.stage.name}:${input.stage.round ?? ""}`);
+  const covers = [...(input.covers || [])].sort((left, right) =>
+    left.role < right.role ? -1 : left.role > right.role ? 1 : 0,
+  );
+  for (const cover of covers) lines.push(`cover:${cover.role}:${cover.path}`);
   const assets = [...(input.assets || [])].sort((left, right) =>
     left.name < right.name ? -1 : left.name > right.name ? 1 : 0,
   );
@@ -130,6 +153,15 @@ export async function computeArticleHash(input: ArticleHashInput): Promise<strin
   lines.push("");
   lines.push(input.markdown);
   return sha256Hex(utf8Bytes(lines.join("\n")));
+}
+
+/** 阶段徽标文案（docs/assistant-events-design.md §4.2）。round 仅在文案里用到时生效。 */
+export function stageLabel(name: string, round?: number | null): string {
+  if (name === "drafted") return "初稿完成";
+  if (name === "revised") return `已按第 ${round ?? ""} 轮改完`;
+  if (name === "rewritten") return `已按第 ${round ?? ""} 轮重写`;
+  if (round === undefined || round === null) return "排版完成，待审";
+  return `已按第 ${round} 轮改完排版`;
 }
 
 /** 协议 §3 / §6：把请求体归一成可信字段，或返回错误对象。 */
@@ -218,6 +250,27 @@ export async function validatePushBody(slug: string, json: unknown): Promise<Nor
     brief = { date: rawBrief.date, topicId: rawBrief.topicId };
   }
 
+  let stage: PushStage | undefined;
+  if (given(input.stage)) {
+    if (typeof input.stage !== "object" || Array.isArray(input.stage)) return pushError(422, "invalid_stage", "stage 不合法");
+    const rawStage = input.stage as Record<string, unknown>;
+    const name = String(rawStage.name ?? "");
+    if (!STAGE_NAMES.includes(name as (typeof STAGE_NAMES)[number])) {
+      return pushError(422, "invalid_stage", "stage.name 只能是 drafted、revised、rewritten 或 typeset");
+    }
+    let round: number | undefined;
+    if (rawStage.round !== undefined && rawStage.round !== null && rawStage.round !== "") {
+      if (typeof rawStage.round !== "number" || !Number.isSafeInteger(rawStage.round) || rawStage.round <= 0) {
+        return pushError(422, "invalid_stage", "stage.round 必须是正整数");
+      }
+      round = rawStage.round;
+    }
+    if ((name === "revised" || name === "rewritten") && round === undefined) {
+      return pushError(422, "invalid_stage", `stage ${name} 必须带 round`);
+    }
+    stage = round === undefined ? { name } : { name, round };
+  }
+
   let assets: PushAssetInput[] = [];
   if (input.assets !== undefined) {
     if (!Array.isArray(input.assets)) return invalid("assets 必须是数组");
@@ -250,6 +303,30 @@ export async function validatePushBody(slug: string, json: unknown): Promise<Nor
     assets = [...seen.values()];
   }
 
+  let covers: PushCover[] | undefined;
+  if (input.covers !== undefined && input.covers !== null) {
+    if (!Array.isArray(input.covers)) return pushError(422, "invalid_covers", "covers 必须是数组");
+    if (input.covers.length > MAX_COVERS) return pushError(422, "invalid_covers", `covers 最多 ${MAX_COVERS} 条`);
+    const seenRoles = new Set<string>();
+    const assetNames = new Set(assets.map((asset) => asset.name));
+    const list: PushCover[] = [];
+    for (const raw of input.covers) {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) return pushError(422, "invalid_covers", "cover 不合法");
+      const cover = raw as Record<string, unknown>;
+      const role = String(cover.role ?? "");
+      if (!COVER_ROLES.includes(role as (typeof COVER_ROLES)[number])) {
+        return pushError(422, "invalid_covers", "cover role 只能是 21x9、1x1 或 cover");
+      }
+      if (seenRoles.has(role)) return pushError(422, "invalid_covers", "cover role 不能重复");
+      if (typeof cover.path !== "string" || !assetNames.has(cover.path)) {
+        return pushError(422, "invalid_covers", "cover path 必须是本次 assets 里的图片");
+      }
+      seenRoles.add(role);
+      list.push({ role, path: cover.path });
+    }
+    covers = list;
+  }
+
   const contentHash = await computeArticleHash({
     title,
     status,
@@ -262,6 +339,8 @@ export async function validatePushBody(slug: string, json: unknown): Promise<Nor
     qaReport,
     boardTopicId,
     brief,
+    stage,
+    covers,
   });
   if (input.contentHash !== undefined && input.contentHash !== null && input.contentHash !== "") {
     if (typeof input.contentHash !== "string" || input.contentHash !== contentHash) {
@@ -269,7 +348,7 @@ export async function validatePushBody(slug: string, json: unknown): Promise<Nor
     }
   }
 
-  return { title, markdown, status, isPublic, tags, date, sourcePath, articleHtml, qaReport, boardTopicId, brief, protocol: PUSH_PROTOCOL, contentHash, assets };
+  return { title, markdown, status, isPublic, tags, date, sourcePath, articleHtml, qaReport, boardTopicId, brief, stage, covers, protocol: PUSH_PROTOCOL, contentHash, assets };
 }
 
 function shanghaiDate(now: string): string {
@@ -339,22 +418,28 @@ export async function handleArticlePut(deps: ArticlePutDeps): Promise<ArticlePut
 
   const existing = await db
     .prepare(
-      "SELECT owner_id AS ownerId, meta_json AS metaJson, content_hash AS contentHash, is_public AS isPublic, date, status FROM articles WHERE slug = ?",
+      "SELECT owner_id AS ownerId, meta_json AS metaJson, content_hash AS contentHash, is_public AS isPublic, date, status, review_round AS reviewRound FROM articles WHERE slug = ?",
     )
     .bind(slug)
     .first<Record<string, unknown>>();
+
+  // 旧 meta（每次推送整体重建，stageHistory 要跨推送带过去）。
+  let existingMeta: Record<string, unknown> = {};
+  if (existing && existing.metaJson) {
+    try {
+      const parsed = JSON.parse(String(existing.metaJson));
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) existingMeta = parsed as Record<string, unknown>;
+    } catch {
+      existingMeta = {};
+    }
+  }
 
   if (existing) {
     if (Number(existing.ownerId) !== viewer.id) {
       return { status: 409, json: { error: "这个 slug 已被其他账号使用", code: "slug_taken" } };
     }
     let source: string | null = null;
-    try {
-      const parsed = JSON.parse(String(existing.metaJson || "{}"));
-      source = parsed && typeof parsed === "object" ? ((parsed as { source?: unknown }).source as string | null) : null;
-    } catch {
-      source = null;
-    }
+    if (typeof existingMeta.source === "string") source = existingMeta.source;
     if (source !== "push") {
       return { status: 409, json: { error: "这个 slug 由服务器目录导入管理", code: "slug_managed" } };
     }
@@ -386,6 +471,15 @@ export async function handleArticlePut(deps: ArticlePutDeps): Promise<ArticlePut
   }
 
   const existingAssets = await assets.list(slug);
+  // 带轮次的阶段要求那一轮已经提交过审稿（articles.review_round 在提交后变成下一轮）。
+  // 放在 unchanged 短路之后：重推幂等请求不受影响。
+  if (normalized.stage && normalized.stage.round !== undefined) {
+    const round = normalized.stage.round;
+    const reviewRound = existing ? Number(existing.reviewRound || 0) : 0;
+    if (!(reviewRound > round)) {
+      return { status: 422, json: { error: `第 ${round} 轮还没有提交审稿`, code: "round_not_reviewed" } };
+    }
+  }
   const existingByPath = new Map(existingAssets.map((asset) => [asset.path, asset.sha256]));
   const requestedNames = new Set(normalized.assets.map((asset) => asset.name));
   const missingAssets: string[] = [];
@@ -423,6 +517,25 @@ export async function handleArticlePut(deps: ArticlePutDeps): Promise<ArticlePut
   if (normalized.brief) meta.brief = normalized.brief;
   if (normalized.boardTopicId !== undefined) meta.boardTopicId = normalized.boardTopicId;
   if (assistant) meta.assistant = assistant;
+  // 阶段写回：本次带 stage 就写 meta.stage 并追加历史；没带也把旧历史带过去（meta 每次重建）。
+  const oldStageHistory = Array.isArray(existingMeta.stageHistory)
+    ? (existingMeta.stageHistory as unknown[]).filter((entry) => entry && typeof entry === "object")
+    : [];
+  if (normalized.stage) {
+    const entry = {
+      name: normalized.stage.name,
+      round: normalized.stage.round ?? null,
+      label: stageLabel(normalized.stage.name, normalized.stage.round),
+      assistant: assistant || null,
+      at: now,
+    };
+    meta.stage = entry;
+    meta.stageHistory = [...oldStageHistory, entry].slice(-20);
+  } else if (oldStageHistory.length) {
+    meta.stageHistory = oldStageHistory;
+  }
+  // 封面跟着内容走：本次带 covers 才写 meta.covers，没带就清掉旧的。
+  if (normalized.covers) meta.covers = normalized.covers;
   const metaJson = JSON.stringify(meta);
 
   if (existing) {

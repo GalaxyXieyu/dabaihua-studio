@@ -117,6 +117,8 @@ test("computeArticleHash reproduces every shared hash vector", async () => {
       qaReport: vector.body.qaReport,
       boardTopicId: vector.body.boardTopicId,
       brief: vector.body.brief ? { date: vector.body.brief.date, topicId: vector.body.brief.topicId } : undefined,
+      stage: vector.body.stage,
+      covers: vector.body.covers,
     });
     assert.equal(hash, vector.contentHash, vector.name);
   }
