@@ -5,6 +5,7 @@
 // sendAssistantEvent 写。响应不含 webhook URL / secret（表里也只有 target_host）。
 
 import { env } from "cloudflare:workers";
+import { ensureSchema } from "../../../lib/store";
 import { authenticateApiKey, getSessionUser } from "../../../lib/auth";
 import { bearerToken, sameSecret } from "../../../lib/assistant-auth";
 import { listAssistantEventLog } from "../../../lib/assistant-event-log";
@@ -34,6 +35,9 @@ async function authorizeRead(request: Request): Promise<Response | null> {
 export async function GET(request: Request) {
   const denied = await authorizeRead(request);
   if (denied) return denied;
+
+  // 幂等补齐新列（如 payload_json），旧部署首次拉取也能工作。
+  await ensureSchema(env.DB);
 
   const url = new URL(request.url);
   const afterIdRaw = (url.searchParams.get("afterId") || "").trim();

@@ -2156,7 +2156,7 @@ def _cmd_article_feedback(args):
     reviewer = (feedback.get("reviewer") or {}).get("nickname") or "未知"
     print("《%s》 第 %s 轮 · %s   审稿人 %s · %s" % (
         title, feedback.get("round") if feedback.get("round") is not None else "—",
-        verdict, reviewer, feedback.get("submittedAt") or ""))
+        verdict, reviewer, _feedback_local_time(feedback.get("submittedAt"))))
     overall = str(feedback.get("overallComment") or "").strip()
     print("总体意见：%s" % (overall or "（无）"))
     marks = [mark for mark in (feedback.get("marks") or []) if isinstance(mark, dict)]
@@ -2451,6 +2451,16 @@ def _events_local_time(iso):
     except ValueError:
         return text
     return moment.astimezone(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _feedback_local_time(iso):
+    """submittedAt（ISO）→ +08:00 的 YYYY-MM-DD HH:MM；解析失败原样返回。"""
+    text = str(iso or "")
+    try:
+        moment = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return text
+    return moment.astimezone(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M")
 
 
 def cmd_events(args):

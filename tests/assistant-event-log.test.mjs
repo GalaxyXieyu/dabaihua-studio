@@ -233,6 +233,9 @@ test("GET /api/assistant-events 路由：认助手 token，只读，不含 webho
   assert.match(route, /export async function GET/);
   assert.doesNotMatch(route, /export async function POST/);
   assert.doesNotMatch(route, /export async function PUT/);
+  // 查询前幂等补齐 schema（新列 payload_json）。
+  assert.match(route, /await ensureSchema\(env\.DB\)/);
+  assert.match(route, /from "\.\.\/\.\.\/\.\.\/lib\/store"/);
   // 查询走纯函数，绝不带出 webhook URL / secret。
   assert.match(route, /listAssistantEventLog/);
   assert.doesNotMatch(route, /SHUFANGZHAI_WEBHOOK_URL/);

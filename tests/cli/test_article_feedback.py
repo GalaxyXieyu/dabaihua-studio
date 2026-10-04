@@ -194,6 +194,9 @@ class FeedbackCliTests(unittest.TestCase):
         self.assertIn("第 2 轮", out)
         self.assertIn("要求修改", out)
         self.assertIn("审稿人 虚构审稿人", out)
+        # 审稿时间转成 +08:00 的 YYYY-MM-DD HH:MM，不再原样打 UTC ISO。
+        self.assertIn("审稿人 虚构审稿人 · 2026-02-01 18:00", out)
+        self.assertNotIn("2026-02-01T10:00:00.000Z", out)
         self.assertIn("总体意见：整体不错，但有几处要改", out)
         self.assertIn("要改（2）", out)
         self.assertIn("写得好（1）", out)
