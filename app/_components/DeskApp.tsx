@@ -42,6 +42,9 @@ import { SOURCE_CATEGORIES, sourceCategoryLabel, type SourceCategory } from "../
 import { BRAND_NAME } from "../../lib/brand";
 import { SiteNavCluster } from "./SiteNav";
 import { Seal } from "./seal/Seal.tsx";
+import { StampSlot } from "./seal/StampSlot.tsx";
+import { slotId } from "./seal/seal-moments.ts";
+import { useInPageStamp } from "./seal/useInPageStamp.ts";
 import { SiteSidebarNav } from "./SiteSidebar";
 
 type SessionUser = { id: number; account: string; nickname: string; bio: string; avatarUrl: string | null; role: "user" | "admin"; createdAt: string };
@@ -1201,6 +1204,18 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
     return () => { active = false; window.clearInterval(timer); };
   }, [heartbeatItemId, sessionUserId, view]);
 
+  // 印章（阅读 · 圆章 yuan，规范第 10 节）：页内标记已读当场盖章，今天页不再补盖
+  const readingStamp = useInPageStamp({ kind: "yuan", actorId: "seal-actor-reading", size: 48 });
+  // 刚标记已读、正在盖的那一行先渲染成 pending，盖完（stamp 落定）恢复 stamped
+  const [pendingReadKeys, setPendingReadKeys] = useState<ReadonlySet<string>>(() => new Set());
+  function stampRead(id: number) {
+    const key = `read:${id}`;
+    setPendingReadKeys((prev) => { if (prev.has(key)) return prev; const next = new Set(prev); next.add(key); return next; });
+    void readingStamp.stamp({ key, slotId: slotId(key) }).then(() => {
+      setPendingReadKeys((prev) => { if (!prev.has(key)) return prev; const next = new Set(prev); next.delete(key); return next; });
+    });
+  }
+
   async function loadApiTokens() {
     try {
       const res = await jsonRequest<{ tokens: typeof apiTokens }>("/api/tokens", { cache: "no-store" });
@@ -1554,6 +1569,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
       setSelectedItemId(selectedItem.id);
       await post("/api/items", { action: "mark-read", id: selectedItem.id });
       patchItemState(selectedItem.id, { isRead: true });
+      stampRead(selectedItem.id); // 页内盖章，不阻塞主流程
     } catch (error) { setNotice(error instanceof Error ? error.message : "标记已读失败"); }
     finally { setBusy(""); }
   }
@@ -1563,7 +1579,10 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
     setBusy(saveForLater ? "today-later" : "today-next");
     try {
       if (saveForLater && !Boolean(selectedItem.isSaved)) await post("/api/items", { action: "save", id: selectedItem.id });
-      if (!Boolean(selectedItem.isRead)) await post("/api/items", { action: "mark-read", id: selectedItem.id });
+      if (!Boolean(selectedItem.isRead)) {
+        await post("/api/items", { action: "mark-read", id: selectedItem.id });
+        stampRead(selectedItem.id); // 页内盖章，不阻塞进入下一篇
+      }
       patchItemState(selectedItem.id, { isRead: true, ...(saveForLater ? { isSaved: true } : {}) });
       const currentIndex = todayItems.findIndex((item) => item.id === selectedItem.id);
       const next = todayItems.slice(currentIndex + 1).find((item) => !Boolean(item.isRead));
@@ -1765,6 +1784,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
         <div className="article-status-tabs" role="tablist" aria-label="阅读状态">
           <button role="tab" aria-controls="article-list" aria-selected={articleStatus === "unread"} className={articleStatus === "unread" ? "active" : ""} onClick={() => { setArticleStatus("unread"); setSelectedItemId(null); setVisibleItemLimit(ARTICLE_BATCH_SIZE); }}><span>未读</span><em>{articleStatusCounts.unread}</em></button>
           <button role="tab" aria-controls="article-list" aria-selected={articleStatus === "read"} className={articleStatus === "read" ? "active" : ""} onClick={() => { setArticleStatus("read"); setSelectedItemId(null); setVisibleItemLimit(ARTICLE_BATCH_SIZE); }}><span>已读</span><em>{articleStatusCounts.read}</em></button>
+          <span className="article-tabs-seal-actor" aria-hidden="true"><Seal id="seal-actor-reading" kind="yuan" size={48} pose="stamped" /></span>
         </div>
         <div className="article-list" id="article-list" onScroll={(event) => {
           const list = event.currentTarget;
@@ -1775,7 +1795,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
           {loading && <div className="list-loading"><i /><i /><i /></div>}
           {!loading && visibleItems.length === 0 && <div className="list-empty"><strong>{query.trim() ? "没有找到匹配文章" : articleStatus === "unread" ? "未读已经清空" : "还没有已读文章"}</strong><p>{query.trim() ? "换个关键词试试。" : articleStatus === "unread" ? "新文章同步后会出现在这里。" : "在文章中点击「标记已读」后，文章会出现在这里。"}</p></div>}
           {renderedItems.map((item) => <button className={`article-row ${effectiveItemId === item.id ? "active" : ""} ${item.isRead ? "read" : ""}`} key={item.id} onClick={() => openItem(item.id)}>
-            <div className="article-row-meta"><span>{item.author || item.sourceName || "未知作者"}</span><span className="article-meta-trailing"><time>{when(item.publishedAt)}</time>{Boolean(item.isRead) && <span className="read-status"><Check size={11} weight="bold" aria-hidden="true" />已读</span>}{Boolean(item.isSaved) && <span className="saved-status" aria-label="已收藏" title="已收藏"><BookmarkSimple size={12} weight="fill" aria-hidden="true" /></span>}</span></div><h2>{item.translatedTitle || item.title}</h2><p>{item.translatedExcerpt || item.originalExcerpt || "等待读取正文"}</p>
+            <div className="article-row-meta"><span>{item.author || item.sourceName || "未知作者"}</span><span className="article-meta-trailing"><time>{when(item.publishedAt)}</time>{Boolean(item.isRead) && <span className="read-status"><Check size={11} weight="bold" aria-hidden="true" />已读</span>}{readingStamp.seen.has(`read:${item.id}`) && <StampSlot targetId={slotId(`read:${item.id}`)} state={pendingReadKeys.has(`read:${item.id}`) ? "pending" : "stamped"} kind="yuan" size={24} label="已读" />}{Boolean(item.isSaved) && <span className="saved-status" aria-label="已收藏" title="已收藏"><BookmarkSimple size={12} weight="fill" aria-hidden="true" /></span>}</span></div><h2>{item.translatedTitle || item.title}</h2><p>{item.translatedExcerpt || item.originalExcerpt || "等待读取正文"}</p>
           </button>)}
           {renderedItems.length < visibleItems.length && <button className="article-load-more" type="button" onClick={() => setVisibleItemLimit((limit) => Math.min(visibleItems.length, limit + ARTICLE_BATCH_SIZE))}>继续加载 {Math.min(ARTICLE_BATCH_SIZE, visibleItems.length - renderedItems.length)} 篇</button>}
         </div>
