@@ -279,22 +279,100 @@ html[data-nav="collapsed"] .global-brand .seal-actor { display: none; }
   display: none;
 }
 
-/* 印谱叶里既有的小件（昨天小卡 / 当天印条 / 连续天数）居中，内部样式不动 */
-.seal-book .td-a-seal-card-wrap {
-  text-align: center;
-}
-
-.seal-book .td-a-seal-card {
-  margin-left: auto;
-  margin-right: auto;
-}
-
+/* 印谱叶里既有的小件（当天印条 / 连续天数）居中，内部样式不动；
+   昨日纸小卡的纸面规则在本文件 .seal-sheet 一组，边距在 today.css */
 .seal-book .td-a-seal-strip {
   justify-content: center;
 }
 
 .seal-book .td-a-seal-note {
   text-align: center;
+}
+
+/* ---------- 昨日纸（规范 6.7 / v3-zhuan README）：居中双线小笺 ----------
+   容器 .seal-sheet 可以是页面卡（#seal-yesterday-card）也可以是回放遮罩里的纸，
+   两处共用同一套规则（本文件在 layout.tsx 全局引入，body 上的遮罩也吃得到）。 */
+
+.seal-sheet {
+  background: var(--wash, #F6EFE2);
+  border: .5px solid var(--line-strong, #C4B8A2);
+  padding: 3px;
+  text-align: center;
+  box-sizing: border-box;
+  width: 420px;
+  max-width: 100%;
+}
+
+.seal-sheet-in {
+  border: .5px solid var(--line, #D8CFBE);
+  padding: 16px 20px 14px;
+}
+
+/* 日期章题头：竖长方朱文，自上而下读 */
+.seal-sheet-date {
+  display: flex;
+  justify-content: center;
+  line-height: 0;
+}
+
+/* 一行居中的小印痕 + 时间小字，多时换行；行末尾的 +N 跟着居中 */
+.seal-sheet-marks {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 10px;
+}
+
+/* 单元格：印痕 + 下方时间小字。flex 列对齐去掉 inline-block 行盒撑出的空白，
+   间距只剩 .seal-sheet-time 自己的 margin-top 5px（设计的 5px） */
+.seal-sheet-mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.seal-sheet-plus {
+  align-self: center;
+  font-family: var(--font-serif, serif);
+  font-size: 12px;
+  color: var(--seal-date, #71695C);
+}
+
+.seal-sheet-time {
+  display: block;
+  font-style: normal;
+  margin-top: 5px;
+  font-size: 10px;
+  color: var(--seal-date, #71695C);
+  letter-spacing: .08em;
+  text-align: center;
+}
+
+.seal-sheet-cap {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--seal-date, #71695C);
+  letter-spacing: .3em;
+  padding-left: .3em;
+}
+
+/* 手机（<=640px）：满宽、间距收紧、日期章实缩到 76px
+   （CSS 覆盖 svg 的 width/height 属性，不用 transform：transform 只缩不缩布局盒，
+   且会跟回放动画盖在 .seal-mark 上的 transform 打架） */
+@media (max-width: 640px) {
+  .seal-sheet {
+    width: 100%;
+  }
+
+  .seal-sheet-marks {
+    gap: 12px;
+  }
+
+  .seal-sheet-date .seal-mark-svg {
+    width: 76px;
+    height: 76px;
+  }
 }
 
 /* ---------- 手机（<=640px）：印谱叶收窄，印位格换手机分行 ---------- */

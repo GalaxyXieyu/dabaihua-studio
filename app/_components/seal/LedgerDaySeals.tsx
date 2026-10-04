@@ -58,8 +58,9 @@ export function LedgerDaySeals({ days, generatedAt, pageDate }: LedgerDaySealsPr
     plan && plan.pageDate !== null ? plan.events.filter((e) => shanghaiDate(e.at) === plan.pageDate) : [];
   const stripShown = stripEvents.slice(0, WRAP.stripMax);
 
-  // 印位格：git 方章写「提交 N 次」，其他按事件键归类；日期用中文
-  const bookItems: SealBookItem[] = (plan?.events ?? []).map((e) => {
+  // 印位格：git 方章写「提交 N 次」，其他按事件键归类；日期用中文。
+  // 最新在前（照 mockup），只反交给格子的数组，plan.events 的时序不动（补盖队列用）。
+  const bookItems: SealBookItem[] = [...(plan?.events ?? [])].reverse().map((e) => {
     const isGit = e.key.startsWith("git:");
     const day = isGit ? days?.find((d) => `git:${d.date}` === e.key) : undefined;
     return {

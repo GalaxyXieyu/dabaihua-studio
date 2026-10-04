@@ -306,45 +306,24 @@ body:has(.td-a) {
 
 /* ── 新盖的章（印章栏目） ────────────────────────────── */
 
-/* 昨日小卡：200×95 的纸，内容是 400×190 的回放纸缩到 50% */
-.td-a-seal-card-wrap {
-  margin: 0 0 14px;
-}
-
-.td-a-seal-card-note {
-  margin: 0 0 4px;
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  color: var(--seal-date, #71695C);
-}
-
+/* 昨日纸小卡：整张居中的双线小笺（纸面规则在 seal.css 的 .seal-sheet），
+   日期章就是题头，不再另写日期行，也不再用缩略图 */
 .td-a-seal-card {
-  position: relative;
   display: block;
-  box-sizing: border-box;
-  width: 200px;
-  height: 95px;
-  background: #fffdf8;
-  border: 1px solid var(--a-rule);
-  overflow: hidden;
+  margin: 0 auto 28px;
+  width: 420px;
+  max-width: 100%;
+  color: inherit;
+  text-decoration: none;
 }
 
 .td-a-seal-card:hover {
-  border-color: var(--a-accent);
+  border-color: var(--seal-red);
 }
 
 /* 回放收起飞进来之前先占位（visibility 保位，FLIP 目标有几何） */
 .td-a-seal-card[data-state="pending"] {
   visibility: hidden;
-}
-
-.td-a-seal-card-sheet {
-  position: absolute;
-  left: 0;
-  top: 0;
-  display: block;
-  transform: scale(0.5);
-  transform-origin: 0 0;
 }
 
 /* 印位格：印谱叶 SealBookGrid（seal.css），本文件不再有自己的格子规则 */
@@ -421,6 +400,12 @@ body:has(.td-a) {
   .td-a-footer {
     padding-left: 20px;
     padding-right: 20px;
+  }
+
+  /* 昨日纸小卡：手机满宽、下边距收紧（照 mockups 的 yd 手机档） */
+  .td-a-seal-card {
+    width: 100%;
+    margin-bottom: 22px;
   }
 
   .td-a-masthead-wrap {

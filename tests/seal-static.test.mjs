@@ -360,6 +360,9 @@ test("回放纸的小字用 --seal-date，不再用 --faint", () => {
     { key: "git:2026-10-03", kind: "fang", at: "2026-10-03T23:59:00+08:00", label: "测试", targetId: "seal-slot-git" },
   ];
   const html = replaySheetHtml({ date: "2026-10-03", events, streak: 5, prefix: "t" });
-  assert.ok(html.includes("var(--seal-date,#71695C)"), "纸的小字该用 --seal-date");
+  // 小字颜色现在在 seal.css（页面卡和 body 遮罩共用），不在内联字符串里
   assert.ok(!html.includes("--faint"), "纸的输出不该再用 --faint");
+  const css = readFileSync(new URL("../app/_components/seal/seal.css", import.meta.url), "utf8");
+  assert.ok(/\.seal-sheet-time\s*\{[^}]*color:\s*var\(--seal-date/.test(css), "小字颜色该用 --seal-date");
+  assert.ok(/\.seal-sheet-cap\s*\{[^}]*color:\s*var\(--seal-date/.test(css), "小注颜色该用 --seal-date");
 });

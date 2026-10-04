@@ -93,6 +93,10 @@ test("replaySheetHtml：6 个事件 → 6 个 data-i、1 个 data-date-mark，gi
   // 日期章：竖长方模板边框 + 现算篆文
   assert.ok(html.includes('<rect x="17" y="2.75" width="14" height="42.5" rx="0.8"/>'));
   assert.ok(/data-date-mark/.test(html));
+  // 小注：中文计数
+  assert.ok(html.includes("昨日 · 六枚"), `6 枚应写「昨日 · 六枚」: ${html}`);
+  // 流式布局：不再有绝对定位
+  assert.ok(!html.includes("position:absolute"), "不应再出现 position:absolute");
 });
 
 test("replaySheetHtml：10 个事件 → 8 枚印痕 +「+2」", () => {
@@ -104,11 +108,12 @@ test("replaySheetHtml：10 个事件 → 8 枚印痕 +「+2」", () => {
   assert.ok(html.includes("+2"));
 });
 
-test("replaySheetHtml：0 个事件 → 只有日期章，没有「没有完成」之类的字样", () => {
+test("replaySheetHtml：0 个事件 → 只有日期章和「昨日 · 未盖」，没有「没有完成」之类的字样", () => {
   const html = replaySheetHtml({ date: "2026-10-03", events: [], streak: 5, prefix: "t" });
   assert.equal((html.match(/data-i="/g) || []).length, 0);
   assert.equal((html.match(/data-plus/g) || []).length, 0);
   assert.equal((html.match(/data-date-mark/g) || []).length, 1);
+  assert.ok(html.includes("昨日 · 未盖"), `0 枚应写「昨日 · 未盖」: ${html}`);
   assert.ok(!/没有完成|无记录|没有记录|空/.test(html), `不应出现空态文案: ${html}`);
 });
 
@@ -116,6 +121,24 @@ test("replaySheetHtml：dry（streak 0）时用干印不透明度 0.3", () => {
   const html = replaySheetHtml({ date: "2026-10-03", events: [GIT], streak: 0, prefix: "t" });
   assert.ok(/opacity:0\.3/.test(html), "dry 印痕应为 0.3");
   assert.ok(html.includes("var(--seal-dry"), "dry 用干印色");
+});
+
+// ---------- 昨日纸改成居中流式小笺（卡片与回放遮罩共用） ----------
+
+test("seal-sheet / seal-player：流式小笺，不再有 400×190 坐标系和文字题头", () => {
+  assert.ok(SHEET.includes('"seal-sheet-in"'), "内层结构应是 .seal-sheet-in");
+  assert.ok(SHEET.includes('class="seal-sheet-date" data-date-mark'), "日期章作题头（data-date-mark）");
+  assert.ok(SHEET.includes('class="seal-sheet-marks"'), "印痕一行应是 .seal-sheet-marks");
+  assert.ok(SHEET.includes("cnCount(events.length)"), "小注用中文计数");
+  assert.ok(!SHEET.includes("position:absolute"), "seal-sheet.ts 不应再拼绝对定位");
+
+  assert.ok(PLAYER.includes('"seal-replay-sheet seal-sheet"'), "遮罩里的纸应带 seal-sheet 类");
+  assert.ok(!PLAYER.includes("REPLAY.sheetW") && !PLAYER.includes("REPLAY.sheetH"), "播放器不再用 sheetW/sheetH");
+  assert.ok(!/seal-replay-title/.test(PLAYER), "不应再有单独的文字题头段落");
+  assert.ok(PLAYER.includes("replayAriaLabel(date)"), "遮罩 aria-label 应带日期");
+  const tokens = readFileSync(new URL("../app/_components/seal/seal-tokens.ts", import.meta.url), "utf8");
+  assert.ok(!tokens.includes("sheetW") && !tokens.includes("sheetH"), "REPLAY 令牌不应再有 sheetW/sheetH");
+  assert.ok(/dateSize: 88/.test(tokens), "日期章渲染尺寸应为 88");
 });
 
 // ---------- reducedImpressionFrames：reduced 分支只有 opacity ----------

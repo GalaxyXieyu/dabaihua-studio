@@ -73,20 +73,26 @@ test("新盖的章是印谱叶：文武边 + seal-book-grid，去掉右侧大号
   for (const gone of ["td-a-col-figure", "td-a-index", "td-a-unit", "td-a-seal-cells", "td-a-col-label"]) {
     assert.ok(!src.includes(gone), `不该再出现 ${gone}`);
   }
-  // 昨天小卡 / 当天印条 / 连续天数原样保留
+  // 昨日纸小卡：整张居中的流式小笺（类名带 seal-sheet），不再有日期行和缩略图
   assert.ok(src.includes('id="seal-yesterday-card"'));
+  assert.ok(src.includes('className="td-a-seal-card seal-sheet"'), "小卡就是整张纸");
+  assert.ok(!src.includes("td-a-seal-card-note"), "不应再有单独的日期行");
+  assert.ok(!src.includes("td-a-seal-card-sheet"), "不应再有缩略图包裹层");
+  // 印位格条目最新在前（只反交给格子的数组）
+  assert.ok(src.includes("[...(plan?.events ?? [])].reverse()"), "印位格应最新在前");
   assert.ok(src.includes("seal-strip-"));
   assert.ok(src.includes("td-a-seal-note"));
 });
 
-test("旧账日视图的印章区也用 SealBookGrid", () => {
+test("旧账日视图的印章区也用 SealBookGrid（条目最新在前）", () => {
   const src = read("app/_components/seal/LedgerDaySeals.tsx");
   assert.ok(src.includes("<SealBookGrid"), "印位格应交给 SealBookGrid");
+  assert.ok(src.includes("[...(plan?.events ?? [])].reverse()"), "印位格应最新在前");
   assert.ok(!src.includes("daily-a-seal-cells"), "旧格子列表应删掉");
   assert.ok(src.includes("seal-strip-"), "当天印条保留");
 });
 
-test("seal.css：印谱叶与印位格规则都在，today.css 里旧格子规则已删", () => {
+test("seal.css：印谱叶、昨日纸与印位格规则都在，today.css 里旧格子规则已删", () => {
   const css = read("app/_components/seal/seal.css");
   for (const rule of [
     ".seal-book {",
@@ -97,11 +103,17 @@ test("seal.css：印谱叶与印位格规则都在，today.css 里旧格子规�
     ".seal-book-cell[data-d-first]::before",
     ".seal-book-cell[data-m-hide]",
     ".seal-book-imp .seal-slot",
+    ".seal-sheet {",
+    ".seal-sheet-in {",
+    ".seal-sheet-date {",
+    ".seal-sheet-marks {",
+    ".seal-sheet-time {",
+    ".seal-sheet-cap {",
   ]) {
     assert.ok(css.includes(rule), `seal.css 缺少 ${rule}`);
   }
   const today = read("app/today.css");
-  for (const gone of [".td-a-seal-cells", ".td-a-seal-cell", ".td-a-seal-cell-note"]) {
+  for (const gone of [".td-a-seal-cells", ".td-a-seal-cell", ".td-a-seal-cell-note", ".td-a-seal-card-note", ".td-a-seal-card-sheet", ".td-a-seal-card-wrap"]) {
     assert.ok(!today.includes(gone), `today.css 不该再有 ${gone}`);
   }
   const daily = read("app/ledger/daily.css");

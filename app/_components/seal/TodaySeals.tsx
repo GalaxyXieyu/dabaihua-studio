@@ -1,7 +1,7 @@
 "use client";
 
 // "今天"页的"新盖的章"栏目（规范 10 行 / 6.7 / 7.4 / 11.3）：印谱叶（文武边），
-// 居中标题 + SealBookGrid 行均衡印位格 + 昨天小卡 + 当天印条。
+// 居中标题 + SealBookGrid 行均衡印位格 + 昨日纸小卡（整张 seal-sheet，与回放共用）+ 当天印条。
 // 服务端渲染时印位是 unknown、小卡和印条不渲染，避免先闪出印痕再消失；
 // SealStage 用 lazy 按需加载，没有新事件时不加载那个 chunk（规范 11.3）。
 // 跳过/打断的监听都在 SealStage 和 useSealQueue 里，本组件不另外监听。
@@ -15,7 +15,7 @@ import type { SealBookItem } from "./SealBookGrid.tsx";
 import { StampMark } from "./StampMark.tsx";
 import { replaySheetHtml } from "./seal-sheet.ts";
 import { cnCount, cnDateText, eventCaption } from "./seal-book.ts";
-import { REPLAY, WRAP } from "./seal-tokens.ts";
+import { WRAP } from "./seal-tokens.ts";
 import { addDays, shanghaiDate } from "./seal-store.ts";
 import type { SealDay, SealEvent } from "./seal-moments.ts";
 
@@ -89,8 +89,10 @@ export function TodaySeals({ days, generatedAt }: TodaySealsProps) {
 
   const count = plan?.events.length ?? 0;
 
-  // 印位格条目：释文按事件键归类，日期用中文（git 方章的日期在键里）
-  const bookItems: SealBookItem[] = (plan?.events ?? []).map((e) => ({
+  // 印位格条目：释文按事件键归类，日期用中文（git 方章的日期在键里）。
+  // 最新在前（照 mockup：十月四日左上……最旧在末），只反交给格子的数组，
+  // plan.events 本身不动（补盖队列的时序仍按时间正序）。
+  const bookItems: SealBookItem[] = [...(plan?.events ?? [])].reverse().map((e) => ({
     key: e.key,
     kind: e.kind,
     targetId: e.targetId,
@@ -113,29 +115,21 @@ export function TodaySeals({ days, generatedAt }: TodaySealsProps) {
         </header>
 
         {cardState !== "hidden" && yesterday !== null && (
-          <div className="td-a-seal-card-wrap">
-            <p className="td-a-seal-card-note">昨天 · {monthDay(yesterday)}</p>
-            <a
-              id="seal-yesterday-card"
-              data-state={cardState}
-              href={"/ledger?view=day&date=" + yesterday}
-              className="td-a-seal-card"
-              aria-label={"昨天的章，" + monthDay(yesterday)}
-            >
-              <span
-                className="td-a-seal-card-sheet"
-                style={{ width: REPLAY.sheetW, height: REPLAY.sheetH }}
-                dangerouslySetInnerHTML={{
-                  __html: replaySheetHtml({
-                    date: yesterday,
-                    events: cardEvents,
-                    streak: plan?.streak ?? 0,
-                    prefix: "seal-card",
-                  }),
-                }}
-              />
-            </a>
-          </div>
+          <a
+            id="seal-yesterday-card"
+            data-state={cardState}
+            href={"/ledger?view=day&date=" + yesterday}
+            className="td-a-seal-card seal-sheet"
+            aria-label={"昨天的章，" + monthDay(yesterday)}
+            dangerouslySetInnerHTML={{
+              __html: replaySheetHtml({
+                date: yesterday,
+                events: cardEvents,
+                streak: plan?.streak ?? 0,
+                prefix: "seal-card",
+              }),
+            }}
+          />
         )}
 
         <SealBookGrid items={bookItems} streak={plan?.streak} dry={plan?.dry} />

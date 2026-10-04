@@ -444,10 +444,11 @@ export async function playDayWrap(
 /** 纸的内容（终态）：纯函数，回放遮罩和收起后的小卡共用 */
 export { replaySheetHtml };
 
-function replayTitle(date: string): string {
+/** 遮罩对话框的无障碍名：「昨日回放 · 10 月 3 日」（题头已改成纸上的日期章） */
+function replayAriaLabel(date: string): string {
   const m = Number(date.slice(5, 7));
   const d = Number(date.slice(8, 10));
-  return `昨天 · ${m} 月 ${d} 日`;
+  return `昨日回放 · ${m} 月 ${d} 日`;
 }
 
 /** 昨日回放：全屏遮罩 + 一张纸，落印、盖日期章，最后收进 card（FLIP）。
@@ -509,7 +510,7 @@ export async function playReplay(
   mask.style.inset = "0";
   mask.style.zIndex = "80";
   mask.setAttribute("role", "dialog");
-  mask.setAttribute("aria-label", "昨日回放");
+  mask.setAttribute("aria-label", replayAriaLabel(date));
   mask.tabIndex = -1;
 
   const bg = document.createElement("div");
@@ -529,7 +530,7 @@ export async function playReplay(
   content.style.padding = "16px";
   mask.appendChild(content);
 
-  // scaleWrap（FLIP 目标）> fit（窄屏缩放）> 标题 + 纸 + 小椭圆章
+  // scaleWrap（FLIP 目标）> fit > 纸（流式小笺，题头是纸上的日期章）+ 小椭圆章
   const scaleWrap = document.createElement("div");
   scaleWrap.className = "seal-replay-scale";
   scaleWrap.style.position = "relative";
@@ -537,27 +538,13 @@ export async function playReplay(
 
   const fit = document.createElement("div");
   fit.className = "seal-replay-fit";
-  fit.style.transformOrigin = "center";
   scaleWrap.appendChild(fit);
 
-  const title = document.createElement("p");
-  title.className = "seal-replay-title";
-  title.textContent = replayTitle(date);
-  title.style.margin = "0 0 8px";
-  title.style.fontFamily = "var(--font-serif, serif)";
-  title.style.fontSize = "13px";
-  title.style.letterSpacing = ".06em";
-  title.style.color = "var(--seal-date, #71695C)";
-  fit.appendChild(title);
-
+  // 纸：类名 seal-sheet 吃 seal.css 的纸面规则（--wash 底、双线框、420px 满宽收窄、
+  // 手机满宽），尺寸跟着内容流式长，不再定死 400×190，也不另写文字题头
   const sheet = document.createElement("div");
-  sheet.className = "seal-replay-sheet";
+  sheet.className = "seal-replay-sheet seal-sheet";
   sheet.style.position = "relative";
-  sheet.style.width = `${REPLAY.sheetW}px`;
-  sheet.style.height = `${REPLAY.sheetH}px`;
-  sheet.style.background = "#FFFDF8";
-  sheet.style.border = "1px solid var(--line, #D8CFBE)";
-  sheet.style.boxSizing = "border-box";
   sheet.innerHTML = replaySheetHtml({ date, events, streak, prefix });
   fit.appendChild(sheet);
 
@@ -566,6 +553,7 @@ export async function playReplay(
   actor.className = "seal-actor";
   actor.dataset.kind = "tuoyuan";
   actor.dataset.pose = "stamped";
+  // 宽屏在纸左侧，窄屏（≤640px）在纸上方（纸已流式满宽，不再整体缩放）
   const narrow = window.innerWidth <= 640;
   actor.style.position = "absolute";
   if (narrow) {
@@ -583,10 +571,6 @@ export async function playReplay(
   breath.innerHTML = sealSvg("tuoyuan", { size: 96, prefix: `${prefix}-actor` });
   actor.appendChild(breath);
   fit.appendChild(actor);
-
-  // 窄屏缩放：整张纸按 min(1, (innerWidth - 32) / 400)
-  const s = Math.min(1, (window.innerWidth - 32) / REPLAY.sheetW);
-  fit.style.transform = `scale(${s})`;
 
   document.body.appendChild(mask);
   try {
@@ -705,7 +689,7 @@ export async function playReplay(
       })
       .catch(() => {});
     if (card) {
-      // 变换原点是 scaleWrap 的右下角（wrap 里还有标题和小章，所以 O 用 wrap 的 rect，尺寸用纸的 rect），
+      // 变换原点是 scaleWrap 的右下角（wrap 里还有小章，所以 O 用 wrap 的 rect，尺寸用纸的 rect），
       // 位移按通用公式算：P' = O + S(P - O) + t，令纸的左上角映射到 card 的左上角
       const wrapRect = scaleWrap.getBoundingClientRect();
       const o = { x: wrapRect.right, y: wrapRect.bottom };

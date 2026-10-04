@@ -61,7 +61,7 @@ export const BACK = { days: 3, speed: 0.6, gap: 120, after: 300, jumpUp: 180, ju
 // 昨日回放（规范 6.7）：纸、落印、日期章、收进栏
 export const REPLAY = {
   sheetIn: 240, after: 60, drop: 240, maxStagger: 220, dropBudget: 1500, maxMarks: 8, beforeDate: 160, hold: 600, dock: 360,
-  rot: [-2, 1.5, -1, 2, -1.5, 1, -2.5, 1.2], sheetW: 400, sheetH: 190, markSize: 32, dateSize: 72, dropFrom: 18, dropScale: 1.12,
+  rot: [-2, 1.5, -1, 2, -1.5, 1, -2.5, 1.2], markSize: 32, dateSize: 88, dropFrom: 18, dropScale: 1.12,
 } as const;
 
 // 呼吸（规范 5 / 6.5）：打盹 3400ms，休息 4800ms
