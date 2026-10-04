@@ -162,6 +162,14 @@ export function stampTimeline(kind: SealKind, opts?: StampOptions): StampTimelin
   };
 }
 
+/**
+ * reduced-motion 时印痕显现的关键帧（规范 7.5）：只有 opacity 一个键，
+ * 任何位移/缩放/裁剪都不许出现。播放器 reduced 分支只播这一份，测试靠它锁住“无 transform”。
+ */
+export function reducedImpressionFrames(opacity: number): { opacity: number }[] {
+  return [{ opacity: 0 }, { opacity }];
+}
+
 /** 鞠躬（规范 6.2 第 3 步）：240 下沉 / 320 停 / 300 回正，dropPx = 1×PX */
 export function bowTimeline(deg: number = WRAP.bowDeg, size: number = 64): {
   down: number; hold: number; up: number; total: number; deg: number; dropPx: number;

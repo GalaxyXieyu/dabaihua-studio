@@ -57,6 +57,10 @@
 /* stamped 已盖：站直，眼睛睁开 */
 .seal-actor[data-pose="stamped"] { transform: none; }
 
+/* stamping 盖章中（播放器用）：和 stamped 一样站直、眼睛睁开，身体关键帧走 WAAPI */
+.seal-actor[data-pose="stamping"] { transform: none; }
+.seal-actor[data-pose="stamping"] .seal-eye { transform: scaleY(1); }
+
 /* rest 空白日（6.5）：坐着，歪 4°，压到 0.97，眼睛半闭，慢呼吸 4800ms */
 .seal-actor[data-pose="rest"] { transform: rotate(-4deg) scaleY(.97); }
 .seal-actor[data-pose="rest"] .seal-eye { transform: scaleY(.35); }
