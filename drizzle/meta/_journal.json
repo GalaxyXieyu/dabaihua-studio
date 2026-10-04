@@ -169,6 +169,13 @@
       "when": 1791336000000,
       "tag": "0023_outline_structured",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1791422400000,
+      "tag": "0024_assistant_notify",
+      "breakpoints": true
     }
   ]
 }

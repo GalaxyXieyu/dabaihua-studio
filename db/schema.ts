@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { blob, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
@@ -490,6 +491,19 @@ export const briefNotifyLog = sqliteTable("brief_notify_log", {
   targetHost: text("target_host").notNull().default(""),
   createdAt: text("created_at").notNull(),
 }, (table) => [index("brief_notify_log_date_topic_idx").on(table.date, table.topicId, table.id)]);
+
+export const assistantNotifyLog = sqliteTable("assistant_notify_log", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  key: text("key").notNull(),
+  event: text("event").notNull(),
+  ref: text("ref"),
+  state: text("state").notNull(),
+  httpStatus: integer("http_status"),
+  error: text("error"),
+  durationMs: integer("duration_ms").notNull().default(0),
+  targetHost: text("target_host").notNull().default(""),
+  createdAt: text("created_at").notNull(),
+}, (table) => [index("assistant_notify_log_key_ref_idx").on(table.key, table.ref, sql`${table.id} DESC`)]);
 
 export const privateDatasets = sqliteTable("private_datasets", {
   name: text("name").primaryKey(),

@@ -11,7 +11,7 @@ import { readXArticles, readXPost, readXProfile, xPostAddress, xProfileAddress }
 export type AppEnv = { DB: D1Database; AI?: { run: (model: string, input: unknown) => Promise<unknown> } };
 const now = () => new Date().toISOString();
 const day = () => new Date().toISOString().slice(0, 10);
-const SCHEMA_VERSION = "2026-10-05.1";
+const SCHEMA_VERSION = "2026-10-05.2";
 const schemaReady = new WeakMap<object, Promise<void>>();
 
 async function initializeSchema(db: D1Database) {
@@ -87,6 +87,8 @@ async function initializeSchema(db: D1Database) {
     db.prepare("CREATE INDEX IF NOT EXISTS brief_selections_date_idx ON brief_selections(date, selected_at DESC)"),
     db.prepare("CREATE TABLE IF NOT EXISTS brief_notify_log (id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, topic_id TEXT NOT NULL, event TEXT NOT NULL, state TEXT NOT NULL, http_status INTEGER, error TEXT, duration_ms INTEGER NOT NULL DEFAULT 0, target_host TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL)"),
     db.prepare("CREATE INDEX IF NOT EXISTS brief_notify_log_date_topic_idx ON brief_notify_log(date, topic_id, id DESC)"),
+    db.prepare("CREATE TABLE IF NOT EXISTS assistant_notify_log (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT NULL, event TEXT NOT NULL, ref TEXT, state TEXT NOT NULL, http_status INTEGER, error TEXT, duration_ms INTEGER NOT NULL DEFAULT 0, target_host TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL)"),
+    db.prepare("CREATE INDEX IF NOT EXISTS assistant_notify_log_key_ref_idx ON assistant_notify_log(key, ref, id DESC)"),
     db.prepare("CREATE TABLE IF NOT EXISTS private_datasets (name TEXT PRIMARY KEY, json TEXT NOT NULL, sha256 TEXT NOT NULL, bytes INTEGER NOT NULL, generated_at TEXT, summary_json TEXT NOT NULL DEFAULT '{}', uploaded_at TEXT NOT NULL, uploaded_by TEXT)"),
     db.prepare("CREATE INDEX IF NOT EXISTS daily_brief_responses_updated_idx ON daily_brief_responses(updated_at)"),
     db.prepare("CREATE INDEX IF NOT EXISTS daily_brief_responses_date_idx ON daily_brief_responses(date)"),
