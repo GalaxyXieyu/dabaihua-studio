@@ -69,6 +69,12 @@ def mock_article_hash(payload):
         lines.append("html:" + hashlib.sha256(payload["articleHtml"].encode("utf-8")).hexdigest())
     if payload.get("qaReport"):
         lines.append("qa:" + hashlib.sha256(payload["qaReport"].encode("utf-8")).hexdigest())
+    if payload.get("stage"):
+        round_value = payload["stage"].get("round")
+        lines.append("stage:%s:%s" % (
+            payload["stage"].get("name", ""), "" if round_value is None else str(round_value)))
+    for cover in sorted(payload.get("covers") or [], key=lambda item: str(item.get("role", ""))):
+        lines.append("cover:%s:%s" % (cover.get("role", ""), cover.get("path", "")))
     for asset in sorted(payload.get("assets") or [], key=lambda item: item["name"]):
         lines.append("asset:%s %s" % (asset["name"], asset["sha256"]))
     text = "\n".join(lines) + "\n\n" + (payload.get("markdown") or "")
@@ -87,6 +93,7 @@ class MockArticleServer:
         self.requests = []
         self.force_slug_taken = set()
         self.force_locked = set()
+        self.force_round_not_reviewed = set()
         self.served_assets = set()
         self.auth_headers = []
         self.assistants = []
@@ -125,6 +132,13 @@ class MockArticleServer:
                     return
                 if slug in outer.force_locked:
                     self._send(409, {"error": "文章已锁定", "code": "article_locked", "status": "published"})
+                    return
+                stage = payload.get("stage") or {}
+                if slug in outer.force_round_not_reviewed and stage.get("round") is not None:
+                    self._send(422, {
+                        "error": "第 %s 轮还没有提交审稿" % stage.get("round"),
+                        "code": "round_not_reviewed",
+                    })
                     return
                 given_hash = payload.get("contentHash")
                 if given_hash and given_hash != mock_article_hash(payload):

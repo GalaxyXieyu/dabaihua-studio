@@ -83,7 +83,7 @@ superme — 个人工作台（内容选题中心）的多端 CLI（云端命令�
   superme retro history --title "..."
 
 文章命令:
-  superme article push <文件|目录> [--public] [--dry-run] [--root 目录] [--assistant 名字]
+  superme article push <文件|目录> [--public] [--dry-run] [--root 目录] [--assistant 名字] [--stage 阶段] [--round N]
   superme article sync <目录> [--dry-run]
   superme article list
   superme article feedback <slug> [--round N] [--json] [--assistant 名字]   # 读某篇文章的审稿反馈
@@ -140,6 +140,8 @@ ARTICLE_PROTOCOL = "dabaihua.article-push/v1"
 ARTICLES_STATE = CONFIG_DIR / "articles.json"
 ARTICLE_SLUG_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$")
 ARTICLE_IMAGE_EXTS = {"png", "jpg", "jpeg", "gif", "webp", "svg"}
+ARTICLE_STAGE_NAMES = ("drafted", "revised", "rewritten", "typeset")
+ARTICLE_COVER_EXTS = ("png", "jpg", "jpeg", "webp")
 ARTICLE_MAX_IMAGE_BYTES = 2 * 1024 * 1024
 ARTICLE_SIPS = "/usr/bin/sips"
 ARTICLE_FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})")
@@ -1757,6 +1759,105 @@ def _article_dir_board_topic_id(meta):
     return value
 
 
+def _stage_label(name, round_value):
+    """阶段徽标文案（设计 §4.2，与 lib/article-push.ts 的 stageLabel 一致）。"""
+    if name == "drafted":
+        return "初稿完成"
+    if name == "revised":
+        return "已按第 %s 轮改完" % ("" if round_value is None else round_value)
+    if name == "rewritten":
+        return "已按第 %s 轮重写" % ("" if round_value is None else round_value)
+    if round_value is None:
+        return "排版完成，待审"
+    return "已按第 %s 轮改完排版" % round_value
+
+
+def _stage_text(stage):
+    """dry-run 的 stage 行：<name> round <N> · 中文标签（无 round 不带 round 段）。"""
+    round_value = stage.get("round")
+    round_text = "" if round_value is None else (" round %s" % round_value)
+    return "%s%s · %s" % (stage.get("name", ""), round_text, _stage_label(stage.get("name"), round_value))
+
+
+def _article_push_stage(stage, round_value):
+    """push 的 --stage/--round → {name[, round]}；不合法就抛 ArticleError。
+
+    只写 --round N 等同 --stage revised --round N；revised/rewritten 必须带 round。"""
+    if stage is None and round_value is None:
+        return None
+    name = "revised" if stage is None else str(stage).strip().lower()
+    if name not in ARTICLE_STAGE_NAMES:
+        raise ArticleError("--stage 只能是 drafted、revised、rewritten 或 typeset")
+    if round_value is None:
+        if name in ("revised", "rewritten"):
+            raise ArticleError("--stage %s 必须带 --round（第几轮审稿）" % name)
+        return {"name": name}
+    return {"name": name, "round": round_value}
+
+
+def _article_cover_file(article_dir, prefix):
+    """images/<prefix>.<ext>：按 png/jpg/jpeg/webp 顺序取第一个存在的。"""
+    for extension in ARTICLE_COVER_EXTS:
+        candidate = article_dir / "images" / (prefix + "." + extension)
+        try:
+            if candidate.is_file():
+                return candidate
+        except OSError:
+            pass
+    return None
+
+
+def _article_dir_covers(article_dir, meta):
+    """封面来源清单（设计 §4.3，仅文章目录）：返回 ([{role, source}], [warning])。
+
+    images/cover-21x9.* 与 images/cover-1x1.* 自动发现；meta.cover 显式指定时优先
+    （字符串 = role cover，对象 = {21x9/1x1/cover: 路径}）。路径相对文章目录，
+    越出目录或找不到的条目给 warning 并忽略。同一文件可能占多个 role，去重交给 _store_image。"""
+    article_dir = Path(article_dir)
+    sources = []
+    warnings = []
+    meta_covers = {}
+    value = meta.get("cover")
+    if value is not None:
+        entries = []
+        if isinstance(value, str):
+            entries.append(("cover", value))
+        elif isinstance(value, dict):
+            for role in ("21x9", "1x1", "cover"):
+                if value.get(role) is not None:
+                    entries.append((role, value.get(role)))
+        else:
+            warnings.append("meta.cover 只能是字符串或 {21x9, 1x1, cover} 对象，忽略")
+        for role, path_value in entries:
+            if not isinstance(path_value, str) or not path_value.strip():
+                warnings.append("meta.cover 的 %s 路径不合法，忽略" % role)
+                continue
+            text = path_value.strip()
+            try:
+                (article_dir / text).resolve().relative_to(article_dir.resolve())
+            except (ValueError, OSError):
+                warnings.append("封面 %s 不在文章目录内: %s，忽略" % (role, text))
+                continue
+            meta_covers[role] = article_dir / text
+    for role, prefix in (("21x9", "cover-21x9"), ("1x1", "cover-1x1")):
+        source = meta_covers.pop(role, None)
+        if source is None:
+            source = _article_cover_file(article_dir, prefix)
+        if source is None:
+            continue
+        if not source.is_file():
+            warnings.append("封面 %s 找不到: %s，忽略" % (role, source.name))
+            continue
+        sources.append({"role": role, "source": source})
+    if "cover" in meta_covers:
+        source = meta_covers["cover"]
+        if not source.is_file():
+            warnings.append("封面 cover 找不到: %s，忽略" % source.name)
+        else:
+            sources.append({"role": "cover", "source": source})
+    return sources, warnings
+
+
 def _article_dir_slug(article_dir, meta, body_path, title, state_files):
     """文章目录的 slug：meta.slug > 目录名（合法时）> state 里记录的 slug > 由标题生成。"""
     value = meta.get("slug")
@@ -1794,6 +1895,7 @@ def _article_dir_entry(article_dir, meta, state_files):
         title = str(title).strip()
     layout = meta.get("layout")
     html_name = layout.get("html") if isinstance(layout, dict) else None
+    cover_specs, cover_warnings = _article_dir_covers(article_dir, meta)
     return {
         "file": body_path,
         "rel": article_dir.name + "/" + body_path.name,
@@ -1808,6 +1910,8 @@ def _article_dir_entry(article_dir, meta, state_files):
         "qa_report": _article_dir_read(_article_dir_named_file(article_dir, meta.get("qa_report"), "qa-report.md")),
         "board_topic_id": _article_dir_board_topic_id(meta),
         "brief": _article_dir_brief(meta),
+        "cover_specs": cover_specs,
+        "cover_warnings": cover_warnings,
     }
 
 
@@ -1906,6 +2010,12 @@ def _article_push_one(entry, assets, state_files, assistant=None):
         body["boardTopicId"] = entry["board_topic_id"]
     if entry.get("brief"):
         body["brief"] = entry["brief"]
+    # 阶段写回（设计 §4.2）：请求体原样传 {name[, round]}，无 round 不带 round 键。
+    if entry.get("stage"):
+        body["stage"] = entry["stage"]
+    # 封面（设计 §4.3）：[{role, path}]，path = 资产名 images/<sha12>.<ext>。
+    if entry.get("covers"):
+        body["covers"] = entry["covers"]
     if assistant:
         body["assistant"] = assistant
     path = "/api/articles/" + urllib.parse.quote(slug)
@@ -1931,6 +2041,8 @@ def _article_push_one(entry, assets, state_files, assistant=None):
     if status in (200, 201):
         result = response.get("result") or ("created" if status == 201 else "updated")
         print("%s %s · %s" % (slug, result, entry["title"]))
+        if entry.get("stage"):
+            print("已标记：%s" % _stage_label(entry["stage"].get("name"), entry["stage"].get("round")))
         record = state_files.setdefault(str(entry["file"]), {})
         record["slug"] = slug
         record["contentHash"] = entry["contentHash"]
@@ -1953,6 +2065,8 @@ def _article_push_one(entry, assets, state_files, assistant=None):
     elif status == 409 and code == "article_locked":
         print("失败 %s: 文章已锁定为非草稿状态（当前状态: %s），助手不能覆盖，先在站点上处理" % (
             slug, response.get("status") or "未知"))
+    elif status == 422 and code == "round_not_reviewed":
+        print("失败 %s: %s，不能标记阶段" % (slug, message))
     elif status == 422 and code == "assistant_required":
         print("失败 %s: 助手 token 推送需要 --assistant 助手名字" % slug)
     elif status == 503 and code == "owner_unavailable":
@@ -2089,6 +2203,11 @@ def _cmd_article_push(args, sync):
     if assistant and not args.dry_run and not _env_token(
             "SUPERME_TOKEN", "DABAIHUA_CARDS_ASSISTANT_TOKEN", "HANDBOOK_TOKEN"):
         sys.exit(ASSISTANT_TOKEN_HINT)
+    # --stage/--round 校验（设计 §4.2）：不联网，出错直接退。
+    try:
+        stage = _article_push_stage(getattr(args, "stage", None), getattr(args, "round", None))
+    except ArticleError as error:
+        sys.exit(str(error))
     args_root = Path(args.root).expanduser().resolve() if args.root else None
     if args_root is not None and not args_root.exists():
         sys.exit("找不到根目录: " + str(args_root))
@@ -2137,6 +2256,8 @@ def _cmd_article_push(args, sync):
         })
     if not entries:
         return 0
+    if stage is not None and len(entries) > 1:
+        sys.exit("--stage/--round 只能用于单篇文章")
     note_index = {}
     for abs_key, record in state_files.items():
         if record.get("slug"):
@@ -2158,6 +2279,16 @@ def _cmd_article_push(args, sync):
         if entry.get("article_html"):
             entry["article_html"], entry["html_images"] = _article_rewrite_html_images(
                 entry["article_html"], entry["article_dir"], normalizer)
+        # 封面（§4.3）：复用正文归一的资产存储（去重 / 2MB / 格式限制），
+        # 必须在取 assets 快照前解析，同一文件只存一份。仅文章目录模式有 cover_specs。
+        entry["stage"] = stage
+        entry["covers"] = []
+        for warning in entry.get("cover_warnings") or []:
+            normalizer.warn(warning)
+        for spec in entry.get("cover_specs") or []:
+            cover_name = normalizer._store_image(spec["source"])
+            if cover_name is not None:
+                entry["covers"].append({"role": spec["role"], "path": cover_name})
         assets = list(normalizer.assets.values())
         entry["tags"] = _article_tags(entry["meta"])
         if assistant:
@@ -2178,6 +2309,7 @@ def _cmd_article_push(args, sync):
             entry["tags"], assets, entry["markdown"],
             article_html=entry.get("article_html"), qa_report=entry.get("qa_report"),
             board_topic_id=entry.get("board_topic_id"), brief=entry.get("brief"),
+            stage=stage, covers=entry.get("covers"),
         )
         cached = state_files.get(str(entry["file"])) or {}
         changed = cached.get("contentHash") != entry["contentHash"]
@@ -2203,6 +2335,10 @@ def _cmd_article_push(args, sync):
                     print("  brief: %s · %s" % (entry["brief"].get("date", ""), entry["brief"].get("topicId", "")))
                 if entry.get("board_topic_id") is not None:
                     print("  boardTopicId: %s" % entry["board_topic_id"])
+                if entry.get("stage"):
+                    print("  stage: %s" % _stage_text(entry["stage"]))
+                for cover in entry.get("covers") or []:
+                    print("  封面 %s: %s" % (cover.get("role", ""), cover.get("path", "")))
                 if assistant:
                     print("  assistant: %s" % assistant)
                 for line in _article_dry_run_assets(entry, assets, state_files, entry_root):
@@ -2212,6 +2348,8 @@ def _cmd_article_push(args, sync):
                 print("%s · %s · %s/%s · 图片 %d · %s" % (
                     entry["slug"], entry["title"], entry["status"], public_text, len(assets), changed_text,
                 ))
+                if entry.get("stage"):
+                    print("  stage: %s" % _stage_text(entry["stage"]))
             for warning in normalizer.warnings:
                 print("  警告: " + warning)
             continue
@@ -2682,7 +2820,8 @@ def main():
     art.add_argument("--dry-run", action="store_true", help="只预览，不联网、不写状态")
     art.add_argument("--root", help="同步根目录（默认目录本身/文件所在目录）")
     art.add_argument("--assistant", help="以助手身份推送（用助手 token，强制草稿，1-20 个字符）")
-    art.add_argument("--round", type=_positive_int, help="feedback: 第 N 轮审稿（正整数）")
+    art.add_argument("--stage", help="push: 阶段写回 drafted|revised|rewritten|typeset（与 --round 一起用）")
+    art.add_argument("--round", type=_positive_int, help="feedback: 第 N 轮审稿；push: 单独用等同 --stage revised --round N")
     art.add_argument("--json", action="store_true", help="feedback: 原样输出服务端返回的 JSON")
 
     # ─── 简报反馈 ───
