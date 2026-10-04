@@ -8,7 +8,8 @@
  * notifyArticleReview 用 fake-d1 + 假 fetch 的发送与写回（delivered / failed /
  * unconfigured、手选优先、找不到轮返回 null）；提交与读取路由的静态约定
  * （submitReview 成功后才通知且仅 article、feedback/rounds 认助手 token 只对
- * article 生效、写接口不认助手 token、重试路由 404）。
+ * article 生效、写接口不认助手 token、重试路由 404）；审稿页 UI 的静态断言
+ * （阶段徽标 / 进度 / 通知状态四种文案与重试 / 接手人单选发 handoff / 封面）。
  *
  * 所有 URL、secret、内容都是杜撰的，仅用于测试。
  */
@@ -402,4 +403,82 @@ test("notify 重试路由：仅文章所有者会话，无已提交轮 404", () 
   assert.match(route, /status: 404/);
   // 读接口同款鉴权之外不接受助手 token（重发是写操作）。
   assert.doesNotMatch(route, /DABAIHUA_CARDS_ASSISTANT_TOKEN/);
+});
+
+// ─── 审稿页 UI 静态断言（设计 §4.2 / §4.3）──────────
+
+test("审稿页：阶段徽标 + 进度 + 通知状态四种文案与重试", () => {
+  const reviewer = read("../app/_components/ArticleReviewer.tsx");
+  const css = read("../app/_components/article-reviewer.css");
+
+  // 阶段徽标：状态后，描边小徽标，title 带助手与时间。
+  assert.match(reviewer, /data-testid="stage-badge"/);
+  assert.match(reviewer, /className="ar-a-badge"/);
+  assert.match(reviewer, /stageTitle\(stage\)/);
+  assert.match(css, /\.ar-a-badge\s*\{/);
+
+  // 进度：stageHistory 最近 5 条、最新在右，每段 title 带助手与时间。
+  assert.match(reviewer, /data-testid="stage-history"/);
+  assert.match(reviewer, /进度：/);
+  assert.match(reviewer, /stageHistory\.slice\(-5\)/);
+  assert.match(reviewer, /ar-a-progress-sep">→/);
+  assert.match(reviewer, /stageTitle\(item\)/);
+  assert.match(css, /\.ar-a-progress\s*\{/);
+
+  // 通知状态：取 rounds\[0\].notify，四种文案。
+  assert.match(reviewer, /rounds\[0\]\.notify \?\? null/);
+  assert.match(reviewer, /data-testid="review-notify"/);
+  assert.match(reviewer, /data-state=\{latestNotify\.state\}/);
+  assert.match(reviewer, /轮审稿已通知助手 · \{latestNotify\.handoff \|\| "助手"\} 接手 · \{formatTime\(latestNotify\.at\)\}/);
+  assert.match(reviewer, /轮审稿通知失败（\{latestNotify\.httpStatus \?\? \(latestNotify\.error \|\| "未知错误"\)\}）/);
+  assert.match(reviewer, /未配置助手通知/);
+  assert.match(reviewer, /通知已关闭/);
+  assert.match(css, /\.ar-a-notify\[data-state="failed"\]/);
+
+  // 失败才出「重新通知」按钮（仅 canReview）：POST /notify 带 round，成功 toast 后 reload。
+  assert.match(reviewer, /latestNotify\.state === "failed" && canReview/);
+  assert.match(reviewer, /data-testid="review-notify-retry"/);
+  assert.match(reviewer, /`\$\{base\}\/notify`/);
+  assert.match(reviewer, /\{ round: latest\.round \}/);
+  assert.match(reviewer, /void retryNotify\(\)/);
+});
+
+test("审稿页：接手人单选随 submit 发 handoff，封面只读展示", () => {
+  const reviewer = read("../app/_components/ArticleReviewer.tsx");
+  const articlePage = read("../app/articles/[slug]/page.tsx");
+  const css = read("../app/_components/article-reviewer.css");
+
+  // 接手人单选：自动 + 三位助手（名单来自 review-notify-core），默认自动。
+  assert.match(reviewer, /data-testid="handoff-picker"/);
+  assert.match(reviewer, /交给：/);
+  assert.match(reviewer, /HANDOFF_ASSISTANTS/);
+  assert.match(reviewer, /useState<string>\("auto"\)/);
+  assert.match(css, /\.ar-a-handoff-on\s*\{/);
+
+  // 「提交批注」「要求修改」两个面板发手选值；「确认通过」不加单选（默认 auto）。
+  assert.match(reviewer, /submitVerdict\("comments", verdictComment, handoffPick\)/);
+  assert.match(reviewer, /submitVerdict\("changes_requested", verdictComment, handoffPick\)/);
+  assert.match(reviewer, /submitVerdict\("approved", verdictComment\)/);
+  assert.match(reviewer, /\{ verdict, comment: overall, handoff \}/);
+
+  // 提交后的 toast 按通知状态分支，旧文案下线。
+  assert.match(reviewer, /已通知助手（\$\{notify\.handoff \|\| "助手"\} 接手）/);
+  assert.match(reviewer, /通知助手失败，可在页头重试/);
+  assert.doesNotMatch(reviewer, /反馈文件会在几秒内写入文章目录/);
+
+  // 封面：宽图在前、小方图在旁，lazy，alt 带 21:9 / 1:1，放在划词容器之外。
+  assert.match(reviewer, /data-testid="article-covers"/);
+  assert.match(reviewer, /cover\.role !== "1x1"/);
+  assert.match(reviewer, /loading="lazy"/);
+  assert.match(reviewer, /`封面 \$\{cover\.role\}`/);
+  const bodyIndex = reviewer.indexOf("dangerouslySetInnerHTML={articleHtml}");
+  const coversIndex = reviewer.indexOf("data-testid=\"article-covers\"");
+  assert.ok(coversIndex >= 0 && bodyIndex > coversIndex, "封面要在正文（划词容器）之前");
+  assert.match(css, /\.ar-a-covers\s*\{/);
+
+  // 文章页从 getArticle 传入 stage / stageHistory / covers（未登录分支不传）。
+  assert.match(articlePage, /toStageEntry/);
+  assert.match(articlePage, /stage=\{stage\}/);
+  assert.match(articlePage, /stageHistory=\{stageHistory\}/);
+  assert.match(articlePage, /covers=\{covers\}/);
 });

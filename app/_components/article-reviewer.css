@@ -109,6 +109,114 @@
   color: var(--faint);
 }
 
+/* 阶段徽标 / 进度 / 通知状态（设计 §4.2 / §4）。 */
+.ar-a-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink);
+}
+
+.ar-a-progress {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--faint);
+}
+
+.ar-a-progress-sep {
+  margin: 0 6px;
+  color: var(--line-strong);
+}
+
+.ar-a-notify {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--faint);
+}
+
+.ar-a-notify[data-state="failed"] {
+  color: var(--danger);
+}
+
+.ar-a-notify-retry {
+  margin-left: 8px;
+  padding: 2px 10px;
+  min-height: 24px;
+  border: 1px solid var(--danger);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.ar-a-notify-retry:disabled {
+  opacity: 0.55;
+}
+
+/* 封面（meta.covers，设计 §4.3）：只读，不参与划词。 */
+.ar-a-covers {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 16px 0 0;
+}
+
+.ar-a-covers img {
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  height: auto;
+}
+
+.ar-a-cover-wide {
+  flex: 1 1 0;
+  min-width: 0;
+  width: 100%;
+}
+
+.ar-a-cover-square {
+  flex: 0 0 auto;
+  width: 96px;
+}
+
+/* 提交面板的接手人单选（设计 §4 handoff）。 */
+.ar-a-handoff {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 12px 0 0;
+}
+
+.ar-a-handoff-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.ar-a-handoff-btn {
+  padding: 4px 10px;
+  min-height: 28px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ar-a-handoff-btn:hover {
+  border-color: var(--ink);
+}
+
+.ar-a-handoff-on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--canvas);
+}
+
 /* ── 布局 ─────────────────────────────────────────────── */
 .ar-a-layout {
   display: block;

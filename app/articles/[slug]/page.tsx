@@ -5,7 +5,7 @@ import { getSessionUser } from "../../../lib/auth";
 import { getArticle, listMarks, listRounds } from "../../../lib/article-review";
 import { canReadArticle, isArticleOwner } from "../../../lib/article-access";
 import { requestOrigin } from "../../../lib/request-origin";
-import { ArticleReviewer, type ReviewMark, type ReviewRoundSummary } from "../../_components/ArticleReviewer";
+import { ArticleReviewer, type ReviewCover, type ReviewMark, type ReviewRoundSummary, type ReviewStageSummary } from "../../_components/ArticleReviewer";
 import { SiteAppBar } from "../../_components/SiteAppBar";
 import { statusLabelFor } from "../../_components/article-status";
 import { ArticleHeaderActions } from "./ArticleHeaderActions";
@@ -14,6 +14,20 @@ export const dynamic = "force-dynamic";
 export const viewport = { width: "device-width", initialScale: 1, interactiveWidget: "resizes-content" as const };
 
 const SLUG_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,120}$/;
+
+// meta_json 里的阶段条目（getArticle 返回原始 JSON 记录）转成页面用的形状。
+function toStageEntry(value: unknown): ReviewStageSummary | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const round = Number(record.round);
+  return {
+    name: String(record.name ?? ""),
+    round: Number.isFinite(round) ? round : null,
+    label: record.label ? String(record.label) : null,
+    assistant: record.assistant ? String(record.assistant) : null,
+    at: record.at ? String(record.at) : null,
+  };
+}
 
 export default async function ArticleDetailPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -64,6 +78,11 @@ export default async function ArticleDetailPage({ params }: { params: Promise<{ 
   const marks = await listMarks(env, "article", slug) as unknown as ReviewMark[];
   const rounds = await listRounds(env, "article", slug) as unknown as ReviewRoundSummary[];
   const latestRound = rounds.length ? Number(rounds[0].round) : null;
+  const stage = toStageEntry(article.stage);
+  const stageHistory = (Array.isArray(article.stageHistory) ? article.stageHistory : [])
+    .map(toStageEntry)
+    .filter((item): item is ReviewStageSummary => item !== null);
+  const covers = (Array.isArray(article.covers) ? article.covers : []) as ReviewCover[];
 
   return (
     <div className="ar-page has-action-bar">
@@ -81,6 +100,9 @@ export default async function ArticleDetailPage({ params }: { params: Promise<{ 
         currentUserId={user.id}
         backHref="/content?view=articles"
         updatedAt={article.updatedAt}
+        stage={stage}
+        stageHistory={stageHistory}
+        covers={covers}
         extraHeader={
           owner ? <ArticleHeaderActions slug={slug} initialPublic={article.isPublic} latestRound={latestRound} /> : undefined
         }

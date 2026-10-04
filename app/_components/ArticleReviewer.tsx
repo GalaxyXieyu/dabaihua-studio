@@ -8,8 +8,9 @@
  * - 支持总评：提交批注 / 打回 / 通过。
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { splitSentences, type SentenceSpan } from "../../lib/sentences";
+import { HANDOFF_ASSISTANTS } from "../../lib/review-notify-core";
 import { htmlSourceLabel } from "./article-status";
 import { decideReviewMode, readReviewModeSignals } from "./review-mode";
 import { Seal } from "./seal/Seal.tsx";
@@ -39,6 +40,24 @@ export type ReviewMark = {
   updatedAt: string;
 };
 
+export type ReviewNotifySummary = {
+  state: string;
+  httpStatus?: number | null;
+  error?: string | null;
+  at?: string | null;
+  handoff?: string | null;
+};
+
+export type ReviewStageSummary = {
+  name: string;
+  round?: number | null;
+  label?: string | null;
+  assistant?: string | null;
+  at?: string | null;
+};
+
+export type ReviewCover = { role: string; path: string; url: string };
+
 export type ReviewRoundSummary = {
   round: number;
   verdict: string;
@@ -47,6 +66,8 @@ export type ReviewRoundSummary = {
   nickname?: string;
   createdAt: string;
   exportPath?: string | null;
+  /** 最近一次助手通知的结果（null = 还没发过）。 */
+  notify?: ReviewNotifySummary | null;
 };
 
 export type ArticleReviewerProps = {
@@ -64,6 +85,12 @@ export type ArticleReviewerProps = {
   backLabel?: string;
   updatedAt?: string | null;
   extraHeader?: ReactNode;
+  /** 当前阶段（meta.stage，设计 §4.2）；null = 未登记。 */
+  stage?: ReviewStageSummary | null;
+  /** 阶段历史（meta.stageHistory）。 */
+  stageHistory?: ReviewStageSummary[];
+  /** 封面资产（meta.covers，设计 §4.3），只读展示。 */
+  covers?: ReviewCover[];
 };
 
 type PendingSelection = {
@@ -98,6 +125,9 @@ const MARK_STYLE_PENDING = "background:var(--accent-wash);border-bottom:2px dash
 const TOUCH_BLOCK_SELECTOR = "p, li, h1, h2, h3, h4, h5, h6, blockquote, figcaption, pre, td, th";
 const INLINE_DISPLAY = /^(inline|contents|ruby)/;
 
+// 提交面板的接手人选项（"auto" 走自动规则，见 lib/review-notify-core）。
+const HANDOFF_PICK_OPTIONS = ["auto", ...HANDOFF_ASSISTANTS] as const;
+
 
 function commonPrefix(left: string, right: string) {
   const limit = Math.min(left.length, right.length);
@@ -116,6 +146,15 @@ function commonSuffix(left: string, right: string) {
 function formatTime(value: string | null | undefined) {
   if (!value) return "";
   return value.slice(0, 16).replace("T", " ");
+}
+
+// 阶段徽标 / 进度段的悬浮提示：<assistant> · <时间>。
+function stageTitle(stage: ReviewStageSummary) {
+  return [stage.assistant, stage.at ? formatTime(stage.at) : null].filter(Boolean).join(" · ");
+}
+
+function coverAlt(cover: ReviewCover) {
+  return cover.role === "21x9" || cover.role === "1x1" ? `封面 ${cover.role}` : "封面";
 }
 
 function textOffset(container: HTMLElement, node: Node, offset: number) {
@@ -354,6 +393,33 @@ function Sheet({
   );
 }
 
+function HandoffPicker({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="ar-a-handoff" data-testid="handoff-picker">
+      <span className="ar-a-handoff-label">交给：</span>
+      {HANDOFF_PICK_OPTIONS.map((option) => (
+        <button
+          key={option}
+          type="button"
+          className={`ar-a-handoff-btn${value === option ? " ar-a-handoff-on" : ""}`}
+          onClick={() => onChange(option)}
+          disabled={disabled}
+        >
+          {option === "auto" ? "自动" : option}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function MarkRow({
   mark,
   currentRound,
@@ -398,6 +464,9 @@ export function ArticleReviewer({
   backLabel = "文章",
   updatedAt,
   extraHeader,
+  stage = null,
+  stageHistory = [],
+  covers = [],
 }: ArticleReviewerProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -430,6 +499,8 @@ export function ArticleReviewer({
   const [toast, setToast] = useState("");
   const [unlocated, setUnlocated] = useState<Set<number>>(new Set());
   const [flashId, setFlashId] = useState<number | null>(null);
+  // 提交面板里手选的接手人（"auto" = 自动规则，设计 §4 handoff）。
+  const [handoffPick, setHandoffPick] = useState<string>("auto");
 
   const base = `/api/review/${target.type}/${target.id}`;
 
@@ -445,6 +516,13 @@ export function ArticleReviewer({
 
   const changeCount = useMemo(() => marks.filter((mark) => mark.type === "change").length, [marks]);
   const goodCount = useMemo(() => marks.filter((mark) => mark.type === "good").length, [marks]);
+
+  // 页头徽标 / 进度 / 封面：stageHistory 只展示最近 5 条（最新在右）；
+  // 21x9 宽图在前，1x1 小方图在旁（其余角色按宽图处理）。
+  const recentStages = useMemo(() => stageHistory.slice(-5), [stageHistory]);
+  const latestNotify = rounds.length ? (rounds[0].notify ?? null) : null;
+  const coverWide = useMemo(() => covers.filter((cover) => cover.role !== "1x1"), [covers]);
+  const coverSquare = useMemo(() => covers.filter((cover) => cover.role === "1x1"), [covers]);
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -934,14 +1012,39 @@ export function ArticleReviewer({
     }
   }
 
-  async function submitVerdict(verdict: ReviewVerdict, overall: string) {
+  // 页头「重新通知」：重发最新一轮的助手通知（POST /notify，仅 canReview）。
+  async function retryNotify() {
+    const latest = rounds[0];
+    if (!latest || busy) return;
     setBusy(true);
     setError("");
     try {
-      const data = await api(`${base}/submit`, "POST", { verdict, comment: overall });
+      const data = await api(`${base}/notify`, "POST", { round: latest.round });
+      const notify = (data.notify ?? {}) as { state?: string; handoff?: string | null };
+      showToast(notify.state === "delivered" ? `审稿通知已重新送达（${notify.handoff || "助手"} 接手）` : "已重新发送审稿通知");
+      window.setTimeout(() => window.location.reload(), 1200);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "重发审稿通知失败");
+      setBusy(false);
+    }
+  }
+
+  async function submitVerdict(verdict: ReviewVerdict, overall: string, handoff = "auto") {
+    setBusy(true);
+    setError("");
+    try {
+      const data = await api(`${base}/submit`, "POST", { verdict, comment: overall, handoff });
       const submittedRound = Number(data.round || round);
+      // 通知状态决定 toast：送达 → 带接手人；失败 → 提示去页头重试。
+      const notify = (data.notify ?? null) as { state?: string; handoff?: string | null } | null;
       setVerdictComment("");
-      showToast(`已提交第 ${submittedRound} 轮审稿，反馈文件会在几秒内写入文章目录`);
+      let message = `已提交第 ${submittedRound} 轮审稿`;
+      if (notify?.state === "delivered") {
+        message = `已提交第 ${submittedRound} 轮，已通知助手（${notify.handoff || "助手"} 接手）`;
+      } else if (notify?.state === "failed") {
+        message = `已提交第 ${submittedRound} 轮，通知助手失败，可在页头重试`;
+      }
+      showToast(message);
       if (verdict === "approved") {
         // 审稿通过的方章：当场盖一次（最多等 1600ms），通过面板先留着让角色演完；
         // reload 等盖章结束、且满原本的 1400ms，两者都到了再刷新（规范 8.5/8.6）。
@@ -1065,6 +1168,12 @@ export function ArticleReviewer({
             <h1 className="ar-a-title">{title || "未命名"}</h1>
             <p className="ar-a-meta">
               <span>{statusLabel}</span>
+              {stage ? (
+                <>
+                  <span className="ar-a-sep">·</span>
+                  <span className="ar-a-badge" data-testid="stage-badge" title={stageTitle(stage)}>{stage.label || stage.name}</span>
+                </>
+              ) : null}
               <span className="ar-a-sep">·</span>
               <span>第 <span className="ar-a-num">{round}</span> 轮</span>
               <span className="ar-a-sep">·</span>
@@ -1076,6 +1185,41 @@ export function ArticleReviewer({
                 </>
               ) : null}
             </p>
+            {recentStages.length ? (
+              <p className="ar-a-progress" data-testid="stage-history">
+                进度：
+                {recentStages.map((item, index) => (
+                  <Fragment key={`${item.name}-${item.round ?? index}-${item.at ?? index}`}>
+                    {index > 0 ? <span className="ar-a-progress-sep">→</span> : null}
+                    <span title={stageTitle(item)}>{item.label || item.name}</span>
+                  </Fragment>
+                ))}
+              </p>
+            ) : null}
+            {latestNotify ? (
+              <p className="ar-a-notify" data-testid="review-notify" data-state={latestNotify.state}>
+                {latestNotify.state === "delivered" ? (
+                  <>第 {rounds[0].round} 轮审稿已通知助手 · {latestNotify.handoff || "助手"} 接手 · {formatTime(latestNotify.at)}</>
+                ) : latestNotify.state === "failed" ? (
+                  <>第 {rounds[0].round} 轮审稿通知失败（{latestNotify.httpStatus ?? (latestNotify.error || "未知错误")}）</>
+                ) : latestNotify.state === "unconfigured" ? (
+                  <>第 {rounds[0].round} 轮审稿已提交 · 未配置助手通知</>
+                ) : (
+                  <>第 {rounds[0].round} 轮审稿已提交 · 通知已关闭</>
+                )}
+                {latestNotify.state === "failed" && canReview ? (
+                  <button
+                    type="button"
+                    data-testid="review-notify-retry"
+                    className="ar-a-notify-retry"
+                    onClick={() => void retryNotify()}
+                    disabled={busy}
+                  >
+                    重新通知
+                  </button>
+                ) : null}
+              </p>
+            ) : null}
             <div className="ar-a-toolbar">
               <button
                 type="button"
@@ -1099,6 +1243,19 @@ export function ArticleReviewer({
           {error ? <p className="ar-a-error">{error}</p> : null}
           <div className="ar-a-layout">
             <main className="ar-a-main">
+              {/* 封面（meta.covers，设计 §4.3）：只读展示，放在划词容器之外。 */}
+              {coverWide.length || coverSquare.length ? (
+                <div className="ar-a-covers" data-testid="article-covers">
+                  {coverWide.map((cover) => (
+                    // eslint-disable-next-line @next/next/no-img-element -- 封面是审稿页临时资产，走划词外的原图
+                    <img key={cover.path} className="ar-a-cover-wide" src={cover.url} alt={coverAlt(cover)} loading="lazy" />
+                  ))}
+                  {coverSquare.map((cover) => (
+                    // eslint-disable-next-line @next/next/no-img-element -- 封面是审稿页临时资产，走划词外的原图
+                    <img key={cover.path} className="ar-a-cover-square" src={cover.url} alt={coverAlt(cover)} loading="lazy" />
+                  ))}
+                </div>
+              ) : null}
               <div
                 ref={containerRef}
                 onClick={handleArticleClick}
@@ -1351,7 +1508,8 @@ export function ArticleReviewer({
             placeholder="可选：给作者的整体说明"
             className="ar-a-textarea"
           />
-          <button type="button" onClick={() => submitVerdict("comments", verdictComment)} disabled={busy} className="ar-a-btn ar-a-btn-primary ar-a-btn-block mt-3">提交批注</button>
+          <HandoffPicker value={handoffPick} onChange={setHandoffPick} disabled={busy} />
+          <button type="button" onClick={() => submitVerdict("comments", verdictComment, handoffPick)} disabled={busy} className="ar-a-btn ar-a-btn-primary ar-a-btn-block mt-3">提交批注</button>
         </Sheet>
       ) : null}
 
@@ -1371,9 +1529,10 @@ export function ArticleReviewer({
             placeholder="说明需要修改的地方…"
             className="ar-a-textarea"
           />
+          <HandoffPicker value={handoffPick} onChange={setHandoffPick} disabled={busy} />
           <button
             type="button"
-            onClick={() => submitVerdict("changes_requested", verdictComment)}
+            onClick={() => submitVerdict("changes_requested", verdictComment, handoffPick)}
             disabled={busy || (!verdictComment.trim() && changeCount === 0)}
             className="ar-a-btn ar-a-btn-danger ar-a-btn-block mt-3"
           >
