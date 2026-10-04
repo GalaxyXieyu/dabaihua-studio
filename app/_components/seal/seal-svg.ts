@@ -4,17 +4,19 @@
 //   1. 不用 <style> 块和 class 选择器（同页多个 SVG 会互相污染），改成每个元素直接带 style 属性；
 //   2. 颜色走 CSS 变量带回退（SVG 表现属性里不能用 var()，所以写在 style 属性里）；
 //   3. 所有 id 加 prefix 前缀（规范 11.1），url(#...) 同步，防止同页重复。
-// 印痕分两代：fang/yuan/hulu/yinshou 已换成 v3 最终印痕（方向 A 汉印·浑厚，48x48、
-// var(--seal-red,#B23A2B)），图形来自 svg/v3/stamp-mark-<kind>.svg（大尺寸，纹理 filter +
-// 咬边 mask）和 -small.svg（size <= 28 时用，仅 mask），经 seal-marks-v3.ts 内联。
+// 印痕分两代：五个 kind 全部换成 v3 最终印痕（方向 A 汉印·浑厚，48x48、
+// var(--seal-red,#B23A2B)），图形来自 svg/v3/stamp-mark-<stem>.svg（大尺寸，纹理 filter +
+// 咬边 mask）和 -small.svg（size <= 28 时用，仅 mask），经 seal-marks-v3.ts 内联；
+// tuoyuan（日章）是汉半通印（stem 为 bantong，替代椭圆印面，键名不变）。
+// 带 date 的 tuoyuan 是日期章：V3_DATE_TEMPLATE（10-03 样张）打底，字形和界格
+// 换成 seal-date-glyphs.ts 现算的当日竖排篆文。
 // 换新刻的印：把两个定稿文件覆盖进 svg/v3/ 后运行 npm run seal:marks 重新生成即可，
-// markSvg 这边不用改。tuoyuan（椭圆日章）和日期章暂时仍用下方 phase-1 占位几何，
-// 等重刻后同样接入。角色（sealSvg / ACTORS）与印痕互不影响。
+// markSvg 这边不用改。角色（sealSvg / ACTORS）与印痕互不影响（tuoyuan 角色仍是椭圆印身）。
 // React 组件（Seal / StampMark / StampSlot）和第 3 部分的 DOM 播放器都只用这份，
 // 保证服务端 HTML、动画里换章、回放的纸上是同一份图形。
 import type { SealKind } from "./seal-tokens.ts";
-import { dateGlyphPaths } from "./seal-machine.ts";
-import { V3_MARKS } from "./seal-marks-v3.ts";
+import { dateGlyphD, dateGridD, dateStrokesV } from "./seal-date-glyphs.ts";
+import { V3_DATE_TEMPLATE, V3_MARKS } from "./seal-marks-v3.ts";
 
 // ---------- 样式（颜色走 CSS 变量带回退） ----------
 
@@ -26,8 +28,6 @@ const LINE = "fill:none;stroke:var(--seal-line,#1B1915);stroke-width:var(--seal-
 const FACE = "fill:var(--seal-red,#B23A2B)";
 // 眼睛
 const EYE = "fill:var(--seal-line,#1B1915)";
-// 印痕边框：2.5 格
-const frameStyle = (dry: boolean) => `fill:none;stroke:${dry ? "var(--seal-dry,#906752)" : "var(--seal-red,#B23A2B)"};stroke-width:2.5;stroke-linejoin:round`;
 // 印文笔画：2 格，方头
 const inkStyle = (dry: boolean, width = 2) =>
   `fill:none;stroke:${dry ? "var(--seal-dry,#906752)" : "var(--seal-red,#B23A2B)"};stroke-width:${width};stroke-linecap:square;stroke-linejoin:miter`;
@@ -101,34 +101,6 @@ const ACTORS: Record<SealKind, ActorArt> = {
     ],
     outline: "M21 6H27Q30 6 30 9V42.5Q30 44 28.5 44H19.5Q18 44 18 42.5V9Q18 6 21 6Z",
     eyes: [[21, 13.5], [27, 13.5]],
-  },
-};
-
-type MarkArt = { frame: BodyEl; glyph: string[] };
-
-const MARKS: Record<SealKind, MarkArt> = {
-  fang: {
-    frame: { tag: "rect", x: 7.25, y: 7.25, w: 33.5, h: 33.5, rx: 2.5 },
-    glyph: ["M15 15.5H33M24 15.5V32.5M13.5 32.5H34.5"],
-  },
-  yuan: {
-    frame: { tag: "circle", cx: 24, cy: 24, r: 16.75 },
-    glyph: ["M16.5 16H31.5V31Q31.5 33 29.5 32.5L27 31.5M19 20.5L25 23.5M18 29.5L26 25.5"],
-  },
-  hulu: {
-    frame: { tag: "path", d: "M19.1 18.5A7 7 0 1 1 28.9 18.5C28.26 19.13 30.54 20.28 31.5 21A12.5 12.5 0 1 1 16.5 21C17.46 20.28 19.74 19.13 19.1 18.5Z" },
-    glyph: ["M18.5 27H30V37Q30 39 28 38.5L26.5 38M24.5 22.5V29Q24 35.5 18 39"],
-  },
-  tuoyuan: {
-    frame: { tag: "ellipse", cx: 24, cy: 24, rx: 17.75, ry: 12.75 },
-    glyph: ["M17.5 16.5H30.5V31.5H17.5ZM17.5 24H30.5"],
-  },
-  yinshou: {
-    frame: { tag: "rect", x: 14.25, y: 3.25, w: 19.5, h: 41.5, rx: 2 },
-    glyph: [
-      "M17.5 10V18.5H21.5M21.5 7.5V21.5M25 7.5L24 11M24 11H30.5M29.5 11Q28.5 17.5 23.5 21M25.5 14Q27.5 19 31 21",
-      "M24 24.5V26.5M17 29.5V27H31V29.5M20 30.5V40.5M20 30.5H27.5V34.5H20M20 36H28.5V40.5H20",
-    ],
   },
 };
 
@@ -226,13 +198,24 @@ function markSvgV3(
   art: { large: string; small: string },
   opts: { size: number; prefix: string; tier?: 0 | 1 | 2 | 3; dry?: boolean; title?: string },
 ): string {
+  // 小尺寸用干净版（无 filter，只留咬边 mask）；size <= 28 的阈值来自设计规范
+  return finishV3Mark(opts.size <= 28 ? art.small : art.large, opts);
+}
+
+/**
+ * v3 印痕收尾（大/小两版共用）：id 前缀、开标签补尺寸/可访问性属性、title、
+ * 干印换色、tier>=1 叠纸色细线。图形本身逐字节来自 seal-marks-v3.ts。
+ */
+function finishV3Mark(
+  art: string,
+  opts: { size: number; prefix: string; tier?: 0 | 1 | 2 | 3; dry?: boolean; title?: string },
+): string {
   const p = cssId(opts.prefix);
   const dry = opts.dry ?? false;
   const tier = opts.tier ?? 0;
   const s = opts.size;
 
-  // 小尺寸用干净版（无 filter，只留咬边 mask）；size <= 28 的阈值来自设计规范
-  let out = prefixV3Ids(s <= 28 ? art.small : art.large, p);
+  let out = prefixV3Ids(art, p);
 
   // 开标签补上运行时尺寸和可访问性属性，title 插在开标签后面
   const open =
@@ -243,59 +226,61 @@ function markSvgV3(
   // 干印换色：v3 印泥色写在 style 里，直接整体替换
   if (dry) out = out.replaceAll("var(--seal-red,#B23A2B)", "var(--seal-dry,#906752)");
 
-  // 连续天数纹理：和 phase-1 一样叠在最上层（规范 6.4）
+  // 连续天数纹理：叠在最上层（规范 6.4）
   const tierLine = tier >= 1 ? `<path style="${PAPER_LINE}" d="${TIER_LINES[tier as 1 | 2 | 3]}"/>` : "";
   if (tierLine) out = out.replace(/<\/svg>$/, `${tierLine}</svg>`);
 
   return out;
 }
 
+/** 把模板里指定笔画宽度的 <g> 组内的那条 path d 换成现算值（日期章的字形 / 界格） */
+function replaceGroupPathD(svg: string, strokeStyle: string, d: string): string {
+  const re = new RegExp(`(<g style="[^"]*${strokeStyle}[^"]*"><path d=")[^"]*("/></g>)`);
+  return svg.replace(re, (all, pre: string, post: string) => pre + d + post);
+}
+
 /**
- * 朱文印痕。有 v3 定稿的 kind（fang/yuan/hulu/yinshou）走 markSvgV3；
- * 其余（tuoyuan 或带 date 的任何 kind）仍走下面 phase-1 占位几何：
- * #impression（边框 + #glyph 印文）。
+ * v3 日期章（竖长方朱文，自上而下：月组、横界格、日组）。V3_DATE_TEMPLATE 是
+ * 10-03 样张，这里把字形和界格两条 path 换成 seal-date-glyphs.ts 现算的当日印文；
+ * size <= 28 时去掉纹理 filter 和咬边（干净小版，同其他 v3 印痕的小号规则）。
+ * date 是 ISO 日期 "YYYY-MM-DD"；不合式时退到一月一日，保证印面有字。
+ */
+function dateMarkSvgV3(
+  opts: { size: number; prefix: string; tier?: 0 | 1 | 2 | 3; dry?: boolean; date: string; title?: string },
+): string {
+  const m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(opts.date);
+  const month = m ? Number(m[2]) : 1;
+  const day = m ? Number(m[3]) : 1;
+
+  let art = V3_DATE_TEMPLATE;
+  // 界格组（0.9）和字形组（1.35）各只有一条 path；边框组（1.9）不动
+  const { gridY } = dateStrokesV(month, day);
+  art = replaceGroupPathD(art, "stroke-width:0.9;stroke-linecap:butt", dateGridD(gridY));
+  art = replaceGroupPathD(art, "stroke-width:1.35", dateGlyphD(month, day));
+
+  if (opts.size <= 28) {
+    art = art
+      .replace(/<filter\b[\s\S]*?<\/filter>/, "")
+      .replace(/ filter="url\(#[^)]*\)"/, "")
+      .replace(/<g fill="#000">[\s\S]*?<\/g>/, '<g fill="#000"></g>');
+  }
+
+  return finishV3Mark(art, opts);
+}
+
+/**
+ * 朱文印痕。五个 kind 全走 v3 定稿印痕（seal-marks-v3.ts 内联的 svg/v3/ 文件）：
+ * tuoyuan 带 date 时是日期章（dateMarkSvgV3 现算印文）；其余（含无 date 的
+ * tuoyuan 半通印）直接用 V3_MARKS[kind]，date 对它们无意义、忽略。
  * dry=true 用干印色 var(--seal-dry)；tier>=1 时在最上层叠纸色细线（飞白/破边）。
- * date（"MM·DD"，只给 tuoyuan 用）：框不变，#glyph 换成日期数字路径，笔画 1.75。
  */
 export function markSvg(
   kind: SealKind,
   opts: { size: number; prefix: string; tier?: 0 | 1 | 2 | 3; dry?: boolean; date?: string; title?: string },
 ): string {
-  // 日期章必须用 phase-1 的日期数字路径，v3 图形里没有日期版
-  const v3 = opts.date ? undefined : V3_MARKS[kind];
+  if (kind === "tuoyuan" && opts.date) return dateMarkSvgV3({ ...opts, date: opts.date });
+  const v3 = V3_MARKS[kind];
   if (v3) return markSvgV3(v3, opts);
-
-  const m = MARKS[kind];
-  const p = cssId(opts.prefix);
-  const dry = opts.dry ?? false;
-  const tier = opts.tier ?? 0;
-  const s = opts.size;
-
-  const f = m.frame;
-  const frame =
-    f.tag === "path"
-      ? `<path style="${frameStyle(dry)}" d="${f.d}"/>`
-      : f.tag === "circle"
-        ? `<circle style="${frameStyle(dry)}" cx="${f.cx}" cy="${f.cy}" r="${f.r}"/>`
-        : f.tag === "ellipse"
-          ? `<ellipse style="${frameStyle(dry)}" cx="${f.cx}" cy="${f.cy}" rx="${f.rx}" ry="${f.ry}"/>`
-          : `<rect style="${frameStyle(dry)}" x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}"${f.rx !== undefined ? ` rx="${f.rx}"` : ""}/>`;
-
-  // 日期章：小椭圆章的框不变，印文换成日期数字（对照 svg/stamp-mark-date-example.svg）
-  const glyphInner = kind === "tuoyuan" && opts.date
-    ? dateGlyphPaths(opts.date)
-        .map((g) => `<path transform="translate(${g.x} ${g.y})" d="${g.d}"/>`)
-        .join("")
-    : m.glyph.map((d) => `<path d="${d}"/>`).join("");
-  const glyphWidth = kind === "tuoyuan" && opts.date ? 1.75 : 2;
-
-  const tierLine = tier >= 1 ? `<path style="${PAPER_LINE}" d="${TIER_LINES[tier as 1 | 2 | 3]}"/>` : "";
-
-  return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="${s}" height="${s}" aria-hidden="true" focusable="false" class="seal-mark-svg">` +
-    (opts.title ? `<title>${esc(opts.title)}</title>` : "") +
-    `<g id="${p}-impression">${frame}<g id="${p}-glyph" style="${inkStyle(dry, glyphWidth)}">${glyphInner}</g></g>` +
-    tierLine +
-    `</svg>`
-  );
+  // 五个 kind 都已定稿，正常到不了这里；重刻中缺文件时给一句可排查的错
+  throw new Error(`markSvg: ${kind} 还没有 v3 印痕，先跑 npm run seal:marks`);
 }

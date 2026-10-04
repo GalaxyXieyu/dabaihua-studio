@@ -1,7 +1,8 @@
 // 印章 IP 静态组件测试（seal-svg 字符串真源 / Seal / StampMark / StampSlot / seal.css / 导航方章）。
-// 核心断言：角色和 phase-1 印痕的 svg/ 目录几何逐字出现在 sealSvg / markSvg 的输出里；
-// v3 定稿印痕（fang/yuan/hulu/yinshou）的 svg/v3/ 几何逐字出现在输出里，
+// 核心断言：角色 svg/ 几何逐字出现在 sealSvg 输出里；五个 kind 的 v3 定稿印痕
+// （svg/v3/）几何逐字出现在 markSvg 输出里（tuoyuan 是半通印 bantong 文件），
 // id 加 prefix 后不重复、url(#) 引用有效、没有 <style> 块和 emoji。
+// 日期章用 V3_DATE_TEMPLATE + seal-date-glyphs 现算印文（样张对照见 seal-core）。
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -17,8 +18,9 @@ const SVG_DIR = new URL("../app/_components/seal/svg/", import.meta.url);
 const read = (name) => readFileSync(new URL(name, SVG_DIR), "utf8");
 const V3_DIR = new URL("v3/", SVG_DIR);
 const readV3 = (name) => readFileSync(new URL(name, V3_DIR), "utf8");
-// 已接入 v3 定稿印痕的 kind；其余（tuoyuan）仍走 phase-1
+// 已接入 v3 定稿印痕的 kind（五个都齐）；tuoyuan 的印面是半通印，文件名叫 bantong
 const V3_KINDS = SEAL_KINDS.filter((k) => V3_MARKS[k]);
+const STEMS = { fang: "fang", yuan: "yuan", hulu: "hulu", tuoyuan: "bantong", yinshou: "yinshou" };
 
 // emoji 粗查（含常见区块；印章图形只用 ASCII 路径，不该出现任何 emoji）
 const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE0F}]/u;
@@ -51,29 +53,13 @@ test("五个角色文件的 circle/rect 几何属性都能在 sealSvg 输出里�
   }
 });
 
-test("phase-1 印痕（未接 v3 的 kind）的每个 d 路径和几何属性都能在 markSvg 输出里找到", () => {
-  for (const kind of SEAL_KINDS.filter((k) => !V3_MARKS[k])) {
-    const file = read(`stamp-mark-${kind}.svg`);
-    const out = markSvg(kind, { size: 48, prefix: "test" });
-    for (const m of file.matchAll(/\sd="([^"]+)"/g)) {
-      assert.ok(out.includes(`d="${m[1]}"`), `mark-${kind} 缺少路径 ${m[1]}`);
-    }
-    for (const t of file.matchAll(/<(circle|rect|ellipse)((?:\s+[a-zA-Z:.-]+="[^"]*")*)\s*\/>/g)) {
-      const geo = [...t[2].matchAll(/\s+([a-zA-Z:.-]+)="([^"]*)"/g)]
-        .filter(([, k]) => ["cx", "cy", "r", "rx", "ry", "x", "y", "width", "height"].includes(k))
-        .map(([, k, v]) => `${k}="${v}"`)
-        .join(" ");
-      assert.ok(geo && out.includes(geo), `mark-${kind} 缺少 ${geo}`);
-    }
-  }
-});
-
-// ---------- v3 最终印痕 ----------
+// ---------- v3 最终印痕（phase-1 印痕文件不再被 markSvg 引用，只作历史存档） ----------
 
 test("v3 印痕：大文件路径都在 size 48 输出里，小文件路径都在 size 24 输出里且无 filter", () => {
   for (const kind of V3_KINDS) {
-    const large = readV3(`stamp-mark-${kind}.svg`);
-    const small = readV3(`stamp-mark-${kind}-small.svg`);
+    const stem = STEMS[kind];
+    const large = readV3(`stamp-mark-${stem}.svg`);
+    const small = readV3(`stamp-mark-${stem}-small.svg`);
     const out48 = markSvg(kind, { size: 48, prefix: "t" });
     const out24 = markSvg(kind, { size: 24, prefix: "t" });
     assert.ok(out48.includes('width="48" height="48"'));
@@ -124,19 +110,12 @@ test("v3 印痕 dry 用 --seal-dry，不再有 --seal-red", () => {
   }
 });
 
-test("tuoyuan 印痕（带/不带 date）仍是 phase-1 输出，逐字不变", () => {
+test("tuoyuan 无 date 时是半通印（bantong 文件）印痕", () => {
   const noDate = markSvg("tuoyuan", { size: 48, prefix: "t" });
-  assert.equal(
-    noDate,
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" aria-hidden="true" focusable="false" class="seal-mark-svg"><g id="t-impression"><ellipse style="fill:none;stroke:var(--seal-red,#B23A2B);stroke-width:2.5;stroke-linejoin:round" cx="24" cy="24" rx="17.75" ry="12.75"/><g id="t-glyph" style="fill:none;stroke:var(--seal-red,#B23A2B);stroke-width:2;stroke-linecap:square;stroke-linejoin:miter"><path d="M17.5 16.5H30.5V31.5H17.5ZM17.5 24H30.5"/></g></g></svg>',
-  );
-  const withDate = markSvg("tuoyuan", { size: 48, prefix: "t", date: "10·03" });
-  assert.equal(
-    withDate,
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48" aria-hidden="true" focusable="false" class="seal-mark-svg"><g id="t-impression"><ellipse style="fill:none;stroke:var(--seal-red,#B23A2B);stroke-width:2.5;stroke-linejoin:round" cx="24" cy="24" rx="17.75" ry="12.75"/><g id="t-glyph" style="fill:none;stroke:var(--seal-red,#B23A2B);stroke-width:1.75;stroke-linecap:square;stroke-linejoin:miter"><path transform="translate(10.9 19.5)" d="M1 1.4L2.25 0V9"/><path transform="translate(17.2 19.5)" d="M0 0H4.5V9H0Z"/><path transform="translate(23.5 19.5)" d="M0.5 4.5H0.5"/><path transform="translate(26.3 19.5)" d="M0 0H4.5V9H0Z"/><path transform="translate(32.6 19.5)" d="M0 0H4.5V9H0M0 4.5H4.5"/></g></g></svg>',
-  );
-  // 带字母 glyph 的旧占位几何（重刻前保持不变）
-  assert.ok(noDate.includes('d="M17.5 16.5H30.5V31.5H17.5ZM17.5 24H30.5"'));
+  // 半通印的边框（stem 为 bantong，不再是有字母 glyph 的椭圆占位几何）
+  assert.ok(noDate.includes('<rect x="15" y="7.25" width="18" height="33.5" rx="0.9"/>'), "半通印边框");
+  assert.ok(!noDate.includes('d="M17.5 16.5H30.5V31.5H17.5ZM17.5 24H30.5"'), "旧的椭圆 glyph 不应出现");
+  assert.ok(!noDate.includes("<ellipse"), "旧椭圆边框不应出现");
 });
 
 test("seal-marks-v3.ts 与 svg/v3/ 源文件同步（renderSealMarksModule 重放一致）", () => {
@@ -144,15 +123,16 @@ test("seal-marks-v3.ts 与 svg/v3/ 源文件同步（renderSealMarksModule 重�
   for (const kind of SEAL_KINDS) {
     try {
       files[kind] = {
-        large: readV3(`stamp-mark-${kind}.svg`),
-        small: readV3(`stamp-mark-${kind}-small.svg`),
+        large: readV3(`stamp-mark-${STEMS[kind]}.svg`),
+        small: readV3(`stamp-mark-${STEMS[kind]}-small.svg`),
       };
     } catch {
       // 还没定稿的 kind（两个文件缺一）跳过
     }
   }
   const committed = readFileSync(new URL("../app/_components/seal/seal-marks-v3.ts", import.meta.url), "utf8");
-  assert.equal(renderSealMarksModule(files), committed, "seal-marks-v3.ts 与 svg/v3/ 不同步，跑 npm run seal:marks");
+  const dateTemplate = readV3("stamp-mark-date-1003.svg");
+  assert.equal(renderSealMarksModule(files, dateTemplate), committed, "seal-marks-v3.ts 与 svg/v3/ 不同步，跑 npm run seal:marks");
 });
 
 // ---------- id 前缀与引用 ----------
@@ -252,36 +232,42 @@ test("dry 用 --seal-dry，正常印痕用 --seal-red", () => {
   const wet = markSvg("yuan", { size: 48, prefix: "t" });
   assert.ok(wet.includes("var(--seal-red,#B23A2B)"));
   assert.ok(!wet.includes("var(--seal-dry"));
-  // phase-1 印痕（tuoyuan）笔画 2、边框 2.5 的老规格不变
-  const p1 = markSvg("tuoyuan", { size: 48, prefix: "t" });
-  assert.ok(p1.includes("stroke-width:2.5"));
-  assert.ok(p1.includes("stroke-width:2;"));
   // v3 印痕的笔画宽度来自源文件（yuan 大号 2.4/1.9），不应被改写
   assert.ok(wet.includes("stroke-width:2.4"));
   assert.ok(wet.includes("stroke-width:1.9"));
 });
 
-// ---------- 日期章 ----------
+// ---------- 日期章（竖长方，V3_DATE_TEMPLATE + 现算篆文） ----------
 
-test("markSvg 的日期章和样张的 5 个 translate 数值一致", () => {
-  const out = markSvg("tuoyuan", { size: 48, prefix: "t", date: "10·03" });
+test("markSvg 的日期章：模板框 + 当日篆文/界格 + prefix 的 id，小号无 filter 无咬边", () => {
+  const out = markSvg("tuoyuan", { size: 48, prefix: "t", date: "2026-12-28" });
   assert.ok(out.includes('class="seal-mark-svg"'));
-  const got = [...out.matchAll(/translate\(([\d.]+) ([\d.]+)\)/g)].map((m) => [Number(m[1]), Number(m[2])]);
-  assert.equal(got.length, 5);
-  const refFile = read("stamp-mark-date-example.svg");
-  const ref = [...refFile.matchAll(/translate\(([\d.]+) ([\d.]+)\)/g)].map((m) => [Number(m[1]), Number(m[2])]);
-  assert.equal(ref.length, 5);
-  for (let i = 0; i < 5; i++) assert.deepEqual(got[i], ref[i]);
-  // 框不变（椭圆），笔画 1.75
-  assert.ok(out.includes('rx="17.75" ry="12.75"'));
-  assert.ok(out.includes("stroke-width:1.75"));
-  // 样张的数字路径也在输出里
-  for (const m of refFile.matchAll(/\sd="(M[^"]+)"/g)) assert.ok(out.includes(`d="${m[1]}"`));
-  // date 只给 tuoyuan 用：别的 kind 传 date 也不该出现 translate
-  const other = markSvg("fang", { size: 48, prefix: "t", date: "10·03" });
-  assert.ok(!other.includes("translate("));
+  // 模板的竖长方边框（1.9 组）逐字保留
+  assert.ok(out.includes('<rect x="17" y="2.75" width="14" height="42.5" rx="0.8"/>'));
+  // 字形和界格是 12-28 当日现算的（与 seal-core 的样张对照同一仹源）
+  const ref = readV3("stamp-mark-date-1228.svg");
+  const glyphD = /stroke-width:1\.35[^"]*"><path d="([^"]+)"/.exec(ref)[1];
+  const gridD = /stroke-width:0\.9[^"]*"><path d="([^"]+)"/.exec(ref)[1];
+  assert.ok(out.includes(`d="${glyphD}"`), "当日字形 path");
+  assert.ok(out.includes(`d="${gridD}"`), "当日界格 path");
+  // 10-03 样张的字形不应出现（不是当天）
+  const ref1003 = /stroke-width:1\.35[^"]*"><path d="([^"]+)"/.exec(readV3("stamp-mark-date-1003.svg"))[1];
+  assert.ok(!out.includes(`d="${ref1003}"`), "不应是样张 10-03 的字形");
+  // id 带 prefix、filter/mask 引用同步前缀
+  assert.ok(out.includes('id="t-v3Adate-f"') && out.includes('filter="url(#t-v3Adate-f)"'));
+  assert.ok(out.includes('mask="url(#t-v3Adate-m)"'));
+  // 小号：去掉纹理 filter 和咬边（干净版）
+  const small = markSvg("tuoyuan", { size: 24, prefix: "t", date: "2026-12-28" });
+  assert.ok(!small.includes("<filter"));
+  assert.ok(!small.includes("filter=\"url("));
+  assert.ok(small.includes('<g fill="#000"></g>'));
+  assert.ok(small.includes('mask="url(#t-v3Adate-m)"'));
+  assert.ok(small.includes(`d="${glyphD}"`), "小号印文不变");
+  // date 只给 tuoyuan 用：别的 kind 传 date 也不受影响（仍是各自的 v3 印痕）
+  const other = markSvg("fang", { size: 48, prefix: "t", date: "2026-12-28" });
+  assert.ok(!other.includes('rect x="17" y="2.75"'));
+  assert.ok(other.includes('id="t-v3Afang-f"'));
 });
-
 // ---------- favicon ----------
 
 test("public/favicon.svg 与组件目录的 favicon.svg 内容相同", () => {

@@ -13,7 +13,7 @@ export type StampMarkProps = {
   streak?: number;
   /** 断更干印：用干印色 + 固定低不透明度 */
   dry?: boolean;
-  /** 日期章印文（"MM·DD"，只给 tuoyuan 用） */
+  /** 日期章印文（ISO 日期 "YYYY-MM-DD"，只给 tuoyuan 用；markSvg 里现算竖排篆文） */
   date?: string;
   /** 事件键（渲染成 data-key，收工印条靠它把条目印痕和印条印痕对应） */
   dataKey?: string;

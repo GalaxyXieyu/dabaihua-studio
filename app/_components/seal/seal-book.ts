@@ -49,13 +49,14 @@ export function bookLayout(n: number, perRow: number): { cols: number; cells: Bo
   return { cols: 2 * longest, cells };
 }
 
-/** 光学尺寸补偿：同一格高内按视觉分量缩放；方章满白文再乘 .96 压暗分量。 */
+/** 光学尺寸补偿：同一格高内按视觉分量缩放；方章满白文再乘 .96 压暗分量。
+ * 半通印不放大：本来就该比方章小一半（v3-zhuan 印谱 README）。 */
 export function opticalScale(kind: SealKind): number {
   const OPTICAL: Record<SealKind, number> = {
     fang: 0.92 * 0.96,
     yuan: 1,
     hulu: 1.1,
-    tuoyuan: 1.1,
+    tuoyuan: 1,
     yinshou: 1.18,
   };
   return OPTICAL[kind];

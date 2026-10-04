@@ -90,8 +90,8 @@ test("replaySheetHtml：6 个事件 → 6 个 data-i、1 个 data-date-mark，gi
   // 印痕浓淡按 streak（streakOpacity(5)，两位小数内波动）
   const op5 = streakOpacity(5);
   assert.ok(html.includes(`opacity:${op5}`), `应带 streak 浓淡 ${op5}`);
-  // 日期章：10·03 的数字路径
-  assert.ok(html.includes("10·03") || /translate\(/.test(html));
+  // 日期章：竖长方模板边框 + 现算篆文
+  assert.ok(html.includes('<rect x="17" y="2.75" width="14" height="42.5" rx="0.8"/>'));
   assert.ok(/data-date-mark/.test(html));
 });
 

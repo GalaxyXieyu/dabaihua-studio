@@ -7,8 +7,8 @@ import { readFileSync } from "node:fs";
 import { strokeFor, streakOpacity, tierOf } from "../app/_components/seal/seal-tokens.ts";
 import {
   stampTimeline, bowTimeline, welcomeTimeline, wrapTimeline, replayTimeline,
-  dateLabel, dateGlyphPaths,
 } from "../app/_components/seal/seal-machine.ts";
+import { dateGlyphD, dateGridD, dateStrokesV } from "../app/_components/seal/seal-date-glyphs.ts";
 import {
   shanghaiDate, addDays, daysBetween, keyDate, parseStore, serializeStore,
   pruneStore, recordInPageStamp, stampLogOn, markSeen, touchVisit,
@@ -137,7 +137,7 @@ test("replayTimeline", () => {
   const r10 = replayTimeline(10);
   assert.equal(r10.plus, 2);
   assert.equal(r10.drops.length, 8);
-  // 日期章用小椭圆章时间线（484），不点头
+  // 日期章用 tuoyuan（日章·半通印）时间线（484），不点头
   assert.equal(r.date.kind, "tuoyuan");
   assert.equal(r.date.total, 484);
   assert.equal(r.date.nod, null);
@@ -148,24 +148,28 @@ test("replayTimeline", () => {
   assert.equal(rr.date.reduced, true);
 });
 
-// ---------- seal-machine：日期章 ----------
+// ---------- 日期章篆文（seal-date-glyphs） ----------
 
-test("dateLabel / dateGlyphPaths 与样张完全一致", () => {
-  assert.equal(dateLabel("2026-10-03"), "10·03");
-  assert.equal(dateLabel("2026-01-05"), "01·05");
-  const svg = readFileSync(new URL("../app/_components/seal/svg/stamp-mark-date-example.svg", import.meta.url), "utf8");
-  const ref = [...svg.matchAll(/<path transform="translate\(([\d.]+) ([\d.]+)\)" d="([^"]+)"\/>/g)].map((m) => ({
-    x: Number(m[1]),
-    y: Number(m[2]),
-    d: m[3],
-  }));
-  assert.equal(ref.length, 5);
-  const got = dateGlyphPaths("10·03");
-  assert.equal(got.length, ref.length);
-  for (let i = 0; i < ref.length; i++) {
-    assert.equal(got[i].x, ref[i].x);
-    assert.equal(got[i].y, ref[i].y);
-    assert.equal(got[i].d, ref[i].d);
+test("dateGlyphD / dateGridD 与两张样张的印文、界格 path 逐字一致", () => {
+  for (const [month, day, file] of [[10, 3, "stamp-mark-date-1003.svg"], [12, 28, "stamp-mark-date-1228.svg"]]) {
+    const svg = readFileSync(new URL(`../app/_components/seal/svg/v3/${file}`, import.meta.url), "utf8");
+    // 字形在 stroke-width:1.35 组、界格在 stroke-width:0.9 组，各只有一条 path
+    const glyph = /stroke-width:1\.35[^"]*"><path d="([^"]+)"/.exec(svg)[1];
+    const grid = /stroke-width:0\.9[^"]*"><path d="([^"]+)"/.exec(svg)[1];
+    assert.equal(dateGlyphD(month, day), glyph, `${file} 字形 path 应逐字一致`);
+    assert.equal(dateGridD(dateStrokesV(month, day).gridY), grid, `${file} 界格 path 应逐字一致`);
+  }
+});
+
+test("dateStrokesV：月组在上日组在下，笔画都在印框内", () => {
+  const { strokes, gridY } = dateStrokesV(10, 3);
+  // 十月三日四字拆开的笔形；十二月廿八日字形更多
+  assert.ok(strokes.length >= 10, "笔画拆分足够细");
+  assert.ok(dateStrokesV(12, 28).strokes.length > strokes.length, "十二月廿八日字形更多");
+  assert.ok(gridY > 20 && gridY < 28, "界格在印面中部");
+  // 印框 (17,2.75)-(31,45.25)，笔画都在框内
+  for (const s of strokes) {
+    for (const [x, y] of s) assert.ok(x >= 16.9 && x <= 31.1 && y >= 2.6 && y <= 45.4);
   }
 });
 

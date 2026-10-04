@@ -4,7 +4,6 @@
 // 布局数值全部来自 REPLAY 令牌：markSize 32、left = 28 + i*44、top 36、日期章 72px 在 300,100。
 import { REPLAY, streakOpacity, DRY_OPACITY } from "./seal-tokens.ts";
 import type { SealKind } from "./seal-tokens.ts";
-import { dateLabel } from "./seal-machine.ts";
 import { markSvg } from "./seal-svg.ts";
 import type { SealEvent } from "./seal-moments.ts";
 
@@ -65,7 +64,8 @@ export function replaySheetHtml(input: { date: string; events: SealEvent[]; stre
         `font-family:var(--font-serif,serif);font-size:12px;color:var(--seal-date,#71695C);">+${events.length - REPLAY.maxMarks}</div>`
       : "";
 
-  const dateMark = markSvg("tuoyuan", { size: REPLAY.dateSize, prefix: `${prefix}d`, date: dateLabel(date), tier: 0, dry });
+  // 日期章直接吃 ISO 日期（markSvg 里现算当日竖排篆文）
+  const dateMark = markSvg("tuoyuan", { size: REPLAY.dateSize, prefix: `${prefix}d`, date, tier: 0, dry });
   const dateCell =
     `<div class="seal-sheet-date" data-date-mark style="position:absolute;left:${REPLAY.sheetW - 100}px;top:100px;">` +
     `<span class="seal-mark" style="display:inline-block;line-height:0;opacity:${dry ? DRY_OPACITY : op};">${dateMark}</span>` +

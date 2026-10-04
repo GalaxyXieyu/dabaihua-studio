@@ -11,7 +11,7 @@ export const SEAL_NAMES: Record<SealKind, string> = {
   fang: "方章",
   yuan: "圆章",
   hulu: "葫芦章",
-  tuoyuan: "小椭圆章",
+  tuoyuan: "半通印",
   yinshou: "长条引首章",
 };
 
@@ -35,7 +35,7 @@ export const EASE = {
 // 盖章时间线基准时长（ms，64px 画布；各章按 FACTOR 缩放，取整到毫秒）
 export const BASE = { wake: 220, stamp: 110, impact: 90, hold: 30, lift: 170, impOffset: 40, imp: 140 } as const;
 
-// 各章时间系数：方/圆/葫芦 1，小椭圆 0.78，引首 1.45（规范 7.2）
+// 各章时间系数：方/圆/葫芦 1，半通印 0.78，引首 1.45（规范 7.2）
 export const FACTOR: Record<SealKind, number> = { fang: 1, yuan: 1, hulu: 1, tuoyuan: 0.78, yinshou: 1.45 };
 
 // 连续天数四档（规范 6.4）：y 是 64px 画布上压下终点的 translateY，s 是压扁最低 scale，hold 是按住时长

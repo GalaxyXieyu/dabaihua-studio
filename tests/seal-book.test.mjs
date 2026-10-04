@@ -71,7 +71,8 @@ test("opticalScale：方章满白文最小，引首最大", () => {
   assert.ok(Math.abs(opticalScale("fang") - 0.92 * 0.96) < 1e-9);
   assert.equal(opticalScale("yuan"), 1);
   assert.equal(opticalScale("hulu"), 1.1);
-  assert.equal(opticalScale("tuoyuan"), 1.1);
+  // 半通印本来就该比方章小一半，不再放大
+  assert.equal(opticalScale("tuoyuan"), 1);
   assert.equal(opticalScale("yinshou"), 1.18);
 });
 
