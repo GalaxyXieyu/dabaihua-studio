@@ -32,6 +32,53 @@
         "markdown": "hello"
       },
       "contentHash": "3f4fb56ea706e41ccc44f31daffc188ea40a26605c2e9d090cc47835d6265450"
+    },
+    {
+      "name": "with-html-qa-brief",
+      "body": {
+        "title": "排版稿示例",
+        "status": "draft",
+        "tags": [
+          "排版"
+        ],
+        "date": "2026-10-03",
+        "markdown": "# 排版稿示例\n\n正文第一段。\n",
+        "articleHtml": "<section><h1>排版稿示例</h1><p>正文第一段。</p><img src=\"images/0123456789ab.png\" alt=\"图\"></section>\n",
+        "qaReport": "## QA\n\n- 标题与正文一致。\n- 图片引用已校验。\n",
+        "boardTopicId": 12,
+        "brief": {
+          "date": "2026-10-01",
+          "topicId": "t-quiet-desk-01"
+        },
+        "assets": [
+          {
+            "name": "images/0123456789ab.png",
+            "sha256": "0123456789ab0000000000000000000000000000000000000000000000000000"
+          }
+        ]
+      },
+      "contentHash": "8f00ef5dcf55064570457f43e6ad2512bdb840c216d311ea695067ee073c5fd1"
+    },
+    {
+      "name": "with-board-only",
+      "body": {
+        "title": "样例文章 Sample",
+        "status": "draft",
+        "tags": [
+          "agent",
+          "笔记"
+        ],
+        "date": "2026-10-02",
+        "markdown": "# 样例文章 Sample\n\n正文第一段。\n\n| 列 A | 列 B |\n| --- | ---: |\n| 1 | 2 |\n\n![图](images/0123456789ab.png)\n",
+        "boardTopicId": 3,
+        "assets": [
+          {
+            "name": "images/0123456789ab.png",
+            "sha256": "0123456789ab0000000000000000000000000000000000000000000000000000"
+          }
+        ]
+      },
+      "contentHash": "88eea7c1806287ea54e2d827678c97206f414dd506e659a13bb5f13adee494f6"
     }
   ]
 }

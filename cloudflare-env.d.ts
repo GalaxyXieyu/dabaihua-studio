@@ -8,6 +8,7 @@ declare namespace Cloudflare {
     DABAIHUA_REGISTER_INVITE_CODE?: string;
     DABAIHUA_PUBLIC_BASE_URL?: string;
     DABAIHUA_CARDS_ASSISTANT_TOKEN?: string;
+    ARTICLES_OWNER_ACCOUNT?: string;
     SHUFANGZHAI_WEBHOOK_URL?: string;
     SHUFANGZHAI_WEBHOOK_SECRET?: string;
     SHUFANGZHAI_WEBHOOK_AUTH_HEADER?: string;

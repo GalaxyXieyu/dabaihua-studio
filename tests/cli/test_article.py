@@ -25,6 +25,12 @@ CLI_PATH = REPO / "public" / "cli" / "superme"
 TOPICS_PATH = REPO / "public" / "cli" / "topics"
 VECTORS = REPO / "tests" / "fixtures" / "article-push" / "hash-vectors.json"
 
+# 外部环境若带这些变量，会让用例连错地址或带错 token，测试前统一摘除。
+ENV_NAMES = (
+    "SUPERME_TOKEN", "SUPERME_ENDPOINT", "SUPERME_ASSISTANT",
+    "DABAIHUA_CARDS_ASSISTANT_TOKEN", "HANDBOOK_TOKEN",
+)
+
 # 1x1 的合法 PNG 字节，仅用于内容寻址，不代表真实图片素材。
 PNG_A = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
@@ -44,14 +50,46 @@ def load_cli(config_dir):
     return module
 
 
+def mock_article_hash(payload):
+    """按协议 §3 从收到的请求体重算 contentHash，与 CLI/服务端同一套算法。"""
+    public = payload.get("isPublic")
+    lines = [
+        "dabaihua.article-push/v1",
+        "title:" + (payload.get("title") or ""),
+        "status:" + (payload.get("status") or "draft"),
+        "public:" + ("" if public is None else ("true" if public else "false")),
+        "date:" + (payload.get("date") or ""),
+        "tags:" + "\t".join(payload.get("tags") or []),
+    ]
+    if payload.get("boardTopicId") is not None:
+        lines.append("board:" + str(payload["boardTopicId"]))
+    if payload.get("brief"):
+        lines.append("brief:%s\t%s" % (payload["brief"].get("date", ""), payload["brief"].get("topicId", "")))
+    if payload.get("articleHtml"):
+        lines.append("html:" + hashlib.sha256(payload["articleHtml"].encode("utf-8")).hexdigest())
+    if payload.get("qaReport"):
+        lines.append("qa:" + hashlib.sha256(payload["qaReport"].encode("utf-8")).hexdigest())
+    for asset in sorted(payload.get("assets") or [], key=lambda item: item["name"]):
+        lines.append("asset:%s %s" % (asset["name"], asset["sha256"]))
+    text = "\n".join(lines) + "\n\n" + (payload.get("markdown") or "")
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 class MockArticleServer:
-    """协议最小实现：PUT /api/articles/<slug> 与 GET /api/articles。"""
+    """协议最小实现：PUT /api/articles/<slug> 与 GET /api/articles。
+
+    按协议重算并校验 contentHash（不一致返回 400 hash_mismatch），记录每次请求的
+    Authorization 头与 assistant 名字；force_locked 可让某 slug 返回 409 article_locked。
+    """
 
     def __init__(self):
         self.articles = {}
         self.requests = []
         self.force_slug_taken = set()
+        self.force_locked = set()
         self.served_assets = set()
+        self.auth_headers = []
+        self.assistants = []
         self._server = None
         self._thread = None
         self.port = None
@@ -80,8 +118,17 @@ class MockArticleServer:
                 slug = path.split("/api/articles/", 1)[-1]
                 payload = self._read()
                 outer.requests.append(payload)
+                outer.auth_headers.append(self.headers.get("Authorization"))
+                outer.assistants.append(payload.get("assistant"))
                 if slug in outer.force_slug_taken:
                     self._send(409, {"error": "slug 已被占用", "code": "slug_taken"})
+                    return
+                if slug in outer.force_locked:
+                    self._send(409, {"error": "文章已锁定", "code": "article_locked", "status": "published"})
+                    return
+                given_hash = payload.get("contentHash")
+                if given_hash and given_hash != mock_article_hash(payload):
+                    self._send(400, {"error": "contentHash 与内容不一致", "code": "hash_mismatch"})
                     return
                 missing = []
                 for asset in payload.get("assets", []):
@@ -117,6 +164,7 @@ class MockArticleServer:
 
             def do_GET(self):
                 path = urllib.parse.urlparse(self.path).path
+                outer.auth_headers.append(self.headers.get("Authorization"))
                 if path == "/api/articles":
                     rows = [{"slug": key, "title": value.get("title"), "isPublic": value.get("isPublic"), "date": None}
                             for key, value in outer.articles.items()]
@@ -145,6 +193,15 @@ class ArticleCliTests(unittest.TestCase):
         self.vault = base / "vault"
         self.vault.mkdir(parents=True, exist_ok=True)
         self.cli = load_cli(self.config_dir)
+        self._env_backup = {name: os.environ.pop(name, None) for name in ENV_NAMES}
+        self.addCleanup(self._restore_env)
+
+    def _restore_env(self):
+        for name, value in self._env_backup.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
 
     def write(self, rel, text, root=None):
         root = root or self.vault
@@ -198,10 +255,19 @@ class ArticleCliTests(unittest.TestCase):
         state = {"/x/a.md": {"slug": "stored-slug"}}
         self.assertEqual(cli._article_resolve_slug({}, "T", "a.md", Path("/x/a.md"), state), "stored-slug")
 
+        # hash 键用「上级目录名/文件名」：不同目录里同名文件不撞，同一路径稳定
         generated = cli._article_generate_slug("心结方法", "notes/x.md")
         self.assertTrue(generated.startswith("n-"))
         self.assertEqual(len(generated), 12)
         self.assertEqual(generated, cli._article_generate_slug("心结方法", "notes/x.md"))
+        slug_a = cli._article_generate_slug("中文标题", "a/02-final.md")
+        slug_b = cli._article_generate_slug("中文标题", "b/02-final.md")
+        self.assertTrue(slug_a.startswith("n-"))
+        self.assertNotEqual(slug_a, slug_b)
+        self.assertEqual(
+            cli._article_resolve_slug({}, "心结方法", "02-final.md", Path("/vault/a/02-final.md"), {}),
+            cli._article_generate_slug("心结方法", "a/02-final.md"),
+        )
 
     # ── contentHash ──
     def test_hash_vectors(self):
@@ -212,6 +278,8 @@ class ArticleCliTests(unittest.TestCase):
             actual = self.cli._article_content_hash(
                 body.get("title", ""), body.get("status", "draft"), body.get("isPublic"),
                 body.get("date"), body.get("tags", []), body.get("assets", []), body["markdown"],
+                article_html=body.get("articleHtml"), qa_report=body.get("qaReport"),
+                board_topic_id=body.get("boardTopicId"), brief=body.get("brief"),
             )
             self.assertEqual(actual, case["contentHash"], case["name"])
 
@@ -327,7 +395,7 @@ class ArticleCliTests(unittest.TestCase):
         self.write("keep.md", "body\n")
         self.write(".obsidian/hidden.md", "body\n")
         self.write("sub/also.md", "body\n")
-        names = sorted(path.name for path in self.cli._collect_article_files(self.vault))
+        names = sorted(item["file"].name for item in self.cli._collect_article_files(self.vault) if "file" in item)
         self.assertEqual(names, ["also.md", "keep.md"])
 
     # ── push / sync flow ──

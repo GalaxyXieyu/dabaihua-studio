@@ -22,6 +22,12 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 CLI_PATH = REPO / "public" / "cli" / "superme"
 
+# 外部环境若带这些变量，会让用例连错地址或带错 token，测试前统一摘除。
+ENV_NAMES = (
+    "SUPERME_TOKEN", "SUPERME_ENDPOINT", "SUPERME_ASSISTANT",
+    "DABAIHUA_CARDS_ASSISTANT_TOKEN", "HANDBOOK_TOKEN",
+)
+
 DAILY = {
     "generatedAt": "2026-10-02T10:00:00.000Z",
     "days": [
@@ -145,6 +151,15 @@ class DataCliTests(unittest.TestCase):
         (self.config_dir / "config.json").write_text(json.dumps(
             {"endpoint": "http://127.0.0.1:1", "token": "topk_made_up_token"}
         ))
+        self._env_backup = {name: os.environ.pop(name, None) for name in ENV_NAMES}
+        self.addCleanup(self._restore_env)
+
+    def _restore_env(self):
+        for name, value in self._env_backup.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
 
     def write_json(self, name, value):
         path = Path(self._tmp.name) / name
