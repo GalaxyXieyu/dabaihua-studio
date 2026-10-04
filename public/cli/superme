@@ -83,9 +83,10 @@ superme — 个人工作台（内容选题中心）的多端 CLI（云端命令�
   superme retro history --title "..."
 
 文章命令:
-  superme article push <文件|目录> [--public] [--dry-run] [--root 目录]
+  superme article push <文件|目录> [--public] [--dry-run] [--root 目录] [--assistant 名字]
   superme article sync <目录> [--dry-run]
   superme article list
+  目录含 meta.json 时整个目录作为一篇文章
 
 数据命令:
   superme data put <daily|career> <文件> [--dry-run] [--endpoint URL]   # 上传日报/职业数据到 D1
@@ -123,7 +124,7 @@ DEFAULT_ENDPOINT = "https://superme.aigalaxy.top"
 CONFIG_DIR = Path(os.environ.get("TOPICS_CONFIG_DIR", "~/.config/topics-cli")).expanduser()
 CONFIG_FILE = CONFIG_DIR / "config.json"
 STRATEGY_CACHE = CONFIG_DIR / "strategy-cache.json"
-CLI_VERSION = "2.5.0"
+CLI_VERSION = "2.6.0"
 
 KIND_ICON = {"rss": "📰", "x": "𝕏 ", "x-tweet": "𝕏 ", "wechat": "💬", "link": "🔗"}
 CATEGORY_LABEL = {"ai": "AI", "investment": "投资", "gaming": "游戏", "technology": "科技", "business": "商业", "product": "产品"}
@@ -141,6 +142,8 @@ ARTICLE_EMBED_RE = re.compile(r"!\[\[([^\]\|]+)(?:\|([^\]]*))?\]\]")
 ARTICLE_MD_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\((?:<([^>]*)>|([^)\n]*))\)")
 ARTICLE_WIKILINK_RE = re.compile(r"\[\[([^\]\|]+?)(?:\|([^\]]*))?\]\]")
 ARTICLE_REMOTE_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
+ARTICLE_HTML_IMG_RE = re.compile(r"<img\b[^>]*>", re.IGNORECASE)
+ARTICLE_HTML_SRC_RE = re.compile(r"""(?<![\w-])(src\s*=\s*)(\"[^\"]*\"|'[^']*')""", re.IGNORECASE)
 ARTICLE_UNSET = object()
 
 
@@ -169,7 +172,19 @@ def save_config(cfg):
 
 
 def endpoint():
+    override = os.environ.get("SUPERME_ENDPOINT")
+    if override and override.strip():
+        return override.strip().rstrip("/")
     return (load_config().get("endpoint") or DEFAULT_ENDPOINT).rstrip("/")
+
+
+def _env_token(*names):
+    """按顺序取环境变量里的 token（去首尾空白，空值跳过），都没有则 None。"""
+    for name in names:
+        value = os.environ.get(name)
+        if value and value.strip():
+            return value.strip()
+    return None
 
 
 # ─── HTTP ────────────────────────────────────────────────────────────────────
@@ -182,7 +197,7 @@ def request(path, method="GET", body=None, token=None, cookie=None, capture_cook
         "Referer": endpoint() + "/",
         "User-Agent": f"superme-cli/{CLI_VERSION}",
     }
-    tok = token if token is not None else load_config().get("token")
+    tok = token if token is not None else (_env_token("SUPERME_TOKEN") or load_config().get("token"))
     if tok:
         headers["Authorization"] = "Bearer " + tok
     if cookie:
@@ -1202,11 +1217,11 @@ def _article_title(meta, body, path):
     return path.stem
 
 
-def _article_generate_slug(title, rel_path):
+def _article_generate_slug(title, key):
     words = re.findall(r"[A-Za-z0-9]+", title.lower())
     slug = re.sub(r"-+", "-", "-".join(words)).strip("-")[:60].strip("-")
     if len(re.sub(r"[^A-Za-z0-9]", "", slug)) < 3:
-        return "n-" + hashlib.sha256(rel_path.encode("utf-8")).hexdigest()[:10]
+        return "n-" + hashlib.sha256(key.encode("utf-8")).hexdigest()[:10]
     return slug
 
 
@@ -1220,7 +1235,8 @@ def _article_resolve_slug(meta, title, rel_path, abs_path, state_files):
     record = state_files.get(str(abs_path))
     if record and record.get("slug"):
         return record["slug"]
-    return _article_generate_slug(title, rel_path)
+    # hash 键用「上级目录名/文件名」，避免不同目录里同名文件（如 02-final.md）生成同一个 slug。
+    return _article_generate_slug(title, abs_path.parent.name + "/" + abs_path.name)
 
 
 def _article_tags(meta):
@@ -1267,7 +1283,8 @@ def _article_is_public(meta, status, cli_public):
     return None
 
 
-def _article_content_hash(title, status, is_public, date, tags, assets, markdown):
+def _article_content_hash(title, status, is_public, date, tags, assets, markdown,
+                           article_html=None, qa_report=None, board_topic_id=None, brief=None):
     public_text = "" if is_public is None else ("true" if is_public else "false")
     lines = [
         ARTICLE_PROTOCOL,
@@ -1277,6 +1294,15 @@ def _article_content_hash(title, status, is_public, date, tags, assets, markdown
         "date:" + (date or ""),
         "tags:" + "\t".join(tags or []),
     ]
+    # 可选扩展行（协议 §3）：只在有值时出现，顺序固定 board/brief/html/qa，插在 tags 与 asset 之间。
+    if board_topic_id is not None:
+        lines.append("board:" + str(board_topic_id))
+    if brief:
+        lines.append("brief:" + str(brief.get("date", "")) + "\t" + str(brief.get("topicId", "")))
+    if article_html:
+        lines.append("html:" + hashlib.sha256(article_html.encode("utf-8")).hexdigest())
+    if qa_report:
+        lines.append("qa:" + hashlib.sha256(qa_report.encode("utf-8")).hexdigest())
     for asset in sorted(assets or [], key=lambda item: item["name"]):
         lines.append("asset:" + asset["name"] + " " + asset["sha256"])
     payload = "\n".join(lines) + "\n\n" + markdown
@@ -1516,7 +1542,8 @@ class _ArticleNormalizer:
         if sha in self.assets:
             return self.assets[sha]["name"]
         name = "images/%s.%s" % (sha[:12], extension)
-        self.assets[sha] = {"name": name, "sha256": sha, "bytes": data}
+        # source 记来源文件，仅供 --dry-run 的 asset 明细行使用，不进请求体与 state。
+        self.assets[sha] = {"name": name, "sha256": sha, "bytes": data, "source": source}
         return name
 
     def _compress_image(self, source):
@@ -1545,16 +1572,94 @@ class _ArticleNormalizer:
                 pass
 
 
+def _article_dir_meta(path):
+    """目录直接含 meta.json 且能解析成 JSON 对象 → 返回该 dict，否则 None。"""
+    path = Path(path)
+    meta_path = path / "meta.json"
+    if not path.is_dir() or not meta_path.is_file():
+        return None
+    try:
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def _collect_article_files(target):
+    """收集要推送的条目：{"file": <.md 路径>} 或 {"article_dir": <文章目录>}。
+
+    目标本身是文章目录（直接含 meta.json）时只返回它，不遍历其中的 .md；
+    遍历时遇到文章目录同样不进入其内部（里面的 .md 不单独推送）。"""
     if target.is_file():
-        return [target] if target.suffix.lower() == ".md" else []
+        return [{"file": target}] if target.suffix.lower() == ".md" else []
+    if _article_dir_meta(target) is not None:
+        return [{"article_dir": target}]
     found = []
     for dirpath, dirnames, filenames in os.walk(target):
-        dirnames[:] = sorted(name for name in dirnames if not name.startswith("."))
+        walk_into = []
+        for name in sorted(dirnames):
+            if name.startswith("."):
+                continue
+            child = Path(dirpath) / name
+            if _article_dir_meta(child) is not None:
+                found.append({"article_dir": child})
+            else:
+                walk_into.append(name)
+        dirnames[:] = walk_into
         for filename in sorted(filenames):
             if filename.lower().endswith(".md") and not filename.startswith("."):
-                found.append(Path(dirpath) / filename)
+                found.append({"file": Path(dirpath) / filename})
     return found
+
+
+def _article_rewrite_html_images(html, article_dir, normalizer):
+    """改写 article.html 里的本地 <img src="...">（双引号或单引号，大小写不限；srcset 不动）。
+
+    src 是本地相对路径（非 http(s)://、//、data:、/ 开头、#）时相对文章目录解析（先 URL 解码，且不得跳出文章目录），
+    找到文件就用 normalizer 同一个 _store_image（与正文共享 assets：去重、2MB 压缩/警告逻辑一致）
+    换成 images/<sha12>.<ext>；找不到或不支持的保留原值并给警告。HTML 其余部分原样不动。
+    返回 (新 html, 改写张数)。
+    """
+    count = 0
+
+    def _rewrite_value(raw):
+        value = raw.strip()
+        if (not value or value.startswith(("#", "/"))
+                or ARTICLE_REMOTE_RE.match(value) or value.lower().startswith("data:")):
+            return None
+        try:
+            decoded = urllib.parse.unquote(value)
+        except Exception:
+            decoded = value
+        source = Path(article_dir) / decoded
+        try:
+            source.resolve().relative_to(Path(article_dir).resolve())
+        except (ValueError, OSError):
+            normalizer.warn("图片不在文章目录内: " + value)
+            return None
+        try:
+            exists = source.is_file()
+        except OSError:
+            exists = False
+        if not exists:
+            normalizer.warn("找不到图片: " + value)
+            return None
+        return normalizer._store_image(source)
+
+    def _replace_src(match):
+        nonlocal count
+        prefix = match.group(1)
+        quoted = match.group(2)
+        new_value = _rewrite_value(quoted[1:-1])
+        if new_value is None:
+            return match.group(0)
+        count += 1
+        return prefix + quoted[0] + new_value + quoted[0]
+
+    def _replace_tag(match):
+        return ARTICLE_HTML_SRC_RE.sub(_replace_src, match.group(0))
+
+    return ARTICLE_HTML_IMG_RE.sub(_replace_tag, html), count
 
 
 def _article_relative(path, root):
@@ -1565,7 +1670,136 @@ def _article_relative(path, root):
     return relative.replace(os.sep, "/")
 
 
-def _article_http(method, path, body=None):
+def _article_dir_file(article_dir, name):
+    """meta 里指定的文件名：非空字符串且解析后仍在文章目录内（不跳出目录）才返回路径，否则 None。"""
+    if not isinstance(name, str):
+        return None
+    text = name.strip()
+    if not text:
+        return None
+    candidate = article_dir / text
+    try:
+        candidate.resolve().relative_to(article_dir.resolve())
+    except (ValueError, OSError):
+        return None
+    return candidate
+
+
+def _article_dir_named_file(article_dir, value, default_name):
+    """meta 指定的文件（字符串时）或默认文件名对应的路径。"""
+    if isinstance(value, str) and value.strip():
+        return _article_dir_file(article_dir, value)
+    return article_dir / default_name
+
+
+def _article_dir_read(candidate):
+    """读取文本文件；不存在或读不了返回 None。"""
+    if candidate is None:
+        return None
+    try:
+        if candidate.is_file():
+            return candidate.read_text(encoding="utf-8")
+    except (OSError, ValueError):
+        return None
+    return None
+
+
+def _article_dir_body_file(article_dir, meta):
+    """正文回退链：meta.final → 02-final.md → meta.draft → 01-draft.md，取第一个存在的。"""
+    final = _article_dir_file(article_dir, meta.get("final"))
+    draft = _article_dir_file(article_dir, meta.get("draft"))
+    for candidate in (final, article_dir / "02-final.md", draft, article_dir / "01-draft.md"):
+        if candidate is not None and candidate.is_file():
+            return candidate
+    return None
+
+
+def _article_dir_date(meta):
+    """date = meta.brief_date，没有再 meta.date；不是 YYYY-MM-DD 就不传。"""
+    value = meta.get("brief_date")
+    if value is None or not str(value).strip():
+        value = meta.get("date")
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text if re.match(r"^\d{4}-\d{2}-\d{2}$", text) else None
+
+
+def _article_dir_brief(meta):
+    """brief = {date: meta.brief_date, topicId: str(meta.topic_id)}，两者都有才带。"""
+    brief_date = meta.get("brief_date")
+    topic_id = meta.get("topic_id")
+    if not (isinstance(brief_date, str) and brief_date.strip()) or topic_id is None:
+        return None
+    topic_text = str(topic_id).strip()
+    if not topic_text:
+        return None
+    return {"date": brief_date.strip(), "topicId": topic_text}
+
+
+def _article_dir_board_topic_id(meta):
+    """boardTopicId = meta.board_topic_id，正整数（不是 bool）才带。"""
+    value = meta.get("board_topic_id")
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return None
+    return value
+
+
+def _article_dir_slug(article_dir, meta, body_path, title, state_files):
+    """文章目录的 slug：meta.slug > 目录名（合法时）> state 里记录的 slug > 由标题生成。"""
+    value = meta.get("slug")
+    if value is not None and str(value).strip():
+        slug = str(value).strip()
+        if not ARTICLE_SLUG_RE.match(slug):
+            raise ArticleError("slug 不合法: %r（需匹配 [A-Za-z0-9][A-Za-z0-9._-]{0,120}）" % slug)
+        return slug
+    if ARTICLE_SLUG_RE.match(article_dir.name):
+        return article_dir.name
+    record = state_files.get(str(body_path))
+    if record and record.get("slug"):
+        return record["slug"]
+    return _article_generate_slug(title, article_dir.name + "/" + body_path.name)
+
+
+def _article_dir_entry(article_dir, meta, state_files):
+    """文章目录（meta.json）→ 一篇文章的 entry。
+
+    正文照旧解析 frontmatter（tags 生效），status 固定 draft（meta.json 里的 status 不是协议状态，忽略）；
+    article_html / qa_report 存原文（html 图片改写由 _article_rewrite_html_images 在归一正文后做）；
+    state 记录键仍是正文文件的绝对路径，rel（sourcePath）= <目录名>/<正文文件名>。"""
+    article_dir = Path(article_dir)
+    body_path = _article_dir_body_file(article_dir, meta)
+    if body_path is None:
+        raise ArticleError("找不到正文（02-final.md / 01-draft.md）")
+    text = _article_dir_read(body_path)
+    if text is None:
+        raise ArticleError("读不到正文 " + body_path.name)
+    fm_meta, body = _parse_frontmatter(text)
+    title = meta.get("title")
+    if title is None or not str(title).strip():
+        title = _article_title(fm_meta, body, body_path)
+    else:
+        title = str(title).strip()
+    layout = meta.get("layout")
+    html_name = layout.get("html") if isinstance(layout, dict) else None
+    return {
+        "file": body_path,
+        "rel": article_dir.name + "/" + body_path.name,
+        "article_dir": article_dir,
+        "meta": fm_meta,
+        "body": body,
+        "title": title,
+        "slug": _article_dir_slug(article_dir, meta, body_path, title, state_files),
+        "status": "draft",
+        "date": _article_dir_date(meta),
+        "article_html": _article_dir_read(_article_dir_named_file(article_dir, html_name, "article.html")),
+        "qa_report": _article_dir_read(_article_dir_named_file(article_dir, meta.get("qa_report"), "qa-report.md")),
+        "board_topic_id": _article_dir_board_topic_id(meta),
+        "brief": _article_dir_brief(meta),
+    }
+
+
+def _article_http(method, path, body=None, assistant=False):
     url = endpoint() + path
     headers = {
         "Content-Type": "application/json",
@@ -1573,7 +1807,11 @@ def _article_http(method, path, body=None):
         "Referer": endpoint() + "/",
         "User-Agent": "superme-cli/" + CLI_VERSION,
     }
-    token = load_config().get("token")
+    if assistant:
+        # 助手模式只用助手 token（SUPERME_TOKEN > DABAIHUA_CARDS_ASSISTANT_TOKEN > HANDBOOK_TOKEN），不用 config。
+        token = _env_token("SUPERME_TOKEN", "DABAIHUA_CARDS_ASSISTANT_TOKEN", "HANDBOOK_TOKEN")
+    else:
+        token = _env_token("SUPERME_TOKEN") or load_config().get("token")
     if token:
         headers["Authorization"] = "Bearer " + token
     data = json.dumps(body).encode("utf-8") if body is not None else None
@@ -1602,7 +1840,26 @@ def _article_uploaded_assets(state_files, slug):
     return uploaded
 
 
-def _article_push_one(entry, assets, state_files):
+def _article_dry_run_assets(entry, assets, state_files, entry_root):
+    """--dry-run 的 asset 明细行（文章目录模式）。
+
+    每行：images/<sha12>.<ext> ← <本地相对文件名> <KB> 上传|已上传（按 state 里该 slug 的记录判断）。
+    """
+    uploaded = _article_uploaded_assets(state_files, entry["slug"])
+    lines = []
+    for asset in sorted(assets, key=lambda item: item["name"]):
+        source = asset.get("source")
+        source_text = _article_relative(source, entry_root) if source else asset["name"]
+        try:
+            size = "%.1f KB" % (len(asset["bytes"]) / 1024)
+        except (KeyError, TypeError):
+            size = "?"
+        state_text = "已上传" if uploaded.get(asset["name"]) == asset["sha256"] else "上传"
+        lines.append("  %s ← %s %s %s" % (asset["name"], source_text, size, state_text))
+    return lines
+
+
+def _article_push_one(entry, assets, state_files, assistant=None):
     slug = entry["slug"]
     uploaded = _article_uploaded_assets(state_files, slug)
     payload_assets = []
@@ -1625,9 +1882,20 @@ def _article_push_one(entry, assets, state_files):
         body["isPublic"] = entry["is_public"]
     if entry["date"]:
         body["date"] = entry["date"]
+    # 扩展字段（协议 §3）：entry 里没有就不传；assistant 不参与 contentHash。
+    if entry.get("article_html"):
+        body["articleHtml"] = entry["article_html"]
+    if entry.get("qa_report"):
+        body["qaReport"] = entry["qa_report"]
+    if entry.get("board_topic_id") is not None:
+        body["boardTopicId"] = entry["board_topic_id"]
+    if entry.get("brief"):
+        body["brief"] = entry["brief"]
+    if assistant:
+        body["assistant"] = assistant
     path = "/api/articles/" + urllib.parse.quote(slug)
     try:
-        status, response = _article_http("PUT", path, body)
+        status, response = _article_http("PUT", path, body, assistant=assistant)
     except ArticleError as error:
         print("失败 %s: %s" % (slug, error))
         return True
@@ -1641,7 +1909,7 @@ def _article_push_one(entry, assets, state_files):
                     if asset is not None:
                         item["base64"] = base64.b64encode(asset["bytes"]).decode("ascii")
             try:
-                status, response = _article_http("PUT", path, body)
+                status, response = _article_http("PUT", path, body, assistant=assistant)
             except ArticleError as error:
                 print("失败 %s: %s" % (slug, error))
                 return True
@@ -1657,11 +1925,23 @@ def _article_push_one(entry, assets, state_files):
     code = response.get("code") or ""
     message = response.get("error") or code or ("HTTP %s" % status)
     if status == 401:
-        print("失败 %s: 未登录或 Key 已失效（先跑 superme login）" % slug)
+        if assistant:
+            print("失败 %s: 助手 token 无效或已失效（检查 HANDBOOK_TOKEN）" % slug)
+        else:
+            print("失败 %s: 未登录或 Key 已失效（先跑 superme login）" % slug)
+    elif status == 403 and code == "assistant_draft_only":
+        print("失败 %s: 助手只能推送草稿，不能发布或公开" % slug)
     elif status == 409 and code == "slug_taken":
         print("失败 %s: slug 已被其他账号占用，请在 frontmatter 里换一个 slug，例如 slug: %s-2" % (slug, slug))
     elif status == 409 and code == "slug_managed":
         print("失败 %s: 该 slug 由服务器目录导入管理，请在 frontmatter 里换一个 slug" % slug)
+    elif status == 409 and code == "article_locked":
+        print("失败 %s: 文章已锁定为非草稿状态（当前状态: %s），助手不能覆盖，先在站点上处理" % (
+            slug, response.get("status") or "未知"))
+    elif status == 422 and code == "assistant_required":
+        print("失败 %s: 助手 token 推送需要 --assistant 助手名字" % slug)
+    elif status == 503 and code == "owner_unavailable":
+        print("失败 %s: 文章归属账号不可用，请联系管理员" % slug)
     else:
         print("失败 %s: %s" % (slug, message))
     return True
@@ -1696,6 +1976,23 @@ def _article_default_root(target):
     return start
 
 
+ASSISTANT_TOKEN_HINT = (
+    "助手推送需要助手 token：先 set -a; . ~/.config/handbook/env; set +a，"
+    '再用 SUPERME_TOKEN="$HANDBOOK_TOKEN"'
+)
+
+
+def _article_assistant_name(args):
+    """--assistant 或环境变量 SUPERME_ASSISTANT 给出的助手名字；没有则 None。"""
+    value = getattr(args, "assistant", None) or os.environ.get("SUPERME_ASSISTANT") or ""
+    name = str(value).strip()
+    if not name:
+        return None
+    if len(name) > 20:
+        sys.exit("助手名字需 1-20 个字符，得到 %d 个: %s" % (len(name), name))
+    return name
+
+
 def _cmd_article_push(args, sync):
     if not args.path:
         sys.exit("用法: superme article %s <文件|目录> [--dry-run]" % ("sync" if sync else "push"))
@@ -1703,17 +2000,37 @@ def _cmd_article_push(args, sync):
     if not target.exists():
         sys.exit("找不到: " + str(target))
     target = target.resolve()
-    root = Path(args.root).expanduser().resolve() if args.root else _article_default_root(target)
-    if not root.exists():
-        sys.exit("找不到根目录: " + str(root))
-    files = _collect_article_files(target)
-    if not files:
+    assistant = _article_assistant_name(args)
+    if assistant and args.public:
+        sys.exit("--assistant 与 --public 不能同时使用（助手只能推草稿）")
+    # --dry-run 不联网，助手模式此时不需要 token。
+    if assistant and not args.dry_run and not _env_token(
+            "SUPERME_TOKEN", "DABAIHUA_CARDS_ASSISTANT_TOKEN", "HANDBOOK_TOKEN"):
+        sys.exit(ASSISTANT_TOKEN_HINT)
+    args_root = Path(args.root).expanduser().resolve() if args.root else None
+    if args_root is not None and not args_root.exists():
+        sys.exit("找不到根目录: " + str(args_root))
+    base_root = args_root or _article_default_root(target)
+    items = _collect_article_files(target)
+    if not items:
         print("（没有 .md 文件）")
         return 0
     state = _article_state_load()
     state_files = _article_state_files(state)
     entries = []
-    for path in files:
+    for item in items:
+        if "article_dir" in item:
+            # 文章目录（meta.json）：一整个目录是一篇文章，里面的其它 .md 不推。
+            article_dir = item["article_dir"]
+            dir_meta = _article_dir_meta(article_dir)
+            if dir_meta is None:
+                continue
+            try:
+                entries.append(_article_dir_entry(article_dir, dir_meta, state_files))
+            except ArticleError as error:
+                print("跳过 %s: %s" % (article_dir.name, error))
+            continue
+        path = item["file"]
         try:
             text = path.read_text(encoding="utf-8")
         except OSError as error:
@@ -1721,7 +2038,7 @@ def _cmd_article_push(args, sync):
             continue
         meta, body = _parse_frontmatter(text)
         title = _article_title(meta, body, path)
-        rel = _article_relative(path, root)
+        rel = _article_relative(path, base_root)
         if meta.get("publish") is False:
             print("跳过 %s: publish: false" % rel)
             continue
@@ -1747,14 +2064,38 @@ def _cmd_article_push(args, sync):
     failed = 0
     unchanged = 0
     for entry in entries:
-        normalizer = _ArticleNormalizer(entry["file"], root, note_index)
+        # 文章目录默认 root = 目录本身（--root 仍可覆盖），找图不遍历上级大目录。
+        if "article_dir" in entry and args_root is None:
+            entry_root = entry["article_dir"]
+        else:
+            entry_root = base_root
+        normalizer = _ArticleNormalizer(entry["file"], entry_root, note_index)
         entry["markdown"] = normalizer.normalize(entry["body"])
+        # 正文归一后再改写 html：与正文共享同一个 normalizer 的 assets。
+        entry["html_images"] = 0
+        if entry.get("article_html"):
+            entry["article_html"], entry["html_images"] = _article_rewrite_html_images(
+                entry["article_html"], entry["article_dir"], normalizer)
         assets = list(normalizer.assets.values())
         entry["tags"] = _article_tags(entry["meta"])
-        entry["is_public"] = _article_is_public(entry["meta"], entry["status"], args.public)
+        if assistant:
+            # 助手只能写草稿：frontmatter 里的 published / public 忽略（给警告），不传 isPublic。
+            if entry["status"] == "published":
+                print("警告 %s: 助手模式忽略 status: published，固定为 draft" % entry["rel"])
+            if entry["meta"].get("public") is True:
+                print("警告 %s: 助手模式忽略 public: true" % entry["rel"])
+            entry["status"] = "draft"
+            entry["is_public"] = None
+        elif "article_dir" in entry:
+            # 文章目录固定 draft；--public（非助手）时 is_public=True。
+            entry["is_public"] = True if args.public else None
+        else:
+            entry["is_public"] = _article_is_public(entry["meta"], entry["status"], args.public)
         entry["contentHash"] = _article_content_hash(
             entry["title"], entry["status"], entry["is_public"], entry["date"],
             entry["tags"], assets, entry["markdown"],
+            article_html=entry.get("article_html"), qa_report=entry.get("qa_report"),
+            board_topic_id=entry.get("board_topic_id"), brief=entry.get("brief"),
         )
         cached = state_files.get(str(entry["file"])) or {}
         changed = cached.get("contentHash") != entry["contentHash"]
@@ -1764,14 +2105,35 @@ def _cmd_article_push(args, sync):
             continue
         if args.dry_run:
             public_text = "公开" if entry["is_public"] is True else ("私密" if entry["is_public"] is False else "默认")
-            print("%s · %s · %s/%s · 图片 %d · %s" % (
-                entry["slug"], entry["title"], entry["status"], public_text, len(assets),
-                "已变化" if changed else "未变化",
-            ))
+            changed_text = "已变化" if changed else "未变化"
+            if "article_dir" in entry:
+                # 文章目录模式逐项打印（§6）：字段、article.html 改写数、asset 明细、全部警告。
+                print("%s · %s · %s" % (entry["slug"], entry["title"], changed_text))
+                print("  状态: %s/%s" % (entry["status"], public_text))
+                print("  日期: %s" % (entry["date"] or "—"))
+                print("  正文: %s" % entry["rel"])
+                if entry.get("article_html"):
+                    print("  article.html: 有（改写 %d 张图）" % entry.get("html_images", 0))
+                else:
+                    print("  article.html: 无")
+                print("  qa-report: %s" % ("有" if entry.get("qa_report") else "无"))
+                if entry.get("brief"):
+                    print("  brief: %s · %s" % (entry["brief"].get("date", ""), entry["brief"].get("topicId", "")))
+                if entry.get("board_topic_id") is not None:
+                    print("  boardTopicId: %s" % entry["board_topic_id"])
+                if assistant:
+                    print("  assistant: %s" % assistant)
+                for line in _article_dry_run_assets(entry, assets, state_files, entry_root):
+                    print(line)
+            else:
+                # 单文件模式保持原有的一行式输出。
+                print("%s · %s · %s/%s · 图片 %d · %s" % (
+                    entry["slug"], entry["title"], entry["status"], public_text, len(assets), changed_text,
+                ))
             for warning in normalizer.warnings:
                 print("  警告: " + warning)
             continue
-        if _article_push_one(entry, assets, state_files):
+        if _article_push_one(entry, assets, state_files, assistant):
             failed += 1
     if not args.dry_run:
         _article_state_save(state)
@@ -2190,6 +2552,7 @@ def main():
     art.add_argument("--public", action="store_true", help="推送为公开文章")
     art.add_argument("--dry-run", action="store_true", help="只预览，不联网、不写状态")
     art.add_argument("--root", help="同步根目录（默认目录本身/文件所在目录）")
+    art.add_argument("--assistant", help="以助手身份推送（用助手 token，强制草稿，1-20 个字符）")
 
     # ─── 私密数据 ───
     dta = sub.add_parser("data", help="上传/查看日报与职业数据")

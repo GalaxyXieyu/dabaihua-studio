@@ -9,7 +9,8 @@ import {
 import { canReadArticle, isArticleOwner, setArticlePublicForViewer, ArticleAccessError } from "../../../../lib/article-access";
 import { getArticle } from "../../../../lib/article-review";
 import { d1ArticleAssetStore } from "../../../../lib/article-assets";
-import { handleArticlePut } from "../../../../lib/article-push";
+import { handleArticlePut, parseAssistantName, resolveArticlesOwnerId } from "../../../../lib/article-push";
+import { bearerToken, sameSecret } from "../../../../lib/assistant-auth";
 import { ensureSchema } from "../../../../lib/store";
 import { PayloadTooLargeError, readBodyWithLimit } from "../../../../lib/weekly";
 
@@ -24,6 +25,22 @@ function jsonError(status: number, error: string, code: string, extra: Record<st
 
 function viewerOf(user: { id: number; role: "user" | "admin" } | null) {
   return user ? { id: user.id, role: user.role } : null;
+}
+
+/** 读请求体（≤ 32MB）并解析 JSON，失败时返回错误 Response。 */
+async function readJsonBody(request: Request): Promise<{ body: unknown } | Response> {
+  let bytes: Uint8Array;
+  try {
+    bytes = await readBodyWithLimit(request, MAX_BODY_BYTES);
+  } catch (error) {
+    if (error instanceof PayloadTooLargeError) return jsonError(413, "请求体最多 32MB", "too_large");
+    throw error;
+  }
+  try {
+    return { body: JSON.parse(new TextDecoder().decode(bytes)) };
+  } catch {
+    return jsonError(400, "请求体不是合法 JSON", "invalid");
+  }
 }
 
 export async function GET(request: Request, { params }: Params) {
@@ -46,6 +63,29 @@ export async function PUT(request: Request, { params }: Params) {
     await ensureSchema(env.DB);
     const { slug } = await params;
 
+    // 助手 token（与卡片 / 简报管线共用）：作者固定为文章归属账号，只能写草稿。
+    // GET / PATCH 不接受助手 token，只有这里开了口子。
+    const assistantToken = (env.DABAIHUA_CARDS_ASSISTANT_TOKEN || "").trim();
+    const token = bearerToken(request);
+    if (token && assistantToken && sameSecret(token, assistantToken)) {
+      const parsed = await readJsonBody(request);
+      if (parsed instanceof Response) return parsed;
+      const assistant = parseAssistantName(parsed.body);
+      if (assistant === null) return jsonError(422, "助手推送必须带 assistant 名字", "assistant_required");
+      const ownerId = await resolveArticlesOwnerId(env.DB, env.ARTICLES_OWNER_ACCOUNT);
+      if (ownerId === null) return jsonError(503, "文章归属账号不可用", "owner_unavailable");
+      const result = await handleArticlePut({
+        db: env.DB,
+        assets: d1ArticleAssetStore(env.DB),
+        viewer: { id: ownerId, role: "admin" },
+        slug,
+        body: parsed.body,
+        now: new Date().toISOString(),
+        assistant,
+      });
+      return Response.json(result.json, { status: result.status, headers: NO_STORE });
+    }
+
     const viaKey = await authenticateApiKey(env, request);
     let viewer: { id: number; role: "user" | "admin" } | null = null;
     if (viaKey.status === "ok") {
@@ -63,26 +103,15 @@ export async function PUT(request: Request, { params }: Params) {
       viewer = { id: sessionUser.id, role: sessionUser.role };
     }
 
-    let bytes: Uint8Array;
-    try {
-      bytes = await readBodyWithLimit(request, MAX_BODY_BYTES);
-    } catch (error) {
-      if (error instanceof PayloadTooLargeError) return jsonError(413, "请求体最多 32MB", "too_large");
-      throw error;
-    }
-    let body: unknown;
-    try {
-      body = JSON.parse(new TextDecoder().decode(bytes));
-    } catch {
-      return jsonError(400, "请求体不是合法 JSON", "invalid");
-    }
+    const parsed = await readJsonBody(request);
+    if (parsed instanceof Response) return parsed;
 
     const result = await handleArticlePut({
       db: env.DB,
       assets: d1ArticleAssetStore(env.DB),
       viewer,
       slug,
-      body,
+      body: parsed.body,
       now: new Date().toISOString(),
     });
     return Response.json(result.json, { status: result.status, headers: NO_STORE });

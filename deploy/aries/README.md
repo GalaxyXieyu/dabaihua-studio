@@ -22,6 +22,7 @@ DABAIHUA_ALLOW_REGISTER=1
 DABAIHUA_REGISTER_INVITE_CODE=...   # 可选
 DABAIHUA_PUBLIC_BASE_URL=https://superme.aigalaxy.top  # 可选，周报 URL 用
 DABAIHUA_CARDS_ASSISTANT_TOKEN=...  # 可选，照照镜子助手 token
+ARTICLES_OWNER_ACCOUNT=...         # 可选，文章归属账号，默认最早的管理员
 ```
 
 ## systemd 单元

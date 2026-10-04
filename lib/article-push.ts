@@ -8,9 +8,12 @@
 
 import type { ArticleAssetStore } from "./article-assets.ts";
 import type { Viewer } from "./article-access.ts";
+import { sanitizeArticleHtml } from "./html-sanitize.ts";
 
 export const PUSH_PROTOCOL = "dabaihua.article-push/v1";
 export const MAX_MARKDOWN_BYTES = 1024 * 1024;
+export const MAX_HTML_BYTES = 1024 * 1024;
+export const MAX_QA_REPORT_BYTES = 256 * 1024;
 export const MAX_ASSET_BYTES = 2 * 1024 * 1024;
 export const MAX_ASSETS = 50;
 export const MAX_TAGS = 20;
@@ -19,6 +22,7 @@ export const MAX_TAG_LENGTH = 40;
 const ASSET_NAME_RE = /^images\/[a-f0-9]{12}\.(png|jpe?g|gif|webp|svg)$/;
 const SHA_RE = /^[a-f0-9]{64}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const BRIEF_TOPIC_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,59}$/;
 const ABSOLUTE_PATH_RE = /^(?:\/|~|[A-Za-z]:[\\/])/;
 
 const CONTENT_TYPES: Record<string, string> = {
@@ -40,6 +44,10 @@ export type ArticleHashInput = {
   tags?: string[];
   assets?: ArticleHashAsset[];
   markdown: string;
+  articleHtml?: string;
+  qaReport?: string;
+  boardTopicId?: number;
+  brief?: { date: string; topicId: string };
 };
 
 export type PushAssetInput = { name: string; sha256: string; base64?: string };
@@ -52,6 +60,10 @@ export type NormalizedPushBody = {
   tags: string[];
   date: string | undefined;
   sourcePath: string | undefined;
+  articleHtml: string | undefined;
+  qaReport: string | undefined;
+  boardTopicId: number | undefined;
+  brief: { date: string; topicId: string } | undefined;
   protocol: string;
   contentHash: string;
   assets: PushAssetInput[];
@@ -65,6 +77,11 @@ export function isPushError(value: NormalizedPushBody | PushError): value is Pus
 
 function invalid(error: string): PushError {
   return { status: 400, code: "invalid", error };
+}
+
+/** 协议约定：undefined / null / "" 都视为没给。 */
+function given(value: unknown): boolean {
+  return value !== undefined && value !== null && value !== "";
 }
 
 function utf8Bytes(value: string): Uint8Array {
@@ -90,7 +107,7 @@ function contentTypeFor(name: string): string {
   return CONTENT_TYPES[ext] || "application/octet-stream";
 }
 
-/** 协议 §3 的 contentHash：sha256(hex 小写)。 */
+/** 协议 §3 的 contentHash：sha256(hex 小写)。可选扩展字段只在给出时追加固定行（见协议 §3）。 */
 export async function computeArticleHash(input: ArticleHashInput): Promise<string> {
   const publicValue = input.isPublic === undefined || input.isPublic === null ? "" : input.isPublic ? "true" : "false";
   const lines = [
@@ -101,6 +118,11 @@ export async function computeArticleHash(input: ArticleHashInput): Promise<strin
     `date:${input.date || ""}`,
     `tags:${(input.tags || []).join("\t")}`,
   ];
+  // 可选字段按固定顺序插在 tags 与 asset 之间；没给就不加行，旧客户端的 hash 不变。
+  if (input.boardTopicId !== undefined && input.boardTopicId !== null) lines.push(`board:${input.boardTopicId}`);
+  if (input.brief) lines.push(`brief:${input.brief.date}\t${input.brief.topicId}`);
+  if (input.articleHtml) lines.push(`html:${await sha256Hex(utf8Bytes(input.articleHtml))}`);
+  if (input.qaReport) lines.push(`qa:${await sha256Hex(utf8Bytes(input.qaReport))}`);
   const assets = [...(input.assets || [])].sort((left, right) =>
     left.name < right.name ? -1 : left.name > right.name ? 1 : 0,
   );
@@ -158,11 +180,42 @@ export async function validatePushBody(slug: string, json: unknown): Promise<Nor
   }
 
   let sourcePath: string | undefined;
-  if (input.sourcePath !== undefined && input.sourcePath !== null && input.sourcePath !== "") {
+  if (given(input.sourcePath)) {
     if (typeof input.sourcePath !== "string") return invalid("sourcePath 不合法");
     if ([...input.sourcePath].length > 300) return invalid("sourcePath 最多 300 个字符");
     if (ABSOLUTE_PATH_RE.test(input.sourcePath)) return invalid("sourcePath 必须是相对路径");
     sourcePath = input.sourcePath;
+  }
+
+  let articleHtml: string | undefined;
+  if (given(input.articleHtml)) {
+    if (typeof input.articleHtml !== "string") return invalid("articleHtml 必须是字符串");
+    if (utf8Bytes(input.articleHtml).byteLength > MAX_HTML_BYTES) return invalid("articleHtml 最多 1MB");
+    articleHtml = input.articleHtml;
+  }
+
+  let qaReport: string | undefined;
+  if (given(input.qaReport)) {
+    if (typeof input.qaReport !== "string") return invalid("qaReport 必须是字符串");
+    if (utf8Bytes(input.qaReport).byteLength > MAX_QA_REPORT_BYTES) return invalid("qaReport 最多 256KB");
+    qaReport = input.qaReport;
+  }
+
+  let boardTopicId: number | undefined;
+  if (given(input.boardTopicId)) {
+    if (typeof input.boardTopicId !== "number" || !Number.isSafeInteger(input.boardTopicId) || input.boardTopicId <= 0) {
+      return invalid("boardTopicId 必须是正整数");
+    }
+    boardTopicId = input.boardTopicId;
+  }
+
+  let brief: { date: string; topicId: string } | undefined;
+  if (given(input.brief)) {
+    if (typeof input.brief !== "object" || Array.isArray(input.brief)) return invalid("brief 不合法");
+    const rawBrief = input.brief as Record<string, unknown>;
+    if (typeof rawBrief.date !== "string" || !DATE_RE.test(rawBrief.date)) return invalid("brief.date 必须是 YYYY-MM-DD");
+    if (typeof rawBrief.topicId !== "string" || !BRIEF_TOPIC_ID_RE.test(rawBrief.topicId)) return invalid("brief.topicId 不合法");
+    brief = { date: rawBrief.date, topicId: rawBrief.topicId };
   }
 
   let assets: PushAssetInput[] = [];
@@ -197,19 +250,61 @@ export async function validatePushBody(slug: string, json: unknown): Promise<Nor
     assets = [...seen.values()];
   }
 
-  const contentHash = await computeArticleHash({ title, status, isPublic, date, tags, assets, markdown });
+  const contentHash = await computeArticleHash({
+    title,
+    status,
+    isPublic,
+    date,
+    tags,
+    assets,
+    markdown,
+    articleHtml,
+    qaReport,
+    boardTopicId,
+    brief,
+  });
   if (input.contentHash !== undefined && input.contentHash !== null && input.contentHash !== "") {
     if (typeof input.contentHash !== "string" || input.contentHash !== contentHash) {
       return { status: 400, code: "hash_mismatch", error: "contentHash 与内容不一致" };
     }
   }
 
-  return { title, markdown, status, isPublic, tags, date, sourcePath, protocol: PUSH_PROTOCOL, contentHash, assets };
+  return { title, markdown, status, isPublic, tags, date, sourcePath, articleHtml, qaReport, boardTopicId, brief, protocol: PUSH_PROTOCOL, contentHash, assets };
 }
 
 function shanghaiDate(now: string): string {
   const shifted = new Date(new Date(now).getTime() + 8 * 60 * 60 * 1000);
   return shifted.toISOString().slice(0, 10);
+}
+
+/** 助手 token 推送时必填的 assistant 名字：非空、≤ 20 字、不含换行。 */
+export function parseAssistantName(body: unknown): string | null {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return null;
+  const raw = (body as Record<string, unknown>).assistant;
+  if (typeof raw !== "string") return null;
+  const name = raw.trim();
+  if (!name) return null;
+  if ([...name].length > 20) return null;
+  if (/[\r\n]/.test(name)) return null;
+  return name;
+}
+
+/** 助手推送的归属账号：优先 ARTICLES_OWNER_ACCOUNT，回退最早的管理员，都没有返回 null。 */
+export async function resolveArticlesOwnerId(db: D1Database, ownerAccount?: string): Promise<number | null> {
+  try {
+    const account = String(ownerAccount ?? "").trim();
+    if (account) {
+      const normalized = account.normalize("NFKC").trim().toLocaleLowerCase("en-US");
+      const row = await db.prepare("SELECT id FROM users WHERE account_normalized = ?").bind(normalized).first<Record<string, unknown>>();
+      if (row) return Number(row.id);
+    }
+    const admin = await db
+      .prepare("SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1")
+      .first<Record<string, unknown>>();
+    return admin ? Number(admin.id) : null;
+  } catch {
+    return null;
+  }
 }
 
 export type ArticlePutDeps = {
@@ -219,6 +314,8 @@ export type ArticlePutDeps = {
   slug: string;
   body: unknown;
   now: string;
+  /** 有值 = 助手 token 请求，viewer 是解析出的文章归属账号。 */
+  assistant?: string;
 };
 
 export type ArticlePutResult = { status: number; json: Record<string, unknown> };
@@ -229,14 +326,20 @@ export type ArticlePutResult = { status: number; json: Record<string, unknown> }
  */
 export async function handleArticlePut(deps: ArticlePutDeps): Promise<ArticlePutResult> {
   const { db, assets, viewer, slug, body, now } = deps;
+  const assistant = typeof deps.assistant === "string" && deps.assistant.trim() ? deps.assistant : undefined;
   if (!viewer) return { status: 401, json: { error: "请先登录后再继续", code: "unauthorized" } };
 
   const normalized = await validatePushBody(slug, body);
   if (isPushError(normalized)) return { status: normalized.status, json: { error: normalized.error, code: normalized.code } };
 
+  // 助手只能推草稿：发布、公开永远由 Yu 自己决定。
+  if (assistant && (normalized.status === "published" || normalized.isPublic === true)) {
+    return { status: 403, json: { error: "助手只能推送草稿，发布由 Yu 决定", code: "assistant_draft_only" } };
+  }
+
   const existing = await db
     .prepare(
-      "SELECT owner_id AS ownerId, meta_json AS metaJson, content_hash AS contentHash, is_public AS isPublic, date FROM articles WHERE slug = ?",
+      "SELECT owner_id AS ownerId, meta_json AS metaJson, content_hash AS contentHash, is_public AS isPublic, date, status FROM articles WHERE slug = ?",
     )
     .bind(slug)
     .first<Record<string, unknown>>();
@@ -254,6 +357,17 @@ export async function handleArticlePut(deps: ArticlePutDeps): Promise<ArticlePut
     }
     if (source !== "push") {
       return { status: 409, json: { error: "这个 slug 由服务器目录导入管理", code: "slug_managed" } };
+    }
+    // 非草稿状态的文章助手不能覆盖（changes-requested 除外：Yu 要求修改后助手要能重推修订稿）。
+    // 这一条要在 unchanged 短路之前判断：内容即使没变，锁定的文章仍然是 409。
+    if (assistant) {
+      const existingStatus = existing.status === null || existing.status === undefined ? "" : String(existing.status);
+      if (existingStatus !== "draft" && existingStatus !== "changes-requested") {
+        return {
+          status: 409,
+          json: { error: `这篇文章已被改为「${existingStatus}」，助手不能覆盖`, code: "article_locked", status: existingStatus },
+        };
+      }
     }
     if (existing.contentHash && String(existing.contentHash) === normalized.contentHash) {
       return {
@@ -283,38 +397,82 @@ export async function handleArticlePut(deps: ArticlePutDeps): Promise<ArticlePut
     return { status: 422, json: { error: "缺少图片数据", code: "missing_assets", missingAssets } };
   }
 
+  const date = normalized.date || (existing && existing.date ? String(existing.date) : null) || shanghaiDate(now);
+
   let isPublic: boolean;
-  if (normalized.isPublic !== undefined) isPublic = normalized.isPublic;
+  if (assistant) {
+    // 助手不能改公开状态：新文章私密，已有文章保持原值。
+    isPublic = existing ? Boolean(existing.isPublic) : false;
+  } else if (normalized.isPublic !== undefined) isPublic = normalized.isPublic;
   else if (normalized.status === "published") isPublic = true;
   else if (existing) isPublic = Boolean(existing.isPublic);
   else isPublic = false;
 
-  const date = normalized.date || (existing && existing.date ? String(existing.date) : null) || shanghaiDate(now);
-  const metaJson = JSON.stringify({
+  const status = assistant ? "draft" : normalized.status;
+  // articleHtml 存清洗后的版本；相对 images/<sha12>.<ext> 保持相对，渲染时再映射到 assets 地址。
+  const articleHtml = normalized.articleHtml === undefined ? null : sanitizeArticleHtml(normalized.articleHtml, { assetBase: "" });
+  const qaReport = normalized.qaReport === undefined ? null : normalized.qaReport;
+  const meta: Record<string, unknown> = {
     source: "push",
     protocol: PUSH_PROTOCOL,
     tags: normalized.tags,
     sourcePath: normalized.sourcePath ?? null,
     pushedAt: now,
-  });
+    pushedBy: assistant ? "assistant" : "owner",
+  };
+  if (normalized.brief) meta.brief = normalized.brief;
+  if (normalized.boardTopicId !== undefined) meta.boardTopicId = normalized.boardTopicId;
+  if (assistant) meta.assistant = assistant;
+  const metaJson = JSON.stringify(meta);
 
   if (existing) {
     await db
       .prepare(
         `UPDATE articles SET date = ?, title = ?, status = ?, meta_json = ?, draft_md = NULL, final_md = ?,
-           qa_report = NULL, article_html = NULL, content_hash = ?, is_public = ?, synced_at = ?, updated_at = ?
+           qa_report = ?, article_html = ?, content_hash = ?, is_public = ?, topic_id = COALESCE(?, topic_id),
+           synced_at = ?, updated_at = ?
          WHERE slug = ?`,
       )
-      .bind(date, normalized.title, normalized.status, metaJson, normalized.markdown, normalized.contentHash, isPublic ? 1 : 0, now, now, slug)
+      .bind(
+        date,
+        normalized.title,
+        status,
+        metaJson,
+        normalized.markdown,
+        qaReport,
+        articleHtml,
+        normalized.contentHash,
+        isPublic ? 1 : 0,
+        normalized.boardTopicId ?? null,
+        now,
+        now,
+        slug,
+      )
       .run();
   } else {
     await db
       .prepare(
         `INSERT INTO articles (slug, date, title, topic, status, meta_json, draft_md, final_md, qa_report, article_html,
            content_hash, review_round, is_public, topic_id, owner_id, synced_at, created_at, updated_at)
-         VALUES (?, ?, ?, NULL, ?, ?, NULL, ?, NULL, NULL, ?, 1, ?, NULL, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, NULL, ?, ?, NULL, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?)`,
       )
-      .bind(slug, date, normalized.title, normalized.status, metaJson, normalized.markdown, normalized.contentHash, isPublic ? 1 : 0, viewer.id, now, now, now)
+      .bind(
+        slug,
+        date,
+        normalized.title,
+        status,
+        metaJson,
+        normalized.markdown,
+        qaReport,
+        articleHtml,
+        normalized.contentHash,
+        isPublic ? 1 : 0,
+        normalized.boardTopicId ?? null,
+        viewer.id,
+        now,
+        now,
+        now,
+      )
       .run();
   }
 

@@ -113,6 +113,10 @@ test("computeArticleHash reproduces every shared hash vector", async () => {
       tags: vector.body.tags || [],
       assets: (vector.body.assets || []).map((asset) => ({ name: asset.name, sha256: asset.sha256 })),
       markdown: vector.body.markdown,
+      articleHtml: vector.body.articleHtml,
+      qaReport: vector.body.qaReport,
+      boardTopicId: vector.body.boardTopicId,
+      brief: vector.body.brief ? { date: vector.body.brief.date, topicId: vector.body.brief.topicId } : undefined,
     });
     assert.equal(hash, vector.contentHash, vector.name);
   }

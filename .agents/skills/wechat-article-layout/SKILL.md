@@ -134,3 +134,27 @@ description: 按微信公众号手机端阅读体验优化中文推文的分行�
 ## 交付说明
 
 简要说明调整了多少处分行、合并和空白段落，并说明这些是移动端视觉优化，不是标点或语法修改。
+
+## 推送到审稿页（尔康排版后，2026-10-04 起）
+
+排版完成后把 `article.html` 和配图推到审稿页 `https://superme.aigalaxy.top/articles/<slug>`，这是审稿页最终的排版版本。以前用 `scripts/publish-review.mjs`（rsync + SSH，经常卡在 22 端口）推送的做法已废弃。
+
+**时机**：`article.html` 和 `images/` 完成后推一次。推送前先跑 dry-run，确认输出里没有「找不到图片」警告：html 里的图片都应是 `images/xxx.png` 这类相对路径并且文件存在。文章目录是 `/workspace/projects/articles/<日期-slug>/`，里面有 `meta.json`，目录名就是审稿页网址里的 slug。
+
+**命令**：没装 CLI 时先安装 `mkdir -p ~/.local/bin && curl -fsSL https://superme.aigalaxy.top/cli/superme -o ~/.local/bin/superme && chmod +x ~/.local/bin/superme`；`superme --version` 要 ≥ 2.6.0，旧了跑 `superme update`。然后：
+
+```bash
+set -a; . ~/.config/handbook/env; set +a
+SUPERME_TOKEN="$HANDBOOK_TOKEN" superme article push /workspace/projects/articles/<目录> --assistant 尔康 --dry-run   # 先看清单
+SUPERME_TOKEN="$HANDBOOK_TOKEN" superme article push /workspace/projects/articles/<目录> --assistant 尔康
+```
+
+**规则**：
+- CLI 自动带上 `meta.title`、`brief_date`、正文（有 `02-final.md` 用定稿，否则用 `01-draft.md`）、`article.html`（其中 `images/…` 图片自动上传并改写）、`qa-report.md`、简报关联（`brief_date` + `topic_id`）、`board_topic_id`，不需要手动传图片或拼 JSON。
+- 只推草稿：不加 `--public`，不改发布状态，发布永远由 Yu 决定。同一目录重复推送 = 覆盖成最新版本，审稿批注不受影响。
+- 绝不用 SSH / rsync / scp / `scripts/publish-review.mjs` / `npm run publish-review`，绝不直接连服务器或数据库；token 只从 `~/.config/handbook/env` 读，绝不打印、回显、写进文件或交接消息。
+
+**结果处理**：
+- 成功会打印 `<slug> created|updated|unchanged`，把审稿链接 `https://superme.aigalaxy.top/articles/<slug>` 写进 `meta.json` 的 `layout.review_site` 字段（替换以前「未推送：SSH…」这类说明），并放进交接消息。
+- `409 article_locked`：Yu 已经把这篇改成「已通过 / 已发布」等状态，停止推送，告诉福伦。`409 slug_taken` / `slug_managed`：不要改目录名硬推，在交接里报告。`401`：token 失效或没加载 env，报告福伦。
+- 网络失败或接口未上线：不阻塞排版交付，照常交稿，交接里注明「审稿页未推送」及错误信息。

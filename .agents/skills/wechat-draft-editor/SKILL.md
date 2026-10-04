@@ -216,3 +216,27 @@ python3 .agents/skills/wechat-draft-editor/scripts/check_content_anchors.py 原�
 - [ ] 原稿中的内部不一致没有被猜测性修复；需要选择的地方已保留并列为作者确认项。
 - [ ] 含数据、案例或引用的长文已运行事实锚点检查脚本，并人工处理所有报警。
 - [ ] 没有质疑原稿经历的真实性、证据跨度或群体观察的成立范围。
+
+## 推送到审稿页（紫薇定稿后，2026-10-04 起）
+
+定稿后把文章推到审稿页 `https://superme.aigalaxy.top/articles/<slug>`，覆盖小燕子交稿时推的初稿版本。以前用 `scripts/publish-review.mjs`（rsync + SSH，经常卡在 22 端口）推送的做法已废弃。
+
+**时机**：`02-final.md` 和 `qa-report.md` 写好、硬否决检查通过后推一次。文章目录是 `/workspace/projects/articles/<日期-slug>/`，里面有 `meta.json`，目录名就是审稿页网址里的 slug。
+
+**命令**：没装 CLI 时先安装 `mkdir -p ~/.local/bin && curl -fsSL https://superme.aigalaxy.top/cli/superme -o ~/.local/bin/superme && chmod +x ~/.local/bin/superme`；`superme --version` 要 ≥ 2.6.0，旧了跑 `superme update`。然后：
+
+```bash
+set -a; . ~/.config/handbook/env; set +a
+SUPERME_TOKEN="$HANDBOOK_TOKEN" superme article push /workspace/projects/articles/<目录> --assistant 紫薇 --dry-run   # 先看清单
+SUPERME_TOKEN="$HANDBOOK_TOKEN" superme article push /workspace/projects/articles/<目录> --assistant 紫薇
+```
+
+**规则**：
+- CLI 自动带上 `meta.title`、`brief_date`、正文（有 `02-final.md` 用定稿，否则用 `01-draft.md`）、`article.html`（其中 `images/…` 图片自动上传并改写）、`qa-report.md`、简报关联（`brief_date` + `topic_id`）、`board_topic_id`，不需要手动传图片或拼 JSON。
+- 只推草稿：不加 `--public`，不改发布状态，发布永远由 Yu 决定。同一目录重复推送 = 覆盖成最新版本，审稿批注不受影响。
+- 绝不用 SSH / rsync / scp / `scripts/publish-review.mjs` / `npm run publish-review`，绝不直接连服务器或数据库；token 只从 `~/.config/handbook/env` 读，绝不打印、回显、写进文件或交接消息。
+
+**结果处理**：
+- 成功会打印 `<slug> created|updated|unchanged`，把审稿链接 `https://superme.aigalaxy.top/articles/<slug>` 写进 `meta.json` 的 `edit.review_url` 字段，并放进交接消息。
+- `409 article_locked`：Yu 已经把这篇改成「已通过 / 已发布」等状态，停止推送，告诉福伦。`409 slug_taken` / `slug_managed`：不要改目录名硬推，在交接里报告。`401`：token 失效或没加载 env，报告福伦。
+- 网络失败或接口未上线：不阻塞审校定稿，照常交稿，交接里注明「审稿页未推送」及错误信息。
