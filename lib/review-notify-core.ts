@@ -257,7 +257,7 @@ export function buildReviewNotifyPayload(input: BuildReviewNotifyPayloadInput): 
       input.picked ?? null,
     ),
     links: {
-      review: `${origin}/review/article/${encodeURIComponent(slug)}`,
+      review: `${origin}/articles/${encodeURIComponent(slug)}`,
       feedback: `${origin}/api/review/article/${encodeURIComponent(slug)}/feedback?round=${feedback.round}`,
     },
   };

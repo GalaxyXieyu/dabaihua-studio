@@ -13,6 +13,7 @@ import { splitSentences, type SentenceSpan } from "../../lib/sentences";
 import { HANDOFF_ASSISTANTS } from "../../lib/review-notify-core";
 import { htmlSourceLabel } from "./article-status";
 import { decideReviewMode, readReviewModeSignals } from "./review-mode";
+import { formatReviewTime } from "./review-time";
 import { Seal } from "./seal/Seal.tsx";
 import { StampSlot } from "./seal/StampSlot.tsx";
 import { slotId } from "./seal/seal-moments.ts";
@@ -143,10 +144,7 @@ function commonSuffix(left: string, right: string) {
   return index;
 }
 
-function formatTime(value: string | null | undefined) {
-  if (!value) return "";
-  return value.slice(0, 16).replace("T", " ");
-}
+const formatTime = formatReviewTime;
 
 // 阶段徽标 / 进度段的悬浮提示：<assistant> · <时间>。
 function stageTitle(stage: ReviewStageSummary) {

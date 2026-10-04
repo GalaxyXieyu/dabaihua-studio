@@ -271,7 +271,7 @@ payload 示例（数据是编的）：
   },
   "handoff": { "assistant": "紫薇", "reason": "文字修改", "source": "auto" },
   "links": {
-    "review": "https://superme.aigalaxy.top/review/article/2026-10-04-mock-review",
+    "review": "https://superme.aigalaxy.top/articles/2026-10-04-mock-review",
     "feedback": "https://superme.aigalaxy.top/api/review/article/2026-10-04-mock-review/feedback?round=2"
   }
 }

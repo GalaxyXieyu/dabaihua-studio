@@ -26,6 +26,7 @@ import {
   suggestHandoff,
 } from "../lib/review-notify-core.ts";
 import { notifyArticleReview } from "../lib/review-notify.ts";
+import { formatReviewTime } from "../app/_components/review-time.ts";
 import { createFakeD1 } from "./helpers/fake-d1.mjs";
 
 const ORIGINAL_FETCH = globalThis.fetch;
@@ -184,8 +185,8 @@ test("buildReviewNotifyPayload: 顶层字段与注册表一致，逐项对上", 
   // 自动判定：意见里命中结构词（重写）→ 小燕子。
   assert.deepEqual(payload.handoff, { assistant: "小燕子", reason: "结构性修改", source: "auto" });
 
-  // links 指向审稿页与反馈接口，slug 编码、带轮次。
-  assert.equal(payload.links.review, `${ORIGIN}/review/article/demo-slug`);
+  // links 指向文章审稿页与反馈接口，slug 编码、带轮次。
+  assert.equal(payload.links.review, `${ORIGIN}/articles/demo-slug`);
   assert.equal(payload.links.feedback, `${ORIGIN}/api/review/article/demo-slug/feedback?round=2`);
 });
 
@@ -218,7 +219,7 @@ test("buildReviewNotifyPayload: meta 缺字段 / 坏 JSON → null，手选优�
     origin: `${ORIGIN}/`,
   });
   assert.equal(flat.article.articleDir, null);
-  assert.equal(flat.links.review, `${ORIGIN}/review/article/demo-slug`);
+  assert.equal(flat.links.review, `${ORIGIN}/articles/demo-slug`);
 
   // 手选优先。
   const picked = buildPayload({ picked: "尔康" });
@@ -232,7 +233,7 @@ function setupReviewDb(feedback = sampleFeedback()) {
   sqlite.exec(`
     CREATE TABLE articles (slug TEXT PRIMARY KEY, title TEXT, status TEXT, meta_json TEXT NOT NULL DEFAULT '{}', review_round INTEGER NOT NULL DEFAULT 1);
     CREATE TABLE review_rounds (id INTEGER PRIMARY KEY AUTOINCREMENT, target_type TEXT NOT NULL, target_id TEXT NOT NULL, round INTEGER NOT NULL, user_id INTEGER NOT NULL, verdict TEXT NOT NULL, comment TEXT NOT NULL DEFAULT '', mark_count INTEGER NOT NULL DEFAULT 0, feedback_json TEXT NOT NULL, exported_at TEXT, export_path TEXT, notify_state TEXT, notify_http_status INTEGER, notify_error TEXT, notify_at TEXT, notify_handoff TEXT, handoff_pick TEXT, created_at TEXT NOT NULL, UNIQUE(target_type, target_id, round));
-    CREATE TABLE assistant_notify_log (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT NULL, event TEXT NOT NULL, ref TEXT, state TEXT NOT NULL, http_status INTEGER, error TEXT, duration_ms INTEGER NOT NULL DEFAULT 0, target_host TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL);
+    CREATE TABLE assistant_notify_log (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT NOT NULL, event TEXT NOT NULL, ref TEXT, state TEXT NOT NULL, http_status INTEGER, error TEXT, duration_ms INTEGER NOT NULL DEFAULT 0, target_host TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, payload_json TEXT);
   `);
   sqlite.prepare("INSERT INTO articles (slug, title, status, meta_json) VALUES (?, ?, ?, ?)")
     .run("demo-slug", "样本文章", "changes-requested", JSON.stringify(SAMPLE_META));
@@ -481,4 +482,27 @@ test("审稿页：接手人单选随 submit 发 handoff，封面只读展示", (
   assert.match(articlePage, /stage=\{stage\}/);
   assert.match(articlePage, /stageHistory=\{stageHistory\}/);
   assert.match(articlePage, /covers=\{covers\}/);
+});
+
+// ─── formatReviewTime（审稿页时间显示） ──────────
+
+test("formatReviewTime: 固定上海时区、YYYY-MM-DD HH:mm、h23、坏值回退", () => {
+  // UTC 时间不再被当本地时间切并（原实现晚 8 小时）。
+  assert.equal(formatReviewTime("2026-10-04T16:30:00Z"), "2026-10-05 00:30");
+  // 已带 +08:00 的字符串同样正确。
+  assert.equal(formatReviewTime("2026-10-04T16:30:00+08:00"), "2026-10-04 16:30");
+  assert.equal(formatReviewTime("2026-01-02T03:04:00Z"), "2026-01-02 11:04");
+  // 边界：小时/分钟补零（h23，不出现 “24:xx”）。
+  assert.equal(formatReviewTime("2026-06-01T15:59:00Z"), "2026-06-01 23:59");
+  assert.equal(formatReviewTime("2026-06-01T16:00:00Z"), "2026-06-02 00:00");
+  // 空值与解析失败回退旧切片行为。
+  assert.equal(formatReviewTime(null), "");
+  assert.equal(formatReviewTime(undefined), "");
+  assert.equal(formatReviewTime(""), "");
+  assert.equal(formatReviewTime("not-a-date"), "not-a-date");
+
+  // 审稿页已改用该纯模块，不再自带切片实现。
+  const reviewer = read("../app/_components/ArticleReviewer.tsx");
+  assert.match(reviewer, /from "\.\/review-time"/);
+  assert.doesNotMatch(reviewer, /return value\.slice\(0, 16\)\.replace/);
 });
