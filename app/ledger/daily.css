@@ -68,33 +68,7 @@ body:has(.daily-a) {
   min-width: 0;
 }
 
-.daily-a-seal-cells {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.daily-a-seal-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 56px;
-}
-
-.daily-a-seal-cell-note {
-  margin-top: 3px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--seal-date, #71695C);
-  white-space: nowrap;
-}
+/* 印位格：印谱叶 SealBookGrid（seal.css），格子自带居中 */
 
 .daily-a-seal-strip {
   display: flex;

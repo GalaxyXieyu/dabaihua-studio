@@ -1,16 +1,18 @@
 "use client";
 
 // 旧账日视图（GROWTH_NAMES.ledger）的印章区（规范 10 行 / 8.5 后三行 / 8.6 最后两条）。
-// 只显示这一天的印位：git 方章 + 本台设备这一天页内当场盖的章，加当天印条（收工用）。
-// 没有昨日回放、没有回来了（planVisit 已按 page 分开处理）。
+// 只显示这一天的印位：git 方章 + 本台设备这一天页内当场盖的章（SealBookGrid 印位格），
+// 加当天印条（收工用）。没有昨日回放、没有回来了（planVisit 已按 page 分开处理）。
 // 空白日：事件列表为空，不渲染虚线印位也不给提示，角色在服务端就是 rest。
 // SealStage 用 lazy 按需加载，没有要补盖的队列时不加载那个 chunk（规范 11.3）。
 import { lazy } from "react";
 import { Suspense, useEffect } from "react";
 import { useSealQueue } from "./useSealQueue.ts";
 import { usePauseWhenHidden } from "./usePauseWhenHidden.ts";
-import { StampSlot } from "./StampSlot.tsx";
+import { SealBookGrid } from "./SealBookGrid.tsx";
+import type { SealBookItem } from "./SealBookGrid.tsx";
 import { StampMark } from "./StampMark.tsx";
+import { cnDateText, eventCaption } from "./seal-book.ts";
 import { WRAP } from "./seal-tokens.ts";
 import { shanghaiDate } from "./seal-store.ts";
 import type { SealDay } from "./seal-moments.ts";
@@ -24,14 +26,6 @@ export type LedgerDaySealsProps = {
   generatedAt: string | null;
   pageDate: string;
 };
-
-/** Asia/Shanghai 的 HH:mm（固定 +8 偏移，不用 Intl；和 seal-sheet 同口径） */
-function shanghaiTime(at: string): string {
-  const ms = Date.parse(at);
-  if (!Number.isFinite(ms)) return "";
-  const d = new Date(ms + 8 * 3600e3);
-  return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
-}
 
 export function LedgerDaySeals({ days, generatedAt, pageDate }: LedgerDaySealsProps) {
   const { ready, plan, slotState, stripState, needsStage, stageProps } = useSealQueue({
@@ -64,31 +58,24 @@ export function LedgerDaySeals({ days, generatedAt, pageDate }: LedgerDaySealsPr
     plan && plan.pageDate !== null ? plan.events.filter((e) => shanghaiDate(e.at) === plan.pageDate) : [];
   const stripShown = stripEvents.slice(0, WRAP.stripMax);
 
+  // 印位格：git 方章写「提交 N 次」，其他按事件键归类；日期用中文
+  const bookItems: SealBookItem[] = (plan?.events ?? []).map((e) => {
+    const isGit = e.key.startsWith("git:");
+    const day = isGit ? days?.find((d) => `git:${d.date}` === e.key) : undefined;
+    return {
+      key: e.key,
+      kind: e.kind,
+      targetId: e.targetId,
+      state: slotState(e.key),
+      label: e.label,
+      caption: isGit ? `提交 ${day?.commits ?? 0} 次` : eventCaption(e.key),
+      date: cnDateText(isGit ? e.key.slice(4) : shanghaiDate(e.at)),
+    };
+  });
+
   return (
     <div className="daily-a-seal-body">
-      <ol className="daily-a-seal-cells">
-        {(plan?.events ?? []).map((e) => {
-          // git 方章下面写 "提交 N 次"，页内章写 label + HH:mm
-          const day = e.key.startsWith("git:") ? days?.find((d) => `git:${d.date}` === e.key) : undefined;
-          return (
-            <li key={e.key} className="daily-a-seal-cell">
-              <StampSlot
-                targetId={e.targetId}
-                state={slotState(e.key)}
-                kind={e.kind}
-                size={48}
-                streak={plan?.streak}
-                dry={plan?.dry}
-                label={e.label}
-              />
-              <span className="daily-a-seal-cell-note">
-                <span>{e.key.startsWith("git:") ? `提交 ${day?.commits ?? 0} 次` : e.label}</span>
-                <span>{e.key.startsWith("git:") ? null : shanghaiTime(e.at)}</span>
-              </span>
-            </li>
-          );
-        })}
-      </ol>
+      <SealBookGrid items={bookItems} streak={plan?.streak} dry={plan?.dry} />
 
       {stripState !== "hidden" && plan?.pageDate != null && (
         <div id={"seal-strip-" + plan.pageDate} data-state={stripState} className="daily-a-seal-strip">

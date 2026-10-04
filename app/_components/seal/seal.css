@@ -150,6 +150,219 @@ html[data-nav="collapsed"] .global-brand .seal-actor { display: none; }
   pointer-events: none;
 }
 
+/* ---------- 印谱叶（文武边）：今天「新盖的章」/ 旧账日视图共用 ---------- */
+
+/* 外框 1.5px --line-strong，内框 0.5px，两线间距 6px；叶面 --paper */
+.seal-book {
+  background: var(--paper, #FBF8F1);
+  border: 1.5px solid var(--line-strong, #C4B8A2);
+  padding: 6px;
+  margin: 0 0 28px;
+}
+
+.seal-book-in {
+  border: 0.5px solid var(--line-strong, #C4B8A2);
+  padding: 30px 36px;
+}
+
+.seal-book-head {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+/* 标题：宋体加粗、字距 .42em，两侧各一条 36px 发丝线 */
+.seal-book-title {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  font-family: var(--font-serif);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.42em;
+  padding-left: 0.42em;
+  color: var(--ink, #1B1915);
+}
+
+.seal-book-title::before,
+.seal-book-title::after {
+  content: "";
+  width: 36px;
+  height: 0.5px;
+  background: var(--line-strong, #C4B8A2);
+}
+
+.seal-book-sub {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--seal-date, #71695C);
+  letter-spacing: 0.24em;
+  padding-left: 0.24em;
+}
+
+/* ---------- 印位格：半列网格，每行都居中（格位变量由 SealBookGrid 写） ---------- */
+
+.seal-book-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: var(--d-cols);
+  justify-content: center;
+  row-gap: 22px;
+}
+
+.seal-book-cell {
+  grid-column: var(--d-col) / span 2;
+  grid-row: var(--d-row);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 4px 0 2px;
+  min-width: 0;
+}
+
+/* 竖界栏：同一行相邻格之间 0.5px，本行首格不画 */
+.seal-book-cell::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 0.5px;
+  background: var(--line, #D8CFBE);
+}
+
+.seal-book-cell[data-d-first]::before {
+  display: none;
+}
+
+.seal-book-imp {
+  display: grid;
+  place-items: center;
+  height: 62px;
+  line-height: 0;
+  margin-bottom: 8px;
+}
+
+.seal-book-cap {
+  font-family: var(--font-serif);
+  font-size: 12.5px;
+  line-height: 16px;
+  letter-spacing: 0.24em;
+  padding-left: 0.24em;
+  color: var(--ink, #1B1915);
+  white-space: nowrap;
+}
+
+.seal-book-date {
+  margin-top: 2px;
+  font-size: 10.5px;
+  line-height: 14px;
+  letter-spacing: 0.1em;
+  padding-left: 0.1em;
+  color: var(--seal-date, #71695C);
+  white-space: nowrap;
+}
+
+/* 「另有 N 枚」：桌面 / 手机各说各的（显示上限不同），还没有集章页所以不带链接 */
+.seal-book-more {
+  margin: 20px 0 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted, #4A453C);
+  letter-spacing: 0.2em;
+}
+
+.seal-book-more-m {
+  display: none;
+}
+
+/* 印谱叶里既有的小件（昨天小卡 / 当天印条 / 连续天数）居中，内部样式不动 */
+.seal-book .td-a-seal-card-wrap {
+  text-align: center;
+}
+
+.seal-book .td-a-seal-card {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.seal-book .td-a-seal-strip {
+  justify-content: center;
+}
+
+.seal-book .td-a-seal-note {
+  text-align: center;
+}
+
+/* ---------- 手机（<=640px）：印谱叶收窄，印位格换手机分行 ---------- */
+
+@media (max-width: 640px) {
+  .seal-book {
+    padding: 5px;
+  }
+
+  .seal-book-in {
+    padding: 22px 12px;
+  }
+
+  .seal-book-head {
+    margin-bottom: 18px;
+  }
+
+  .seal-book-title {
+    font-size: 16px;
+  }
+
+  .seal-book-title::before,
+  .seal-book-title::after {
+    width: 22px;
+  }
+
+  .seal-book-grid {
+    grid-template-columns: var(--m-cols);
+    row-gap: 18px;
+  }
+
+  .seal-book-cell {
+    grid-column: var(--m-col) / span 2;
+    grid-row: var(--m-row);
+  }
+
+  /* 竖界栏改看手机行的首格；桌面首格的免画规则在手机里撤销 */
+  .seal-book-cell[data-d-first]::before {
+    display: block;
+  }
+
+  .seal-book-cell[data-m-first]::before {
+    display: none;
+  }
+
+  /* 超过手机上限的格子不渲染占位（另有 N 枚在下面说明） */
+  .seal-book-cell[data-m-hide] {
+    display: none;
+  }
+
+  .seal-book-imp {
+    height: 51px;
+  }
+
+  /* 印痕按 46/56 缩小；布局盒高不变，StampSlot 尺寸不动，动画参数不受影响 */
+  .seal-book-imp .seal-slot {
+    transform: scale(0.82);
+  }
+
+  .seal-book-more-d {
+    display: none;
+  }
+
+  .seal-book-more-m {
+    display: inline;
+  }
+}
+
 /* ---------- reduced-motion（规范 7.5） ---------- */
 
 @media (prefers-reduced-motion: reduce) {

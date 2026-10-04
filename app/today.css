@@ -347,34 +347,7 @@ body:has(.td-a) {
   transform-origin: 0 0;
 }
 
-/* 印位一行：48px 印位 + 11px 小字，整格不超 64px，可换行不出横向滚动 */
-.td-a-seal-cells {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.td-a-seal-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: 56px;
-}
-
-.td-a-seal-cell-note {
-  margin-top: 3px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--seal-date, #71695C);
-  white-space: nowrap;
-}
+/* 印位格：印谱叶 SealBookGrid（seal.css），本文件不再有自己的格子规则 */
 
 /* 当天印条：收工时条目印痕 FLIP 滑进来排成一行 */
 .td-a-seal-strip {

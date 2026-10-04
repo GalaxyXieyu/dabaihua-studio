@@ -58,6 +58,58 @@ test('TodaySeals 有 "use client"，SealStage 用 lazy 动态加载', () => {
   assert.ok(src.includes("needsStage &&"), "SealStage 应只在 needsStage 时渲染");
 });
 
+// ---------- 印谱叶：新盖的章改成居中、行均衡的印谱版面 ----------
+
+test("新盖的章是印谱叶：文武边 + seal-book-grid，去掉右侧大号计数列", () => {
+  const src = read("app/_components/seal/TodaySeals.tsx");
+  assert.ok(src.includes('className="td-a-seals seal-book"'), "外层应是印谱叶（不再用 td-a-row 网格）");
+  assert.ok(src.includes('className="seal-book-in"'));
+  assert.ok(src.includes('className="seal-book-title"'));
+  assert.ok(src.includes('id="td-a-row-seals"'), "标题 id 保留（aria-labelledby）");
+  assert.ok(src.includes("新盖的章"), "标题文字");
+  assert.ok(src.includes("近七日 · 未盖"), "零枚时写未盖");
+  assert.ok(src.includes("cnCount(count)"), "枚数用中文数字并进副行");
+  assert.ok(src.includes("<SealBookGrid"), "印位格应交给 SealBookGrid");
+  for (const gone of ["td-a-col-figure", "td-a-index", "td-a-unit", "td-a-seal-cells", "td-a-col-label"]) {
+    assert.ok(!src.includes(gone), `不该再出现 ${gone}`);
+  }
+  // 昨天小卡 / 当天印条 / 连续天数原样保留
+  assert.ok(src.includes('id="seal-yesterday-card"'));
+  assert.ok(src.includes("seal-strip-"));
+  assert.ok(src.includes("td-a-seal-note"));
+});
+
+test("旧账日视图的印章区也用 SealBookGrid", () => {
+  const src = read("app/_components/seal/LedgerDaySeals.tsx");
+  assert.ok(src.includes("<SealBookGrid"), "印位格应交给 SealBookGrid");
+  assert.ok(!src.includes("daily-a-seal-cells"), "旧格子列表应删掉");
+  assert.ok(src.includes("seal-strip-"), "当天印条保留");
+});
+
+test("seal.css：印谱叶与印位格规则都在，today.css 里旧格子规则已删", () => {
+  const css = read("app/_components/seal/seal.css");
+  for (const rule of [
+    ".seal-book {",
+    ".seal-book-in {",
+    ".seal-book-title::before,",
+    ".seal-book-sub {",
+    ".seal-book-grid {",
+    ".seal-book-cell[data-d-first]::before",
+    ".seal-book-cell[data-m-hide]",
+    ".seal-book-imp .seal-slot",
+  ]) {
+    assert.ok(css.includes(rule), `seal.css 缺少 ${rule}`);
+  }
+  const today = read("app/today.css");
+  for (const gone of [".td-a-seal-cells", ".td-a-seal-cell", ".td-a-seal-cell-note"]) {
+    assert.ok(!today.includes(gone), `today.css 不该再有 ${gone}`);
+  }
+  const daily = read("app/ledger/daily.css");
+  for (const gone of [".daily-a-seal-cells", ".daily-a-seal-cell", ".daily-a-seal-cell-note"]) {
+    assert.ok(!daily.includes(gone), `daily.css 不该再有 ${gone}`);
+  }
+});
+
 // ---------- scripts/seal-mock-daily.mjs：假数据 ----------
 
 const MOCK = ["scripts/seal-mock-daily.mjs"];
