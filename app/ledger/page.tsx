@@ -1,3 +1,7 @@
+import { Seal } from "../_components/seal/Seal";
+import { StampMark } from "../_components/seal/StampMark";
+import { addDays } from "../_components/seal/seal-store";
+import { LedgerDaySeals } from "../_components/seal/LedgerDaySeals";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import type { CSSProperties } from "react";
@@ -347,7 +351,7 @@ function EmptyState({ user }: { user: Awaited<ReturnType<typeof getSessionUser>>
 }
 
 /** 日视图：原来的 /daily 页面内容。 */
-function DayView({ days, day }: { days: DailyDay[]; day: DailyDay }) {
+function DayView({ days, day, generatedAt }: { days: DailyDay[]; day: DailyDay; generatedAt: string | null }) {
   const index = days.findIndex((item) => item.date === day.date);
   const previous = index > 0 ? days[index - 1] : null;
   const repoCount = day.repos.length > 0 ? day.repos.length : day.repoStats.length;
@@ -408,6 +412,16 @@ function DayView({ days, day }: { days: DailyDay[]; day: DailyDay }) {
 
   return (
     <>
+      {/* 印章区：左角色右印位，紧凑一行；空白日不渲染虚线（LedgerDaySeals 里处理） */}
+      <section className="daily-a-seal-row" aria-label="这一天的印章">
+        <Seal id="seal-actor-ledger" kind="fang" size={96} pose="idle" />
+        <LedgerDaySeals
+          days={days.map((d) => ({ date: d.date, commits: d.commits }))}
+          generatedAt={generatedAt}
+          pageDate={day.date}
+        />
+      </section>
+
       <section className="daily-a-metrics" aria-label="当天关键数字">
         {metrics.map((metric) => (
           <BigMetric
@@ -729,6 +743,18 @@ function MonthView({ days, date }: { days: DailyDay[]; date: string }) {
   const monthMax = Math.max(1, ...dates.map((cell) => Number(cell ? byDate.get(cell.date)?.commits || 0 : 0)));
   const today = shanghaiDate();
 
+  // 有提交的日期集合：算每个日格的连续天数（数据缺口算断，算不出来按 1 天）
+  const commitDates = new Set(days.filter((d) => (d.commits ?? 0) > 0).map((d) => d.date));
+  const streakUntil = (date: string): number => {
+    let streak = 0;
+    let cursor = date;
+    while (commitDates.has(cursor)) {
+      streak += 1;
+      cursor = addDays(cursor, -1);
+    }
+    return streak || 1;
+  };
+
   return (
     <>
       <section className="daily-a-metrics" data-count={5} aria-label="本月关键数字">
@@ -812,6 +838,14 @@ function MonthView({ days, date }: { days: DailyDay[]; date: string }) {
                 >
                   {cell.dayNumber}
                   <span className="review-a-heatmap-count tabular-nums">{formatNumber(commits)}</span>
+                  {commits > 0 ? (
+                    <StampMark
+                      className="review-a-heatmap-seal"
+                      kind="fang"
+                      size={24}
+                      streak={streakUntil(cell.date)}
+                    />
+                  ) : null}
                 </a>
               );
             }
@@ -883,7 +917,7 @@ export default async function ReviewPage({
       <ReviewMasthead view={view} date={anchorDate} title={title} steps={steps} />
       <main className="daily-a-main">
         {view === "day" ? (
-          <DayView days={days} day={day} />
+          <DayView days={days} day={day} generatedAt={data.generatedAt} />
         ) : view === "week" ? (
           <WeekView days={days} date={anchorDate} reports={reports} takeaway={takeaway} />
         ) : (

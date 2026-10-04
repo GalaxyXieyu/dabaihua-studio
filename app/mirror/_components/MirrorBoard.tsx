@@ -53,7 +53,7 @@ type Decided = { id: string; kind: "confirmed" | "rejected" };
 
 const cardPath = (id: string) => `/api/cards/${encodeURIComponent(id)}`;
 
-/** 小椭圆章（照照镜子）的 key：带 card.id 和 version，确认/不要/过期/恢复/编辑后确认成功时盖 */
+/** 小椭圆章（GROWTH_NAMES.mirror）的 key：带 card.id 和 version，确认/不要/过期/恢复/编辑后确认成功时盖 */
 const mirrorSealKey = (card: Card) => `mirror:${card.id}:${card.version}`;
 
 async function request(path: string, init: RequestInit): Promise<WriteResult> {
@@ -132,7 +132,7 @@ export function MirrorBoard({
     return entries.filter((entry) => isMirrorInbox(entry) || ids.has(entry.id));
   }, [entries, decidedEntries]);
 
-  // 小椭圆章（照照镜子）：卡片区写操作成功后当场盖一次（规范 8.5/8.6）
+  // 小椭圆章（GROWTH_NAMES.mirror）：卡片区写操作成功后当场盖一次（规范 8.5/8.6）
   const mirrorStamp = useInPageStamp({ kind: "tuoyuan", actorId: "seal-actor-mirror", size: 48 });
 
   // sealKey 可选：成功提示文字前带一枚 24px 印位（先 pending，由播放器盖成 stamped）

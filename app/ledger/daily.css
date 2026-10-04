@@ -55,6 +55,77 @@ body:has(.daily-a) {
   min-width: 0;
 }
 
+/* ── 印章区（日视图，一天一行） ─────────────────────── */
+.daily-a-seal-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.daily-a-seal-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.daily-a-seal-cells {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.daily-a-seal-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 56px;
+}
+
+.daily-a-seal-cell-note {
+  margin-top: 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--a-ink-3);
+  white-space: nowrap;
+}
+
+.daily-a-seal-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.daily-a-seal-strip[data-state="pending"] {
+  visibility: hidden;
+}
+
+.daily-a-seal-strip-note {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--a-ink-3);
+}
+
+.daily-a-seal-strip-marks {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 0;
+}
+
+.daily-a-seal-strip-plus {
+  font-size: 12px;
+  color: var(--a-ink-3);
+}
+
 /* ── 大数字 ─────────────────────────────────────────── */
 .daily-a-metrics {
   display: grid;
@@ -807,6 +878,11 @@ body:has(.daily-a) {
 
 /* ── 手机 ────────────────────────────────────────────── */
 @media (max-width: 640px) {
+  .daily-a-seal-row {
+    gap: 10px;
+    margin-top: 14px;
+  }
+
   .daily-a-masthead-wrap,
   .daily-a-main {
     padding-left: 20px;

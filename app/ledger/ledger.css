@@ -313,6 +313,7 @@
 }
 
 .review-a-heatmap-cell {
+  position: relative;
   min-height: 46px;
   display: flex;
   flex-direction: column;
@@ -325,6 +326,14 @@
   font-size: 13px;
   line-height: 1.1;
   font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* 有记录的日格右下角静态方章印痕：绝对定位，不改格子尺寸、不挤数字 */
+.review-a-heatmap-seal {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  pointer-events: none;
 }
 
 /* 有记录的格子像日视图的小日历那样，在日号下再压一个提交数。 */
