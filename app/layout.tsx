@@ -23,11 +23,16 @@ export async function generateMetadata(): Promise<Metadata> {
 
   return {
     metadataBase: siteUrl,
-    title,
+    // 子页标题走 template（「子页名 · 超予」），首页自己给 absolute 全题。
+    title: { default: BRAND_TITLE, template: `%s · ${BRAND_NAME}` },
     description,
     icons: {
-      icon: "/favicon.svg",
-      shortcut: "/favicon.svg",
+      icon: [
+        { url: "/favicon.svg?v=chaoyu", type: "image/svg+xml" },
+        { url: "/favicon.ico?v=chaoyu", sizes: "16x16 24x24 32x32 48x48" },
+      ],
+      shortcut: "/favicon.ico?v=chaoyu",
+      apple: "/apple-touch-icon.png?v=chaoyu",
     },
     openGraph: {
       title,

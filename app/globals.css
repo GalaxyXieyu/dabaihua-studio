@@ -1041,7 +1041,7 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
     font-size:0;
   }
   html[data-nav="collapsed"] .global-brand::before {
-    content:"白";
+    content:"超";
     font-family:var(--font-serif);
     font-size:19px;
     font-weight:600;

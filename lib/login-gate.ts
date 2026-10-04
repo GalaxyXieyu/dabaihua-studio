@@ -6,6 +6,7 @@ const PUBLIC_PREFIXES = ["/_vinext/", "/assets/", "/cli/"];
 const PUBLIC_EXACT = new Set([
   "/favicon.svg",
   "/favicon.ico",
+  "/apple-touch-icon.png",
   "/og-community.png",
   "/og-community.svg",
   "/robots.txt",

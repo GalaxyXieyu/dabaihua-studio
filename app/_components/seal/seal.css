@@ -125,16 +125,17 @@ html[data-seal-paused] .seal-breath { animation-play-state: paused; }
   letter-spacing: .2em;
 }
 
-/* ---------- 导航 24px 方章（规范第 10 节，静态永远不动） ---------- */
+/* ---------- 导航 24px 站标「超予」（规范第 10 节，静态永远不动） ---------- */
 
-.global-brand .seal-actor {
-  flex: 0 0 auto;
+.global-brand .brand-logo {
+  display: inline-block;
+  line-height: 0;
   margin-right: 8px; /* 规范：章与文字的间距不小于章宽 1/4 */
-  transform: none;
+  flex: none;
 }
 
-/* 侧栏收起态只显示"白"字，这枚章跟着文字一起隐藏（globals.css 的 font-size:0 方案） */
-html[data-nav="collapsed"] .global-brand .seal-actor { display: none; }
+/* 侧栏收起态只显示"超"字，这枚章跟着文字一起隐藏（globals.css 的 font-size:0 方案） */
+html[data-nav="collapsed"] .global-brand .brand-logo { display: none; }
 
 /* ---------- 页内盖章（第 5 部分）：阅读 tabs 行右端的圆章角色 ---------- */
 

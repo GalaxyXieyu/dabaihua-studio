@@ -490,15 +490,17 @@ test("ships secure accounts, personal state, source follows, contributors, and d
   assert.doesNotMatch(page, /\[data\.user, selectedItem, view\]/);
 });
 
-test("defines the Dabaihua Studio shell", async () => {
+test("defines the 超予 shell", async () => {
   const [page, layout, discoverPage, brand] = await Promise.all([
     readFile(new URL("../app/_components/DeskApp.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/discover/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../lib/brand.ts", import.meta.url), "utf8"),
   ]);
-  assert.match(brand, /BRAND_NAME = "大白话工作室"/);
-  assert.match(brand, /BRAND_TITLE = `\$\{BRAND_NAME\} · RSS \/ X \/ 公众号`/);
+  assert.match(brand, /BRAND_NAME = "超予"/);
+  assert.match(brand, /BRAND_NAME_EN = "Super Me"/);
+  assert.match(brand, /SEAL_BOOK_TITLE = `\$\{BRAND_NAME\}印谱`/);
+  assert.match(brand, /BRAND_TITLE = `\$\{BRAND_NAME\} · 把下一件事做得更好`/);
   assert.match(layout, /BRAND_TITLE/);
   assert.match(page, /\{BRAND_NAME\}/);
   assert.match(page, /今天，他们为你更新了/);
@@ -1649,6 +1651,7 @@ test("classifies public paths for the site-wide login gate", () => {
     "/cli/superme",
     "/favicon.svg",
     "/favicon.ico",
+    "/apple-touch-icon.png",
     "/og-community.png",
     "/og-community.svg",
     "/robots.txt",

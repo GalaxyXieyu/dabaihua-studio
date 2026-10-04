@@ -42,6 +42,7 @@ import { SOURCE_CATEGORIES, sourceCategoryLabel, type SourceCategory } from "../
 import { BRAND_NAME } from "../../lib/brand";
 import { SiteNavCluster } from "./SiteNav";
 import { Seal } from "./seal/Seal.tsx";
+import { BrandLogo } from "./seal/BrandLogo.tsx";
 import { StampSlot } from "./seal/StampSlot.tsx";
 import { slotId } from "./seal/seal-moments.ts";
 import { useInPageStamp } from "./seal/useInPageStamp.ts";
@@ -1632,7 +1633,7 @@ export function DeskApp({ initialView = "today" }: { initialView?: DeskView }) {
 
     {!immersiveReading && <header className="global-appbar">
       <a className="global-brand" href="/" aria-label="前往今天">
-        <Seal kind="fang" size={24} pose="stamped" />
+        <BrandLogo size={24} />
         {BRAND_NAME}
       </a>
       <SiteNavCluster role={data.user?.role} section={navSection} activeTab={navActiveTab} onSelect={handleNavSelect} />

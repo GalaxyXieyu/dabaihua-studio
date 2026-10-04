@@ -1,6 +1,7 @@
-export const BRAND_NAME = "大白话工作室";
-// 印谱标题。站名改古风名时与 BRAND_NAME 一起改这一行。
-export const SEAL_BOOK_TITLE = "大白话印谱";
-export const BRAND_NAME_EN = "Dabaihua Studio";
+export const BRAND_NAME = "超予";
+// 印谱标题跟站名走，改站名只改 BRAND_NAME。
+export const SEAL_BOOK_TITLE = `${BRAND_NAME}印谱`;
+export const BRAND_NAME_EN = "Super Me";
 export const BRAND_TAGLINE = "RSS · X · 公众号";
-export const BRAND_TITLE = `${BRAND_NAME} · RSS / X / 公众号`;
+// Yu 定的标签页标题：站名 + 一句主张。
+export const BRAND_TITLE = `${BRAND_NAME} · 把下一件事做得更好`;

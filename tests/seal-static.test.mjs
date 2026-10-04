@@ -1,13 +1,14 @@
-// 印章 IP 静态组件测试（seal-svg 字符串真源 / Seal / StampMark / StampSlot / seal.css / 导航方章）。
+// 印章 IP 静态组件测试（seal-svg 字符串真源 / Seal / StampMark / StampSlot / BrandLogo / seal.css / 导航站标）。
 // 核心断言：角色 svg/ 几何逐字出现在 sealSvg 输出里；五个 kind 的 v3 定稿印痕
 // （svg/v3/）几何逐字出现在 markSvg 输出里（tuoyuan 是半通印 bantong 文件），
-// id 加 prefix 后不重复、url(#) 引用有效、没有 <style> 块和 emoji。
+// 站标「超予」几何逐字出现在 logoSvg 输出里；id 加 prefix 后不重复、url(#) 引用
+// 有效、没有 <style> 块和 emoji。
 // 日期章用 V3_DATE_TEMPLATE + seal-date-glyphs 现算印文（样张对照见 seal-core）。
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { cssId, markSvg, sealSvg } from "../app/_components/seal/seal-svg.ts";
+import { cssId, logoSvg, markSvg, sealSvg } from "../app/_components/seal/seal-svg.ts";
 import { SEAL_KINDS } from "../app/_components/seal/seal-tokens.ts";
 import { replaySheetHtml } from "../app/_components/seal/seal-sheet.ts";
 import { SEAL_CREDIT } from "../lib/seal-credit.ts";
@@ -132,7 +133,50 @@ test("seal-marks-v3.ts 与 svg/v3/ 源文件同步（renderSealMarksModule 重�
   }
   const committed = readFileSync(new URL("../app/_components/seal/seal-marks-v3.ts", import.meta.url), "utf8");
   const dateTemplate = readV3("stamp-mark-date-1003.svg");
-  assert.equal(renderSealMarksModule(files, dateTemplate), committed, "seal-marks-v3.ts 与 svg/v3/ 不同步，跑 npm run seal:marks");
+  let logo;
+  try {
+    logo = { large: readV3("logo-chaoyu.svg"), small: readV3("logo-chaoyu-small.svg") };
+  } catch {
+    // 站标文件还没定稿（两个文件缺一）跳过
+  }
+  assert.equal(renderSealMarksModule(files, dateTemplate, logo), committed, "seal-marks-v3.ts 与 svg/v3/ 不同步，跑 npm run seal:marks");
+});
+
+// ---------- 站标「超予」 ----------
+
+test("站标 logoSvg：大号路径在 size 48 输出里，小号路径在 size 24/40 输出里且无 filter", () => {
+  const large = readV3("logo-chaoyu.svg");
+  const small = readV3("logo-chaoyu-small.svg");
+  const out48 = logoSvg({ size: 48, prefix: "t" });
+  const out40 = logoSvg({ size: 40, prefix: "t" });
+  const out24 = logoSvg({ size: 24, prefix: "t" });
+  assert.ok(out48.includes('width="48" height="48"'));
+  assert.ok(out40.includes('width="40" height="40"'));
+  assert.ok(out24.includes('width="24" height="24"'));
+  assert.ok(out48.includes('aria-hidden="true"'));
+  assert.ok(out48.includes('focusable="false"'));
+  assert.ok(out48.includes('class="seal-mark-svg"'));
+  for (const m of large.matchAll(/\sd="([^"]+)"/g)) {
+    assert.ok(out48.includes(`d="${m[1]}"`), `logo large 缺少路径 ${m[1]}`);
+  }
+  for (const m of small.matchAll(/\sd="([^"]+)"/g)) {
+    assert.ok(out24.includes(`d="${m[1]}"`), `logo small 缺少路径 ${m[1]}`);
+    assert.ok(out40.includes(`d="${m[1]}"`), "logo size 40 也该用小号");
+  }
+  // 小尺寸（<= 40）用干净版：不带残边 filter；大号带残边和肌理
+  assert.ok(!out24.includes("<filter"), "logo small 不该有 filter");
+  assert.ok(!out40.includes("<filter"), "logo size 40 不该有 filter");
+  assert.ok(out48.includes("<filter"), "logo large 应有残边 filter");
+  // title 插在开标签后面
+  const titled = logoSvg({ size: 48, prefix: "t", title: "站标<超予>" });
+  assert.ok(titled.includes("<title>站标&lt;超予&gt;</title>"));
+  // id 带 prefix、url(#) 引用都在同一字符串里
+  const ids = new Set([...out48.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
+  assert.ok(ids.size >= 2, "站标应至少有 filter 和 mask 两个 id");
+  for (const id of ids) assert.ok(id.startsWith("t-"), `id ${id} 应带 prefix`);
+  for (const ref of out48.matchAll(/url\(#([^)]+)\)/g)) {
+    assert.ok(ids.has(ref[1]), `站标引用了不存在的 id ${ref[1]}`);
+  }
 });
 
 // ---------- id 前缀与引用 ----------
@@ -273,33 +317,26 @@ test("markSvg 的日期章：模板框 + 当日篆文/界格 + prefix 的 id，�
 test("public/favicon.svg 与组件目录的 favicon.svg 内容相同", () => {
   const pub = readFileSync(new URL("../public/favicon.svg", import.meta.url), "utf8");
   assert.equal(pub, read("favicon.svg"));
-  // 由 v3 小号方章独立成文件：无 CSS 变量、颜色写死、带 superme 标题
+  // 站标「超予」favicon：颜色已烘焙（朱底 #B23A2B、纸色底 #FBF8F1），无 CSS 变量
   assert.ok(!pub.includes("var("), "favicon 不该有 CSS 变量");
   assert.ok(pub.includes("#B23A2B"));
-  assert.ok(pub.includes('<title>superme · 方章白文 · 事</title>'));
-  assert.ok(pub.includes('role="img"'));
-  assert.ok(pub.includes('aria-label="superme"'));
-  assert.ok(pub.includes('width="48" height="48"'));
-  assert.ok(!pub.includes("aria-hidden"), "favicon 不该藏起来");
-  // 路径与 v3 小号方章逐字一致
-  const small = readV3("stamp-mark-fang-small.svg");
-  for (const m of small.matchAll(/\sd="([^"]+)"/g)) {
-    assert.ok(pub.includes(`d="${m[1]}"`), `favicon 缺少路径 ${m[1]}`);
-  }
+  assert.ok(pub.includes('mask id="fav-m"'), "站标 favicon 的咬边 mask");
+  assert.ok(pub.includes('fill="#FBF8F1"'), "纸色底透出印面");
 });
 
 // ---------- 源码断言（导航方章 / 服务端组件 / css 接入） ----------
 
-test("SiteAppBar 和 DeskApp 的 global-brand 里放了 24px 方章", () => {
+test("SiteAppBar 和 DeskApp 的 global-brand 里放了 24px 站标", () => {
   for (const f of ["app/_components/SiteAppBar.tsx", "app/_components/DeskApp.tsx"]) {
     const src = readFileSync(new URL(`../${f}`, import.meta.url), "utf8");
-    assert.ok(src.includes('<Seal kind="fang" size={24} pose="stamped" />'), `${f} 缺少导航方章`);
+    assert.ok(src.includes('<BrandLogo size={24} />'), `${f} 缺少站标`);
+    assert.ok(!src.includes('<Seal kind="fang" size={24}'), `${f} 不该再用导航方章`);
     assert.ok(src.includes('className="global-brand"'));
   }
 });
 
-test("Seal / StampMark / StampSlot 都是服务端组件（没有 use client）", () => {
-  for (const f of ["Seal.tsx", "StampMark.tsx", "StampSlot.tsx", "index.ts"]) {
+test("Seal / StampMark / StampSlot / BrandLogo 都是服务端组件（没有 use client）", () => {
+  for (const f of ["Seal.tsx", "StampMark.tsx", "StampSlot.tsx", "BrandLogo.tsx", "index.ts"]) {
     const src = readFileSync(new URL(`../app/_components/seal/${f}`, import.meta.url), "utf8");
     assert.ok(!src.includes('"use client"'), `${f} 不该是客户端组件`);
   }
@@ -313,7 +350,7 @@ test("layout.tsx 在 globals.css 之后 import 了 seal.css", () => {
   assert.ok(si > gi, "seal.css 应在 globals.css 之后");
 });
 
-test("seal.css：变量、姿态、reduced-motion、收起态隐藏方章", () => {
+test("seal.css：变量、姿态、reduced-motion、收起态隐藏站标", () => {
   const css = readFileSync(new URL("../app/_components/seal/seal.css", import.meta.url), "utf8");
   assert.ok(!EMOJI_RE.test(css), "seal.css 里有 emoji");
   for (const v of ["--seal-red: #B23A2B", "--seal-dry: #906752", "--seal-body: #FBF8F1", "--seal-line: #1B1915"]) {
@@ -330,7 +367,9 @@ test("seal.css：变量、姿态、reduced-motion、收起态隐藏方章", () =
   assert.ok(css.includes('[data-state="pending"]::before'));
   assert.ok(css.includes("html[data-seal-paused] .seal-breath"));
   assert.ok(css.includes("prefers-reduced-motion: reduce"));
-  assert.ok(css.includes('html[data-nav="collapsed"] .global-brand .seal-actor'));
+  assert.ok(css.includes('html[data-nav="collapsed"] .global-brand .brand-logo'));
+  assert.ok(css.includes(".global-brand .brand-logo"));
+  assert.ok(css.includes("margin-right: 8px"));
 });
 
 // ---------- 印谱小字颜色与页脚致谢 ----------
@@ -349,7 +388,7 @@ test("page.tsx 从 lib/seal-credit 引入页脚致谢", () => {
 });
 
 test("SEAL_CREDIT 含授权要求的关键来源与印文字样", () => {
-  for (const part of ["Richard Sears", "事", "LXGW Seal，SIL OFL 1.1"]) {
+  for (const part of ["Richard Sears", "事", "超、予", "LXGW Seal，SIL OFL 1.1"]) {
     assert.ok(SEAL_CREDIT.includes(part), `SEAL_CREDIT 缺少「${part}」`);
   }
 });

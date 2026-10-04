@@ -14,9 +14,10 @@
 // markSvg 这边不用改。角色（sealSvg / ACTORS）与印痕互不影响（tuoyuan 角色仍是椭圆印身）。
 // React 组件（Seal / StampMark / StampSlot）和第 3 部分的 DOM 播放器都只用这份，
 // 保证服务端 HTML、动画里换章、回放的纸上是同一份图形。
+// 站标「超予」也是这份真源：V3_LOGO（logo-chaoyu 两个文件）+ logoSvg，供 BrandLogo 用。
 import type { SealKind } from "./seal-tokens.ts";
 import { dateGlyphD, dateGridD, dateStrokesV } from "./seal-date-glyphs.ts";
-import { V3_DATE_TEMPLATE, V3_MARKS } from "./seal-marks-v3.ts";
+import { V3_DATE_TEMPLATE, V3_LOGO, V3_MARKS } from "./seal-marks-v3.ts";
 
 // ---------- 样式（颜色走 CSS 变量带回退） ----------
 
@@ -237,6 +238,15 @@ function finishV3Mark(
 function replaceGroupPathD(svg: string, strokeStyle: string, d: string): string {
   const re = new RegExp(`(<g style="[^"]*${strokeStyle}[^"]*"><path d=")[^"]*("/></g>)`);
   return svg.replace(re, (all, pre: string, post: string) => pre + d + post);
+}
+
+/**
+ * 站标「超予」（二字满白文方印，v3-zhuan 第三轮定稿）。图形逐字节来自 seal-marks-v3.ts
+ * 内联的 logo-chaoyu 两个文件：size <= 40 用小号（满幅、无残边；顶栏 24–32px 都走它），
+ * 其余用大号（带残边和肌理）。id 前缀、尺寸/title 的收尾与 v3 印痕同一套（finishV3Mark）。
+ */
+export function logoSvg(opts: { size: number; prefix: string; title?: string }): string {
+  return finishV3Mark(opts.size <= 40 ? V3_LOGO.small : V3_LOGO.large, opts);
 }
 
 /**

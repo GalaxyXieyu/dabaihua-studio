@@ -2,7 +2,7 @@
 import type { SessionUser } from "../../lib/auth";
 import { BRAND_NAME } from "../../lib/brand";
 import { activeTabKey, isReaderPath, sectionForPath, sectionTabs } from "../../lib/site-nav";
-import { Seal } from "./seal/Seal.tsx";
+import { BrandLogo } from "./seal/BrandLogo.tsx";
 import { SiteNavCluster } from "./SiteNav";
 import { SiteSidebarNav } from "./SiteSidebar";
 import { SiteUserMenu } from "./SiteUserMenu";
@@ -19,7 +19,7 @@ export function SiteAppBar({ user, pathname }: { user: SessionUser | null; pathn
   return (
     <header className={`global-appbar site-appbar ${tabs.length > 0 ? "has-subnav" : ""}`}>
       <a className="global-brand" href="/" aria-label="前往今天">
-        <Seal kind="fang" size={24} pose="stamped" />
+        <BrandLogo size={24} />
         {BRAND_NAME}
       </a>
       <SiteNavCluster role={user?.role} section={section} activeTab={activeTabKey(pathname)} />

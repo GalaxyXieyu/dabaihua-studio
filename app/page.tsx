@@ -6,6 +6,7 @@ import { requestOrigin } from "../lib/request-origin";
 import { getTodayData } from "../lib/today";
 import { dateLabel } from "../lib/today-core";
 import { loadDailyData } from "../lib/daily-data";
+import { BRAND_NAME, BRAND_TITLE } from "../lib/brand";
 import { SEAL_CREDIT } from "../lib/seal-credit";
 import { SiteAppBar } from "./_components/SiteAppBar";
 import { Seal } from "./_components/seal";
@@ -13,7 +14,8 @@ import { TodaySeals } from "./_components/seal/TodaySeals";
 import "./today.css";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "今天", robots: { index: false, follow: false } };
+// 首页（今天）的标签页用 absolute 全题，不吃 layout 的 template。
+export const metadata = { title: { absolute: BRAND_TITLE }, robots: { index: false, follow: false } };
 
 const WEEKDAY_CN = "日一二三四五六";
 const ROMAN = ["I", "II", "III", "IV", "V", "VI"];
@@ -300,7 +302,7 @@ export default async function TodayPage() {
 
       <footer className="td-a-footer">
         <div className="td-a-footer-rule" />
-        <p className="td-a-footer-text">大白话工作室 · 每日简报</p>
+        <p className="td-a-footer-text">{BRAND_NAME} · 每日简报</p>
         <p className="td-a-footer-credit">{SEAL_CREDIT}</p>
       </footer>
     </div>
