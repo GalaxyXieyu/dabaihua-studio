@@ -2067,8 +2067,9 @@ def _article_push_one(entry, assets, state_files, assistant=None):
     elif status == 409 and code == "slug_managed":
         print("失败 %s: 该 slug 由服务器目录导入管理，请在 frontmatter 里换一个 slug" % slug)
     elif status == 409 and code == "article_locked":
-        print("失败 %s: 文章已锁定为非草稿状态（当前状态: %s），助手不能覆盖，先在站点上处理" % (
-            slug, response.get("status") or "未知"))
+        detail = "审稿通过后只能用 --stage typeset 推排版" if (response.get("status") == "approved") else "先在站点上处理"
+        print("失败 %s: 文章已锁定为非草稿状态（当前状态: %s），助手不能覆盖，%s" % (
+            slug, response.get("status") or "未知", detail))
     elif status == 422 and code == "round_not_reviewed":
         print("失败 %s: %s，不能标记阶段" % (slug, message))
     elif status == 422 and code == "assistant_required":

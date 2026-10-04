@@ -14,7 +14,8 @@
   助手**只能写草稿**：不能发布（`status: published` / `isPublic: true` 都会返回 `403 assistant_draft_only`）、
   不能改公开状态（新文章私密，已有文章保持原值）、本接口本来就没有删除。已被改成非草稿状态的文章
   （`changes-requested` 除外：那表示 Yu 审稿后要求修改，助手可以重推修订稿，重推后状态回到 `draft`）
-  返回 `409 article_locked`。`topk_` key 与会话的行为不受影响，也拿不到助手分支的能力。
+  返回 `409 article_locked`；审稿通过（`approved`）后只允许 `--stage typeset` 推排版，状态保持 `approved`。
+  `topk_` key 与会话的行为不受影响，也拿不到助手分支的能力。
 - 私密文章（`is_public = 0`）的列表、详情、图片、审稿接口、公开开关只对**所有者**可见可用；
   其他账号（包括别的管理员）看到的是 404。公开文章所有人可读。
 - `slug` 全站唯一，不按账号分命名空间（文章网址 `/articles/<slug>` 和审稿数据都按 slug 关联）。

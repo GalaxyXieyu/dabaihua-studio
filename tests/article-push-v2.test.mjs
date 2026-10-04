@@ -392,6 +392,106 @@ test("assistant can re-push a changes-requested article and status returns to dr
   assert.equal(row.final_md, "按审稿意见改的修订稿");
 });
 
+test("approved article accepts assistant --stage typeset push and stays approved", async () => {
+  const { sqlite, db, assets } = setup();
+  const owner = addUser(sqlite, { account: "owner@example.com", role: "admin" });
+  const ownerViewer = { id: owner, role: "admin" };
+  const deps = { db, assets };
+
+  await put(deps, ownerViewer, "assistant-e", pushBody({ markdown: "初稿" }), "2026-10-02T01:00:00.000Z", "小助手");
+  sqlite.prepare("UPDATE articles SET status = 'approved' WHERE slug = ?").run("assistant-e");
+
+  const typeset = await put(
+    deps,
+    ownerViewer,
+    "assistant-e",
+    pushBody({ markdown: "排版后的正文", stage: { name: "typeset" } }),
+    "2026-10-02T02:00:00.000Z",
+    "小助手",
+  );
+  assert.equal(typeset.status, 200);
+  assert.equal(typeset.json.result, "updated");
+  const row = rowOf(sqlite, "assistant-e");
+  assert.equal(row.status, "approved");
+  assert.equal(row.final_md, "排版后的正文");
+  const meta = JSON.parse(row.meta_json);
+  assert.equal(meta.stage.name, "typeset");
+  assert.equal(meta.stageHistory.length, 1);
+  assert.equal(meta.stageHistory[0].name, "typeset");
+});
+
+test("approved article rejects assistant pushes without --stage typeset", async () => {
+  const { sqlite, db, assets } = setup();
+  const owner = addUser(sqlite, { account: "owner@example.com", role: "admin" });
+  const ownerViewer = { id: owner, role: "admin" };
+  const deps = { db, assets };
+
+  await put(deps, ownerViewer, "assistant-f", pushBody({ markdown: "初稿" }), "2026-10-02T01:00:00.000Z", "小助手");
+  sqlite.prepare("UPDATE articles SET status = 'approved' WHERE slug = ?").run("assistant-f");
+
+  const noStage = await put(deps, ownerViewer, "assistant-f", pushBody({ markdown: "无阶段推送" }), "2026-10-02T02:00:00.000Z", "小助手");
+  assert.equal(noStage.status, 409);
+  assert.equal(noStage.json.code, "article_locked");
+  assert.equal(noStage.json.status, "approved");
+
+  const revised = await put(
+    deps,
+    ownerViewer,
+    "assistant-f",
+    pushBody({ markdown: "带错阶段", stage: { name: "revised", round: 1 } }),
+    "2026-10-02T03:00:00.000Z",
+    "小助手",
+  );
+  assert.equal(revised.status, 409);
+  assert.equal(revised.json.code, "article_locked");
+  assert.equal(rowOf(sqlite, "assistant-f").final_md, "初稿");
+});
+
+test("non-draft statuses other than approved stay locked even with --stage typeset", async () => {
+  const { sqlite, db, assets } = setup();
+  const owner = addUser(sqlite, { account: "owner@example.com", role: "admin" });
+  const ownerViewer = { id: owner, role: "admin" };
+  const deps = { db, assets };
+
+  await put(deps, ownerViewer, "assistant-g", pushBody({ markdown: "初稿" }), "2026-10-02T01:00:00.000Z", "小助手");
+  sqlite.prepare("UPDATE articles SET status = 'published' WHERE slug = ?").run("assistant-g");
+
+  const typeset = await put(
+    deps,
+    ownerViewer,
+    "assistant-g",
+    pushBody({ markdown: "排版后的正文", stage: { name: "typeset" } }),
+    "2026-10-02T02:00:00.000Z",
+    "小助手",
+  );
+  assert.equal(typeset.status, 409);
+  assert.equal(typeset.json.code, "article_locked");
+  assert.equal(typeset.json.status, "published");
+  assert.equal(rowOf(sqlite, "assistant-g").final_md, "初稿");
+});
+
+test("changes-requested with --stage typeset still returns to draft", async () => {
+  const { sqlite, db, assets } = setup();
+  const owner = addUser(sqlite, { account: "owner@example.com", role: "admin" });
+  const ownerViewer = { id: owner, role: "admin" };
+  const deps = { db, assets };
+
+  await put(deps, ownerViewer, "assistant-h", pushBody({ markdown: "初稿" }), "2026-10-02T01:00:00.000Z", "小助手");
+  sqlite.prepare("UPDATE articles SET status = 'changes-requested' WHERE slug = ?").run("assistant-h");
+
+  const typeset = await put(
+    deps,
+    ownerViewer,
+    "assistant-h",
+    pushBody({ markdown: "改完并排版", stage: { name: "typeset" } }),
+    "2026-10-02T02:00:00.000Z",
+    "小助手",
+  );
+  assert.equal(typeset.status, 200);
+  assert.equal(rowOf(sqlite, "assistant-h").status, "draft");
+  assert.equal(rowOf(sqlite, "assistant-h").final_md, "改完并排版");
+});
+
 test("assistant push keeps an existing public flag and cannot take foreign slugs", async () => {
   const { sqlite, db, assets } = setup();
   const owner = addUser(sqlite, { account: "owner@example.com", role: "admin" });

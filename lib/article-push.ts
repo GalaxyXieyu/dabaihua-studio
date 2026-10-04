@@ -447,7 +447,9 @@ export async function handleArticlePut(deps: ArticlePutDeps): Promise<ArticlePut
     // 这一条要在 unchanged 短路之前判断：内容即使没变，锁定的文章仍然是 409。
     if (assistant) {
       const existingStatus = existing.status === null || existing.status === undefined ? "" : String(existing.status);
-      if (existingStatus !== "draft" && existingStatus !== "changes-requested") {
+      // 审稿通过（approved）后只放行 --stage typeset 的排版推送，状态保持 approved。
+      const approvedTypeset = existingStatus === "approved" && normalized.stage?.name === "typeset";
+      if (existingStatus !== "draft" && existingStatus !== "changes-requested" && !approvedTypeset) {
         return {
           status: 409,
           json: { error: `这篇文章已被改为「${existingStatus}」，助手不能覆盖`, code: "article_locked", status: existingStatus },
@@ -502,7 +504,11 @@ export async function handleArticlePut(deps: ArticlePutDeps): Promise<ArticlePut
   else if (existing) isPublic = Boolean(existing.isPublic);
   else isPublic = false;
 
-  const status = assistant ? "draft" : normalized.status;
+  // 助手推送一律回到 draft，唯一例外：approved + --stage typeset 的排版放行，状态保持 approved。
+  const approvedTypeset = Boolean(
+    assistant && existing && String(existing.status ?? "") === "approved" && normalized.stage?.name === "typeset",
+  );
+  const status = !assistant ? normalized.status : approvedTypeset ? "approved" : "draft";
   // articleHtml 存清洗后的版本；相对 images/<sha12>.<ext> 保持相对，渲染时再映射到 assets 地址。
   const articleHtml = normalized.articleHtml === undefined ? null : sanitizeArticleHtml(normalized.articleHtml, { assetBase: "" });
   const qaReport = normalized.qaReport === undefined ? null : normalized.qaReport;
