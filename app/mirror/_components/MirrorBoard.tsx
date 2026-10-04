@@ -16,6 +16,10 @@ import {
 } from "../../../lib/mirror";
 import type { Card, CardRevision } from "../../../lib/cards-core";
 import { GROWTH_NAMES } from "../../../lib/site-nav";
+import { Seal } from "../../_components/seal/Seal.tsx";
+import { StampSlot } from "../../_components/seal/StampSlot.tsx";
+import { slotId } from "../../_components/seal/seal-moments.ts";
+import { useInPageStamp } from "../../_components/seal/useInPageStamp.ts";
 import { MirrorDeck, type MirrorCardVariant } from "./MirrorDeck";
 
 const SHEET_CATEGORIES = ["画像", "偏好", "方法论", "决策", "待调整"];
@@ -48,6 +52,9 @@ type SheetState =
 type Decided = { id: string; kind: "confirmed" | "rejected" };
 
 const cardPath = (id: string) => `/api/cards/${encodeURIComponent(id)}`;
+
+/** 小椭圆章（照照镜子）的 key：带 card.id 和 version，确认/不要/过期/恢复/编辑后确认成功时盖 */
+const mirrorSealKey = (card: Card) => `mirror:${card.id}:${card.version}`;
 
 async function request(path: string, init: RequestInit): Promise<WriteResult> {
   const response = await fetch(path, {
@@ -82,7 +89,7 @@ export function MirrorBoard({
   const [view, setView] = useState<"deck" | "trash">(initialView);
   const [prevTab, setPrevTab] = useState(initialTab);
   const [sheet, setSheet] = useState<SheetState>(null);
-  const [toast, setToast] = useState<{ text: string; undo?: () => void } | null>(null);
+  const [toast, setToast] = useState<{ text: string; undo?: () => void; sealKey?: string } | null>(null);
   const [pending, setPending] = useState(false);
   const [decided, setDecided] = useState<Decided[]>([]);
   const [rejectId, setRejectId] = useState<string | null>(null);
@@ -125,9 +132,13 @@ export function MirrorBoard({
     return entries.filter((entry) => isMirrorInbox(entry) || ids.has(entry.id));
   }, [entries, decidedEntries]);
 
-  const notify = useCallback((text: string, undo?: () => void, duration = 6000) => {
+  // 小椭圆章（照照镜子）：卡片区写操作成功后当场盖一次（规范 8.5/8.6）
+  const mirrorStamp = useInPageStamp({ kind: "tuoyuan", actorId: "seal-actor-mirror", size: 48 });
+
+  // sealKey 可选：成功提示文字前带一枚 24px 印位（先 pending，由播放器盖成 stamped）
+  const notify = useCallback((text: string, undo?: () => void, duration = 6000, sealKey?: string) => {
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast({ text, undo });
+    setToast({ text, undo, sealKey });
     toastTimer.current = setTimeout(() => setToast(null), duration);
   }, []);
 
@@ -226,11 +237,20 @@ export function MirrorBoard({
   );
 
   const succeed = useCallback(
-    (result: WriteResult, text: (result: WriteResult) => string, undo?: (result: WriteResult) => Promise<void>) => {
+    (
+      result: WriteResult,
+      text: (result: WriteResult) => string,
+      undo?: (result: WriteResult) => Promise<void>,
+      seal?: (result: WriteResult) => string,
+    ) => {
       // 撤销按钮不带参数调用，这里把本次写入的结果绑进去。
-      notify(text(result), undo ? () => void withUndo(undo)(result) : undefined, undo ? 6000 : 4000);
+      const sealKey = seal?.(result);
+      notify(text(result), undo ? () => void withUndo(undo)(result) : undefined, undo ? 6000 : 4000, sealKey);
+      // 印位随 toast 渲染（pending）：等一帧让它先进 DOM，再交给播放器盖成 stamped；
+      // 不阻塞主流程，任何异常都由 hook 自己吞掉
+      if (sealKey) window.setTimeout(() => { void mirrorStamp.stamp({ key: sealKey, slotId: slotId(sealKey) }); }, 50);
     },
-    [notify, withUndo],
+    [notify, withUndo, mirrorStamp.stamp],
   );
 
   const runSimple = useCallback(
@@ -240,10 +260,11 @@ export function MirrorBoard({
       body: unknown,
       text: (result: WriteResult) => string,
       undo?: (result: WriteResult) => Promise<void>,
+      seal?: (result: WriteResult) => string,
     ): Promise<WriteResult | null> => {
       try {
         const result = await write(path, method, body);
-        succeed(result, text, undo);
+        succeed(result, text, undo, seal);
         return result;
       } catch (error) {
         notify(`没保存成功：${(error as Error).message}`, undefined, 4000);
@@ -354,6 +375,7 @@ export function MirrorBoard({
           await write(cardPath(r.card.id), "PATCH", { expectedVersion: r.card.version, status: "待确认" });
           setDecided((prev) => prev.filter((item) => item.id !== r.card.id));
         },
+        (r) => mirrorSealKey(r.card),
       );
       setDecided((prev) => [...prev.filter((item) => item.id !== entry.id), { id: entry.id, kind: "confirmed" }]);
       setEditConflict(false);
@@ -401,6 +423,7 @@ export function MirrorBoard({
         await write(cardPath(r.card.id), "PATCH", { expectedVersion: r.card.version, status: "待确认" });
         setDecided((prev) => prev.filter((item) => item.id !== r.card.id));
       },
+      (r) => mirrorSealKey(r.card),
     );
     if (result) setDecided((prev) => [...prev.filter((item) => item.id !== entry.id), { id: entry.id, kind: "confirmed" }]);
   };
@@ -415,6 +438,7 @@ export function MirrorBoard({
         await write(cardPath(r.card.id), "PATCH", { expectedVersion: r.card.version, status: "待确认" });
         setDecided((prev) => prev.filter((item) => item.id !== r.card.id));
       },
+      (r) => mirrorSealKey(r.card),
     );
     if (result) {
       setDecided((prev) => [...prev.filter((item) => item.id !== entry.id), { id: entry.id, kind: "rejected" }]);
@@ -432,6 +456,7 @@ export function MirrorBoard({
       async (r) => {
         await write(cardPath(r.card.id), "PATCH", { expectedVersion: r.card.version, status: "有效" });
       },
+      (r) => mirrorSealKey(r.card),
     );
   };
 
@@ -444,6 +469,7 @@ export function MirrorBoard({
       async (r) => {
         await write(`${cardPath(r.card.id)}/expire`, "POST", { expectedVersion: r.card.version, reason: "" });
       },
+      (r) => mirrorSealKey(r.card),
     );
   };
 
@@ -722,6 +748,7 @@ export function MirrorBoard({
                   </>
                 )}
               </div>
+              <span className="mirror-a-deck-seal"><Seal id="seal-actor-mirror" kind="tuoyuan" size={48} pose="stamped" /></span>
             </div>
             {tabEntries.length > 0 || (activeTab.inbox && inboxBand.length > 0) ? (
               <MirrorDeck
@@ -741,6 +768,9 @@ export function MirrorBoard({
 
       {toast ? (
         <div className="ce-toast" role="status">
+          {toast.sealKey ? (
+            <StampSlot targetId={slotId(toast.sealKey)} state="pending" kind="tuoyuan" size={24} label="已记录" />
+          ) : null}
           {toast.text}
           {toast.undo ? (
             <button type="button" onClick={() => toast.undo?.()}>

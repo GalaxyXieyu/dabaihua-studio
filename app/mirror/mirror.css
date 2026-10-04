@@ -147,6 +147,20 @@ body:has(.mirror-a) {
   font-size: 12px;
 }
 
+/* 小椭圆章（seal-ip p1）：卡片区右上角的角色；窄屏缩小，不挤新增按钮 */
+.mirror-a-deck-seal {
+  flex: 0 0 auto;
+  align-self: center;
+  line-height: 0;
+}
+
+@media (max-width: 640px) {
+  .mirror-a-deck-seal {
+    transform: scale(0.72);
+    transform-origin: right center;
+  }
+}
+
 .mirror-a-deck {
   margin-top: 18px;
 }

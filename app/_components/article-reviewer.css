@@ -741,3 +741,22 @@
     font-size: 24px;
   }
 }
+
+/* ── 印章：审稿通过方章（角色 + 印位），窄面板时缩小角色 ───── */
+.ar-seal-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin: 10px 0 4px;
+}
+
+.ar-seal-row .ar-seal-shrink {
+  line-height: 0;
+}
+
+@media (max-width: 480px) {
+  .ar-seal-row .ar-seal-shrink {
+    transform: scale(0.72);
+    transform-origin: left bottom;
+  }
+}

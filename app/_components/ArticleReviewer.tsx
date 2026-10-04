@@ -12,6 +12,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { splitSentences, type SentenceSpan } from "../../lib/sentences";
 import { htmlSourceLabel } from "./article-status";
 import { decideReviewMode, readReviewModeSignals } from "./review-mode";
+import { Seal } from "./seal/Seal.tsx";
+import { StampSlot } from "./seal/StampSlot.tsx";
+import { slotId } from "./seal/seal-moments.ts";
+import { useInPageStamp } from "./seal/useInPageStamp.ts";
 import "./article-reviewer.css";
 
 export type ReviewTargetType = "article" | "topic";
@@ -428,6 +432,11 @@ export function ArticleReviewer({
   const [flashId, setFlashId] = useState<number | null>(null);
 
   const base = `/api/review/${target.type}/${target.id}`;
+
+  // 方章（审稿）：这一轮通过后当场盖一次；key 带 target.id 和轮次，跨设备去重靠 seen
+  const reviewStamp = useInPageStamp({ kind: "fang", actorId: "seal-actor-review", size: 96 });
+  const reviewSealKey = `review:${target.id}:${round}`;
+  const roundApproved = rounds.some((item) => item.round === round && item.verdict === "approved");
 
   // React replaces a dangerouslySetInnerHTML node's content whenever the prop
   // object identity changes. Memoizing it keeps the rendered article stable so
@@ -931,10 +940,24 @@ export function ArticleReviewer({
     try {
       const data = await api(`${base}/submit`, "POST", { verdict, comment: overall });
       const submittedRound = Number(data.round || round);
-      setSheet(null);
       setVerdictComment("");
       showToast(`已提交第 ${submittedRound} 轮审稿，反馈文件会在几秒内写入文章目录`);
-      window.setTimeout(() => window.location.reload(), 1400);
+      if (verdict === "approved") {
+        // 审稿通过的方章：当场盖一次（最多等 1600ms），通过面板先留着让角色演完；
+        // reload 等盖章结束、且满原本的 1400ms，两者都到了再刷新（规范 8.5/8.6）。
+        const key = `review:${target.id}:${submittedRound}`;
+        const reloadDue = new Promise<void>((resolve) => { window.setTimeout(resolve, 1400); });
+        await Promise.race([
+          reviewStamp.stamp({ key, slotId: slotId(key) }),
+          new Promise<void>((resolve) => { window.setTimeout(resolve, 1600); }),
+        ]);
+        await reloadDue;
+        setSheet(null);
+        window.location.reload();
+      } else {
+        setSheet(null);
+        window.setTimeout(() => window.location.reload(), 1400);
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "提交审稿失败");
       setBusy(false);
@@ -1362,6 +1385,17 @@ export function ArticleReviewer({
       {sheet?.kind === "approve" ? (
         <Sheet title="通过确认" onClose={() => setSheet(null)}>
           <p className="mb-2 text-[12px] text-[var(--muted)]">通过后会写入反馈文件并进入下一轮。</p>
+          {/* 方章角色 + 印位：这一轮已通过则印位直接stamped，否则 unknown 不催人 */}
+          <div className="ar-seal-row">
+            <span className="ar-seal-shrink"><Seal id="seal-actor-review" kind="fang" size={96} pose="stamped" /></span>
+            <StampSlot
+              targetId={slotId(reviewSealKey)}
+              state={roundApproved || reviewStamp.seen.has(reviewSealKey) ? "stamped" : "unknown"}
+              kind="fang"
+              size={48}
+              label="审稿通过"
+            />
+          </div>
           <textarea
             autoFocus
             value={verdictComment}
