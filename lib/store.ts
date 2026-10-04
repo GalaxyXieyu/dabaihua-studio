@@ -11,7 +11,7 @@ import { readXArticles, readXPost, readXProfile, xPostAddress, xProfileAddress }
 export type AppEnv = { DB: D1Database; AI?: { run: (model: string, input: unknown) => Promise<unknown> } };
 const now = () => new Date().toISOString();
 const day = () => new Date().toISOString().slice(0, 10);
-const SCHEMA_VERSION = "2026-10-05.2";
+const SCHEMA_VERSION = "2026-10-06.1";
 const schemaReady = new WeakMap<object, Promise<void>>();
 
 async function initializeSchema(db: D1Database) {
@@ -73,7 +73,7 @@ async function initializeSchema(db: D1Database) {
     db.prepare("CREATE TABLE IF NOT EXISTS article_versions (id INTEGER PRIMARY KEY AUTOINCREMENT, target_type TEXT NOT NULL, target_id TEXT NOT NULL, round INTEGER NOT NULL, html TEXT, markdown TEXT, content_hash TEXT, created_at TEXT NOT NULL, UNIQUE(target_type, target_id, round))"),
     db.prepare("CREATE TABLE IF NOT EXISTS review_marks (id INTEGER PRIMARY KEY AUTOINCREMENT, target_type TEXT NOT NULL, target_id TEXT NOT NULL, round INTEGER NOT NULL, user_id INTEGER NOT NULL, kind TEXT NOT NULL, exact TEXT NOT NULL, prefix TEXT NOT NULL DEFAULT '', suffix TEXT NOT NULL DEFAULT '', start_offset INTEGER, end_offset INTEGER, block_index INTEGER, comment TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"),
     db.prepare("CREATE INDEX IF NOT EXISTS review_marks_target_idx ON review_marks(target_type, target_id, round, start_offset)"),
-    db.prepare("CREATE TABLE IF NOT EXISTS review_rounds (id INTEGER PRIMARY KEY AUTOINCREMENT, target_type TEXT NOT NULL, target_id TEXT NOT NULL, round INTEGER NOT NULL, user_id INTEGER NOT NULL, verdict TEXT NOT NULL, comment TEXT NOT NULL DEFAULT '', mark_count INTEGER NOT NULL DEFAULT 0, feedback_json TEXT NOT NULL, exported_at TEXT, export_path TEXT, created_at TEXT NOT NULL, UNIQUE(target_type, target_id, round))"),
+    db.prepare("CREATE TABLE IF NOT EXISTS review_rounds (id INTEGER PRIMARY KEY AUTOINCREMENT, target_type TEXT NOT NULL, target_id TEXT NOT NULL, round INTEGER NOT NULL, user_id INTEGER NOT NULL, verdict TEXT NOT NULL, comment TEXT NOT NULL DEFAULT '', mark_count INTEGER NOT NULL DEFAULT 0, feedback_json TEXT NOT NULL, exported_at TEXT, export_path TEXT, notify_state TEXT, notify_http_status INTEGER, notify_error TEXT, notify_at TEXT, notify_handoff TEXT, handoff_pick TEXT, created_at TEXT NOT NULL, UNIQUE(target_type, target_id, round))"),
     db.prepare("CREATE INDEX IF NOT EXISTS review_rounds_target_idx ON review_rounds(target_type, target_id, round DESC)"),
     db.prepare("CREATE INDEX IF NOT EXISTS review_rounds_export_idx ON review_rounds(exported_at, id)"),
     db.prepare("CREATE TABLE IF NOT EXISTS weekly_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, week TEXT NOT NULL UNIQUE, user_id INTEGER NOT NULL, bytes INTEGER NOT NULL, content_sha256 TEXT NOT NULL, chunk_count INTEGER NOT NULL, current_version INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id))"),
@@ -141,6 +141,12 @@ async function initializeSchema(db: D1Database) {
   if (!briefSelectionNames.has("outline_json")) await db.prepare("ALTER TABLE brief_selections ADD COLUMN outline_json TEXT NOT NULL DEFAULT ''").run();
   if (!briefSelectionNames.has("outline_rev")) await db.prepare("ALTER TABLE brief_selections ADD COLUMN outline_rev INTEGER NOT NULL DEFAULT 0").run();
   if (!briefSelectionNames.has("outline_regen_json")) await db.prepare("ALTER TABLE brief_selections ADD COLUMN outline_regen_json TEXT NOT NULL DEFAULT '[]'").run();
+  // review_rounds 的助手通知写回列（docs/assistant-events-design.md §4；幂等 ALTER）。
+  const reviewRoundColumns = await db.prepare("PRAGMA table_info(review_rounds)").all<{ name: string }>();
+  const reviewRoundExisting = new Set(reviewRoundColumns.results.map((column) => column.name));
+  for (const name of ["notify_state", "notify_http_status", "notify_error", "notify_at", "notify_handoff", "handoff_pick"]) {
+    if (!reviewRoundExisting.has(name)) await db.prepare(`ALTER TABLE review_rounds ADD COLUMN ${name} ${name === "notify_http_status" ? "INTEGER" : "TEXT"}`).run();
+  }
   const itchColumns = await db.prepare("PRAGMA table_info(itches)").all<{ name: string }>();
   const itchExisting = new Set(itchColumns.results.map((column) => column.name));
   const itchNewColumns: Array<[string, string]> = [

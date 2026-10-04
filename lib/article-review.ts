@@ -14,6 +14,7 @@ import { renderMarkdownAsGzhHtml } from "./gzh-markdown";
 import { setReviewDecision } from "./reviews";
 import type { SessionUser } from "./auth";
 import { listArticlesForViewer, setArticlePublicForViewer, type Viewer } from "./article-access";
+import { normalizeHandoffPick } from "./review-notify-core";
 
 type Env = { DB: D1Database };
 
@@ -426,7 +427,7 @@ async function loadReviewContent(env: Env, target: ReviewTargetType, targetId: s
 
 // ─── 提交审稿 ─────────────────────────────────────────
 
-export type SubmitInput = { verdict?: unknown; comment?: unknown };
+export type SubmitInput = { verdict?: unknown; comment?: unknown; handoff?: unknown };
 
 export async function submitReview(env: Env, user: SessionUser, type: ReviewTargetType, id: string | number, input: SubmitInput) {
   await ensureSchema(env.DB);
@@ -436,6 +437,8 @@ export async function submitReview(env: Env, user: SessionUser, type: ReviewTarg
   const verdict = String(input.verdict ?? "") as ReviewVerdict;
   if (verdict !== "approved" && verdict !== "changes_requested" && verdict !== "comments") throw new Error("审稿结论不合法");
   const comment = cleanText(input.comment, "审稿意见", 2000, false);
+  // 手选接手人（"auto" 存 null，走自动判定）；非法名字 400。
+  const handoffPick = normalizeHandoffPick(input.handoff);
   const round = await currentRound(env, target, targetId);
   const allMarks = await listAllMarks(env, target, targetId, round);
   const changeCount = allMarks.filter((mark) => mark.type === "change").length;
@@ -463,9 +466,9 @@ export async function submitReview(env: Env, user: SessionUser, type: ReviewTarg
 
   try {
     await env.DB.prepare(
-      `INSERT INTO review_rounds (target_type, target_id, round, user_id, verdict, comment, mark_count, feedback_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).bind(target, targetId, round, user.id, verdict, comment, feedback.marks.length, JSON.stringify(feedback), timestamp).run();
+      `INSERT INTO review_rounds (target_type, target_id, round, user_id, verdict, comment, mark_count, feedback_json, handoff_pick, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(target, targetId, round, user.id, verdict, comment, feedback.marks.length, JSON.stringify(feedback), handoffPick, timestamp).run();
   } catch (error) {
     if (String(error).toLowerCase().includes("unique")) throw new Error("这一轮已经提交过审稿");
     throw error;
@@ -509,7 +512,10 @@ export async function listRounds(env: Env, type: ReviewTargetType, id: string | 
   const targetId = normalizeTargetId(target, id);
   const rows = await env.DB.prepare(
     `SELECT id, round, user_id AS userId, verdict, comment, mark_count AS markCount,
-       exported_at AS exportedAt, export_path AS exportPath, created_at AS createdAt
+       exported_at AS exportedAt, export_path AS exportPath,
+       notify_state AS notifyState, notify_http_status AS notifyHttpStatus, notify_error AS notifyError,
+       notify_at AS notifyAt, notify_handoff AS notifyHandoff, handoff_pick AS handoffPick,
+       created_at AS createdAt
      FROM review_rounds WHERE target_type = ? AND target_id = ? ORDER BY round DESC, id DESC`,
   ).bind(target, targetId).all<Record<string, unknown>>();
   return rows.results.map((row) => ({
@@ -521,6 +527,17 @@ export async function listRounds(env: Env, type: ReviewTargetType, id: string | 
     markCount: Number(row.markCount || 0),
     exportedAt: row.exportedAt ? String(row.exportedAt) : null,
     exportPath: row.exportPath ? String(row.exportPath) : null,
+    // 最近一次助手通知的结果（state 为空 = 还没发过）。
+    notify: row.notifyState
+      ? {
+          state: String(row.notifyState),
+          httpStatus: row.notifyHttpStatus === null || row.notifyHttpStatus === undefined ? null : Number(row.notifyHttpStatus),
+          error: row.notifyError ? String(row.notifyError) : null,
+          at: row.notifyAt ? String(row.notifyAt) : null,
+          handoff: row.notifyHandoff ? String(row.notifyHandoff) : null,
+        }
+      : null,
+    handoffPick: row.handoffPick ? String(row.handoffPick) : null,
     createdAt: String(row.createdAt || ""),
   }));
 }

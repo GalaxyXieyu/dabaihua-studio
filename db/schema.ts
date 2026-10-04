@@ -390,6 +390,14 @@ export const reviewRounds = sqliteTable("review_rounds", {
   feedbackJson: text("feedback_json").notNull(),
   exportedAt: text("exported_at"),
   exportPath: text("export_path"),
+  // 助手通知写回（docs/assistant-events-design.md §4）：最近一次 article.review_submitted 的结果与接手人。
+  notifyState: text("notify_state"),
+  notifyHttpStatus: integer("notify_http_status"),
+  notifyError: text("notify_error"),
+  notifyAt: text("notify_at"),
+  notifyHandoff: text("notify_handoff"),
+  /** 提交体手选的接手人（"auto" / 三位助手名）。 */
+  handoffPick: text("handoff_pick"),
   createdAt: text("created_at").notNull(),
 }, (table) => [
   uniqueIndex("review_rounds_target_round_idx").on(table.targetType, table.targetId, table.round),
