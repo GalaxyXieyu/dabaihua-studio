@@ -280,6 +280,7 @@ class ArticleCliTests(unittest.TestCase):
                 body.get("date"), body.get("tags", []), body.get("assets", []), body["markdown"],
                 article_html=body.get("articleHtml"), qa_report=body.get("qaReport"),
                 board_topic_id=body.get("boardTopicId"), brief=body.get("brief"),
+                stage=body.get("stage"), covers=body.get("covers"),
             )
             self.assertEqual(actual, case["contentHash"], case["name"])
 

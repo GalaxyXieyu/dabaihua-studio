@@ -86,7 +86,12 @@ superme — 个人工作台（内容选题中心）的多端 CLI（云端命令�
   superme article push <文件|目录> [--public] [--dry-run] [--root 目录] [--assistant 名字]
   superme article sync <目录> [--dry-run]
   superme article list
+  superme article feedback <slug> [--round N] [--json] [--assistant 名字]   # 读某篇文章的审稿反馈
   目录含 meta.json 时整个目录作为一篇文章
+
+简报命令:
+  superme brief pipeline <日期> <topicId>              # 某选题的简报流水线状态（JSON）
+  superme brief responses [--date D | --since ISO]    # 简报反馈（晴儿的打分/评语，JSON）
 
 数据命令:
   superme data put <daily|career> <文件> [--dry-run] [--endpoint URL]   # 上传日报/职业数据到 D1
@@ -124,7 +129,7 @@ DEFAULT_ENDPOINT = "https://superme.aigalaxy.top"
 CONFIG_DIR = Path(os.environ.get("TOPICS_CONFIG_DIR", "~/.config/topics-cli")).expanduser()
 CONFIG_FILE = CONFIG_DIR / "config.json"
 STRATEGY_CACHE = CONFIG_DIR / "strategy-cache.json"
-CLI_VERSION = "2.6.0"
+CLI_VERSION = "2.7.0"
 
 KIND_ICON = {"rss": "📰", "x": "𝕏 ", "x-tweet": "𝕏 ", "wechat": "💬", "link": "🔗"}
 CATEGORY_LABEL = {"ai": "AI", "investment": "投资", "gaming": "游戏", "technology": "科技", "business": "商业", "product": "产品"}
@@ -1284,7 +1289,8 @@ def _article_is_public(meta, status, cli_public):
 
 
 def _article_content_hash(title, status, is_public, date, tags, assets, markdown,
-                           article_html=None, qa_report=None, board_topic_id=None, brief=None):
+                           article_html=None, qa_report=None, board_topic_id=None, brief=None,
+                           stage=None, covers=None):
     public_text = "" if is_public is None else ("true" if is_public else "false")
     lines = [
         ARTICLE_PROTOCOL,
@@ -1303,6 +1309,12 @@ def _article_content_hash(title, status, is_public, date, tags, assets, markdown
         lines.append("html:" + hashlib.sha256(article_html.encode("utf-8")).hexdigest())
     if qa_report:
         lines.append("qa:" + hashlib.sha256(qa_report.encode("utf-8")).hexdigest())
+    # 阶段扩展行（协议 §3）：跟在 board/brief/html/qa 之后、asset 之前，只在给出时追加。
+    if stage:
+        round_value = stage.get("round")
+        lines.append("stage:%s:%s" % (stage.get("name", ""), "" if round_value is None else str(round_value)))
+    for cover in sorted(covers or [], key=lambda item: str(item.get("role", ""))):
+        lines.append("cover:%s:%s" % (cover.get("role", ""), cover.get("path", "")))
     for asset in sorted(assets or [], key=lambda item: item["name"]):
         lines.append("asset:" + asset["name"] + " " + asset["sha256"])
     payload = "\n".join(lines) + "\n\n" + markdown
@@ -1799,7 +1811,7 @@ def _article_dir_entry(article_dir, meta, state_files):
     }
 
 
-def _article_http(method, path, body=None, assistant=False):
+def _article_http(method, path, body=None, assistant=False, token_chain=None):
     url = endpoint() + path
     headers = {
         "Content-Type": "application/json",
@@ -1807,7 +1819,10 @@ def _article_http(method, path, body=None, assistant=False):
         "Referer": endpoint() + "/",
         "User-Agent": "superme-cli/" + CLI_VERSION,
     }
-    if assistant:
+    if token_chain is not None:
+        # 自定义链（如 brief 只读）：环境变量依次取，再退回 config token。
+        token = _env_token(*token_chain) or load_config().get("token")
+    elif assistant:
         # 助手模式只用助手 token（SUPERME_TOKEN > DABAIHUA_CARDS_ASSISTANT_TOKEN > HANDBOOK_TOKEN），不用 config。
         token = _env_token("SUPERME_TOKEN", "DABAIHUA_CARDS_ASSISTANT_TOKEN", "HANDBOOK_TOKEN")
     else:
@@ -1963,6 +1978,73 @@ def _cmd_article_list():
         print("%-40s %s · %s · %s" % (
             row.get("slug", ""), row.get("title") or "", public, str(row.get("date") or "")[:10],
         ))
+    return 0
+
+
+FEEDBACK_NOT_FOUND = "还没有找到这篇文章的审稿反馈（slug 或轮次不对，或还没提交审稿）"
+
+_FEEDBACK_VERDICT_LABELS = {
+    "approved": "确认通过",
+    "changes_requested": "要求修改",
+    "comments": "批注",
+}
+
+
+def _feedback_quote(mark):
+    """默认摘要里的 quote：超过 120 字截断加省略号（--json 不截断）。"""
+    quote = str(mark.get("quote") or "")
+    if len(quote) > 120:
+        quote = quote[:120] + "…"
+    return quote
+
+
+def _feedback_print_group(label, marks):
+    print("%s（%d）" % (label, len(marks)))
+    for index, mark in enumerate(marks, 1):
+        print("  %d. 「%s」" % (index, _feedback_quote(mark)))
+        comment = str(mark.get("comment") or "").strip()
+        print("     → %s" % (comment or "（未写意见）"))
+
+
+def _cmd_article_feedback(args):
+    slug = str(args.path or "").strip()
+    if not slug:
+        sys.exit("用法: superme article feedback <slug> [--round N] [--json] [--assistant 名字]")
+    assistant = _article_assistant_name(args)
+    path = "/api/review/article/" + urllib.parse.quote(slug, safe="") + "/feedback"
+    if args.round:
+        path += "?round=" + urllib.parse.quote(str(args.round), safe="")
+    try:
+        status, response = _article_http("GET", path, assistant=bool(assistant))
+    except ArticleError as error:
+        sys.exit(str(error))
+    if status == 401:
+        if assistant:
+            sys.exit("助手 token 无效或已失效（检查 HANDBOOK_TOKEN）")
+        sys.exit("未登录或 Key 已失效（先跑 superme login）")
+    if status == 404:
+        sys.exit(FEEDBACK_NOT_FOUND)
+    if status != 200:
+        sys.exit("服务器返回 %s: %s" % (status, response.get("error") or ""))
+    feedback = response.get("feedback")
+    if not feedback:
+        sys.exit(FEEDBACK_NOT_FOUND)
+    if getattr(args, "json", False):
+        print(json.dumps(feedback, ensure_ascii=False, indent=2))
+        return 0
+    target = feedback.get("target") or {}
+    title = target.get("title") or slug
+    verdict = _FEEDBACK_VERDICT_LABELS.get(feedback.get("verdict"), feedback.get("verdict") or "未知")
+    reviewer = (feedback.get("reviewer") or {}).get("nickname") or "未知"
+    print("《%s》 第 %s 轮 · %s   审稿人 %s · %s" % (
+        title, feedback.get("round") if feedback.get("round") is not None else "—",
+        verdict, reviewer, feedback.get("submittedAt") or ""))
+    overall = str(feedback.get("overallComment") or "").strip()
+    print("总体意见：%s" % (overall or "（无）"))
+    marks = [mark for mark in (feedback.get("marks") or []) if isinstance(mark, dict)]
+    _feedback_print_group("要改", [mark for mark in marks if mark.get("type") == "change"])
+    _feedback_print_group("写得好", [mark for mark in marks if mark.get("type") == "good"])
+    print("contentHash: %s" % (feedback.get("contentHash") or "—"))
     return 0
 
 
@@ -2145,7 +2227,43 @@ def _cmd_article_push(args, sync):
 def cmd_article(args):
     if args.action == "list":
         return _cmd_article_list()
+    if args.action == "feedback":
+        return _cmd_article_feedback(args)
     return _cmd_article_push(args, sync=(args.action == "sync"))
+
+
+# ─── 简报反馈（晴儿） ───────────────────────────────────────────────────────
+
+BRIEF_TOKEN_CHAIN = ("SUPERME_TOKEN", "DABAIHUA_CARDS_ASSISTANT_TOKEN", "HANDBOOK_TOKEN")
+
+
+def cmd_brief(args):
+    if args.action == "pipeline":
+        date = str(args.pipeline_date or "").strip()
+        topic_id = str(args.topic_id or "").strip()
+        if not date or not topic_id:
+            sys.exit("用法: superme brief pipeline <日期 YYYY-MM-DD> <topicId>")
+        path = "/api/briefs/%s/topics/%s/pipeline" % (
+            urllib.parse.quote(date, safe=""), urllib.parse.quote(topic_id, safe=""))
+    else:
+        if args.date and args.since:
+            sys.exit("--date 与 --since 只能选一个")
+        query = []
+        if args.date:
+            query.append("date=" + urllib.parse.quote(str(args.date), safe=""))
+        if args.since:
+            query.append("since=" + urllib.parse.quote(str(args.since), safe=""))
+        path = "/api/briefs/responses" + (("?" + "&".join(query)) if query else "")
+    try:
+        status, response = _article_http("GET", path, token_chain=BRIEF_TOKEN_CHAIN)
+    except ArticleError as error:
+        sys.exit(str(error))
+    if status == 401:
+        sys.exit("未登录或 token 无效（简报只读接口可用助手 token：检查 HANDBOOK_TOKEN）")
+    if status != 200:
+        sys.exit("服务器返回 %s: %s" % (status, response.get("error") or ""))
+    print(json.dumps(response, ensure_ascii=False, indent=2))
+    return 0
 
 
 # ─── 私密数据（D1） ─────────────────────────────────────────────────────────
@@ -2379,6 +2497,17 @@ def cmd_update(args):
     print(f"   重新运行: superme version 确认")
 
 
+def _positive_int(value):
+    """argparse type：正整数（如 --round）。"""
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError("必须是正整数: %s" % value)
+    if number <= 0:
+        raise argparse.ArgumentTypeError("必须是正整数: %s" % value)
+    return number
+
+
 def main():
     # topics-daily dispatch: 'superme daily <sub> ...' -> ~/bin/topics-daily（与本脚本同目录）
     if len(sys.argv) > 1 and sys.argv[1] == "daily":
@@ -2546,13 +2675,23 @@ def main():
     rt.add_argument("--topics", help="new: 关联选题ID，逗号分隔如 5,7,9")
 
     # ─── 文章推送 ───
-    art = sub.add_parser("article", help="文章推送（push/sync/list）")
-    art.add_argument("action", choices=["push", "sync", "list"])
-    art.add_argument("path", nargs="?", help="push/sync: 文件或目录")
+    art = sub.add_parser("article", help="文章推送与审稿反馈（push/sync/list/feedback）")
+    art.add_argument("action", choices=["push", "sync", "list", "feedback"])
+    art.add_argument("path", nargs="?", help="push/sync: 文件或目录；feedback: 文章 slug")
     art.add_argument("--public", action="store_true", help="推送为公开文章")
     art.add_argument("--dry-run", action="store_true", help="只预览，不联网、不写状态")
     art.add_argument("--root", help="同步根目录（默认目录本身/文件所在目录）")
     art.add_argument("--assistant", help="以助手身份推送（用助手 token，强制草稿，1-20 个字符）")
+    art.add_argument("--round", type=_positive_int, help="feedback: 第 N 轮审稿（正整数）")
+    art.add_argument("--json", action="store_true", help="feedback: 原样输出服务端返回的 JSON")
+
+    # ─── 简报反馈 ───
+    br = sub.add_parser("brief", help="简报反馈（pipeline/responses）")
+    br.add_argument("action", choices=["pipeline", "responses"])
+    br.add_argument("pipeline_date", nargs="?", help="brief pipeline: 日期 YYYY-MM-DD")
+    br.add_argument("topic_id", nargs="?", help="brief pipeline: topic ID")
+    br.add_argument("--date", help="brief responses: 只看某一天 YYYY-MM-DD")
+    br.add_argument("--since", help="brief responses: 从某个 ISO 时间点起")
 
     # ─── 私密数据 ───
     dta = sub.add_parser("data", help="上传/查看日报与职业数据")
@@ -2579,7 +2718,7 @@ def main():
         "schedule": cmd_schedule, "unschedule": cmd_unschedule,
         "calendar": cmd_calendar, "publish": cmd_publish, "series": cmd_series,
         "retro": cmd_retro, "version": cmd_version, "update": cmd_update,
-        "article": cmd_article, "data": cmd_data,
+        "article": cmd_article, "data": cmd_data, "brief": cmd_brief,
     }
     result = handlers[args.cmd](args)
     if isinstance(result, int) and result:
