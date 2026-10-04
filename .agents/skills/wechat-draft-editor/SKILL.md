@@ -223,13 +223,22 @@ python3 .agents/skills/wechat-draft-editor/scripts/check_content_anchors.py 原�
 
 **时机**：`02-final.md` 和 `qa-report.md` 写好、硬否决检查通过后推一次。文章目录是 `/workspace/projects/articles/<日期-slug>/`，里面有 `meta.json`，目录名就是审稿页网址里的 slug。
 
-**命令**：没装 CLI 时先安装 `mkdir -p ~/.local/bin && curl -fsSL https://superme.aigalaxy.top/cli/superme -o ~/.local/bin/superme && chmod +x ~/.local/bin/superme`；`superme --version` 要 ≥ 2.6.0，旧了跑 `superme update`。然后：
+**命令**：没装 CLI 时先安装 `mkdir -p ~/.local/bin && curl -fsSL https://superme.aigalaxy.top/cli/superme -o ~/.local/bin/superme && chmod +x ~/.local/bin/superme`；`superme --version` 要 ≥ 2.7.0，旧了跑 `superme update`。然后：
 
 ```bash
 set -a; . ~/.config/handbook/env; set +a
 SUPERME_TOKEN="$HANDBOOK_TOKEN" superme article push /workspace/projects/articles/<目录> --assistant 紫薇 --dry-run   # 先看清单
 SUPERME_TOKEN="$HANDBOOK_TOKEN" superme article push /workspace/projects/articles/<目录> --assistant 紫薇
 ```
+
+**审稿反馈（收到 handoff=紫薇 的通知后）**：
+
+```bash
+SUPERME_TOKEN="$HANDBOOK_TOKEN" superme article feedback <slug> --round N --assistant 紫薇   # 读第 N 轮反馈
+SUPERME_TOKEN="$HANDBOOK_TOKEN" superme article push /workspace/projects/articles/<目录> --assistant 紫薇 --stage revised --round N
+```
+
+逐条处理「要改」标记（用 prefix / suffix 在本地稿里定位 quote），「写得好」的句子保留不动；改完带 `--stage revised --round N` 重推。反馈字段与阶段语义见 `docs/article-push-protocol.md` §10。
 
 **规则**：
 - CLI 自动带上 `meta.title`、`brief_date`、正文（有 `02-final.md` 用定稿，否则用 `01-draft.md`）、`article.html`（其中 `images/…` 图片自动上传并改写）、`qa-report.md`、简报关联（`brief_date` + `topic_id`）、`board_topic_id`，不需要手动传图片或拼 JSON。

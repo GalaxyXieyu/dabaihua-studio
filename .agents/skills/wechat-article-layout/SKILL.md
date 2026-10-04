@@ -141,13 +141,20 @@ description: 按微信公众号手机端阅读体验优化中文推文的分行�
 
 **时机**：`article.html` 和 `images/` 完成后推一次。推送前先跑 dry-run，确认输出里没有「找不到图片」警告：html 里的图片都应是 `images/xxx.png` 这类相对路径并且文件存在。文章目录是 `/workspace/projects/articles/<日期-slug>/`，里面有 `meta.json`，目录名就是审稿页网址里的 slug。
 
-**命令**：没装 CLI 时先安装 `mkdir -p ~/.local/bin && curl -fsSL https://superme.aigalaxy.top/cli/superme -o ~/.local/bin/superme && chmod +x ~/.local/bin/superme`；`superme --version` 要 ≥ 2.6.0，旧了跑 `superme update`。然后：
+**命令**：没装 CLI 时先安装 `mkdir -p ~/.local/bin && curl -fsSL https://superme.aigalaxy.top/cli/superme -o ~/.local/bin/superme && chmod +x ~/.local/bin/superme`；`superme --version` 要 ≥ 2.7.0，旧了跑 `superme update`。然后：
 
 ```bash
 set -a; . ~/.config/handbook/env; set +a
 SUPERME_TOKEN="$HANDBOOK_TOKEN" superme article push /workspace/projects/articles/<目录> --assistant 尔康 --dry-run   # 先看清单
-SUPERME_TOKEN="$HANDBOOK_TOKEN" superme article push /workspace/projects/articles/<目录> --assistant 尔康
+SUPERME_TOKEN="$HANDBOOK_TOKEN" superme article push /workspace/projects/articles/<目录> --assistant 尔康 --stage typeset
 ```
+
+**按第 N 轮反馈改排版（收到 handoff=尔康 的通知后）**：先
+`SUPERME_TOKEN="$HANDBOOK_TOKEN" superme article feedback <slug> --round N --assistant 尔康`
+读第 N 轮反馈，改完排版后
+`SUPERME_TOKEN="$HANDBOOK_TOKEN" superme article push /workspace/projects/articles/<目录> --assistant 尔康 --stage typeset --round N`
+重推。封面放 `images/cover-21x9.png`（横版）和 `images/cover-1x1.png`（方版）会自动上传并
+显示在审稿页标题下。反馈字段与阶段语义见 `docs/article-push-protocol.md` §10。
 
 **规则**：
 - CLI 自动带上 `meta.title`、`brief_date`、正文（有 `02-final.md` 用定稿，否则用 `01-draft.md`）、`article.html`（其中 `images/…` 图片自动上传并改写）、`qa-report.md`、简报关联（`brief_date` + `topic_id`）、`board_topic_id`，不需要手动传图片或拼 JSON。

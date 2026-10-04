@@ -207,8 +207,11 @@ contentHash 都按 §3 / §4 的规则。
 `superme article push` 用助手 token 推送整篇文章目录，例如：
 
 ```sh
-set -a; . ~/.config/handbook/env; set +a; SUPERME_TOKEN="$HANDBOOK_TOKEN" superme article push <文章目录> --assistant 尔康
+set -a; . ~/.config/handbook/env; set +a; SUPERME_TOKEN="$HANDBOOK_TOKEN" superme article push <文章目录> --assistant 尔康 --stage typeset
 ```
+
+排版完成推 `--stage typeset`；初稿推 `--stage drafted`，按第 N 轮反馈改稿 / 重写 / 改排版推
+`--stage revised|rewritten|typeset --round N`（阶段语义与反馈读取见 §10）。
 
 `HANDBOOK_TOKEN` 就是 `DABAIHUA_CARDS_ASSISTANT_TOKEN`，由 Yu 分发，绝不进仓库。
 
@@ -222,3 +225,82 @@ set -a; . ~/.config/handbook/env; set +a; SUPERME_TOKEN="$HANDBOOK_TOKEN" superm
   正文文件、article.html（有/无及改写图片数）、qa-report（有/无）、brief、boardTopicId、助手名字、
   每个 asset 一行 `images/<sha12>.<ext> ← <本地相对文件名> <KB> 上传|已上传`（按 state 判断）
   以及全部警告；单文件模式保持一行式摘要。
+
+## 10. 审稿反馈与阶段写回（助手）
+
+Yu 在审稿页提交反馈后，会按 `docs/shufangzhai-protocol.md` §3.5 的 `article_review_submitted`
+事件通知漱芳斋，由 `handoff` 字段转交给紫薇 / 小燕子 / 尔康。被转交的助手用本节的接口读反馈、
+改稿、带阶段写回。
+
+### 10.1 读审稿反馈（只读）
+
+助手 token（`Authorization: Bearer $HANDBOOK_TOKEN`）只读，仅对 article 生效：
+
+```
+GET /api/review/article/<slug>/feedback?round=N    # 某一轮完整反馈（缺省最新已提交轮）
+GET /api/review/article/<slug>/rounds               # 已提交轮次列表（含每轮 notify 结果）
+```
+
+其他审稿接口（提交、标记、重试通知）仍需登录会话 / 文章所有者，不认助手 token。
+`feedback` 返回 `{ feedback: … }`，字段（`dabaihua.review-feedback/v1`）：
+
+| 字段 | 说明 |
+| --- | --- |
+| `round` | 轮次，正整数 |
+| `verdict` | `approved` 确认通过 / `changes_requested` 要求修改 / `comments` 批注 |
+| `overallComment` | 总体意见 |
+| `reviewer.nickname` | 审稿人昵称（不带 id / 邮箱） |
+| `submittedAt` | 提交时间 |
+| `contentHash` | 被审那一版的 contentHash（对应哪一稿） |
+| `marks[]` | 每条：`type`（`good` 写得好 / `change` 要改）、`quote` 被标原文、`comment` 意见、`prefix` / `suffix` 前后文（用它在本地稿里定位） |
+| `counts` | `good` / `change` 数量 |
+
+CLI（`superme article feedback <slug> [--round N] [--json] [--assistant 名字]`）：
+
+```sh
+set -a; . ~/.config/handbook/env; set +a
+SUPERME_TOKEN="$HANDBOOK_TOKEN" superme article feedback <slug> --round 2 --assistant 紫薇
+```
+
+输出示例：
+
+```
+《示例稿》 第 2 轮 · 要求修改   审稿人 Yu · 2026-10-04T22:29:00+08:00
+总体意见：开头两段铺垫太长，直接从场景切入
+要改（1）
+  1. 「在我看来这个框架的核心不是工具」
+     → 这句判断太弱，给出理由
+写得好（1）
+  1. 「这一段把机制讲清楚了」
+     → 写得好，别动
+contentHash: 3e2f1a0b…
+```
+
+`--json` 原样输出服务端返回的 JSON（quote 不截断，带 prefix / suffix）。
+
+### 10.2 阶段写回 `--stage`
+
+改完稿子用 `superme article push <文章目录> --assistant <名字> --stage <name> [--round N]`
+推送（请求体 `stage`，见 §3）；四种取值：
+
+| `--stage` | 页面标签 | 何时用 | `--round` |
+| --- | --- | --- | --- |
+| `drafted` | 初稿完成 | 小燕子第一次交稿 | 不带 |
+| `revised` | 已按第 N 轮改完 | 紫薇按第 N 轮反馈改稿后 | 必带 |
+| `rewritten` | 已按第 N 轮重写 | 小燕子按第 N 轮反馈重写后 | 必带 |
+| `typeset` | 排版完成，待审 / 已按第 N 轮改完排版 | 尔康排版完成 / 按第 N 轮改排版 | 可选 |
+
+- 只写 `--round N` 等同 `--stage revised --round N`。
+- 带 `round` 时那一轮必须已提交过审稿，否则 `422 round_not_reviewed`（新文章不能带 round）。
+- 阶段写进 `meta.stage`（`{ name, round, label, assistant, at }`）、追加到 `meta.stageHistory`
+  （跨推送保留，最多 20 条）；审稿页页头显示阶段徽标，页头下方「进度」列最近几条历史。
+- 阶段行参与 contentHash（`stage:<name>:<round>`），只改阶段也算 changed，不会返回 `unchanged`。
+
+### 10.3 封面
+
+文章目录里放 `images/cover-21x9.*`（21:9 横版）与 `images/cover-1x1.*`（1:1 方版），
+CLI 自动作为封面资产上传（请求体 `covers`，见 §3）；或用 `meta.json` 的 `cover` 字段显式指定
+（优先于自动发现；字符串 = role `cover`，对象 = `{21x9/1x1/cover: 路径}`，路径相对文章目录）。
+封面存 `meta.covers`，显示在审稿页标题下；封面行参与 contentHash
+（`cover:<role>:<path>`），只换封面也算 changed。**没带 `covers` 的推送不保留旧封面**
+（封面跟着内容走），重推正文时记得连封面一起放回目录。

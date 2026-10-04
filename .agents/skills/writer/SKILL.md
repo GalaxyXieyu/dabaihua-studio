@@ -307,13 +307,20 @@ Claude：L1-L5 质检 → 输出修改建议
 
 **时机**：`01-draft.md` 和 `meta.json` 写好后推一次，审稿页显示初稿。`meta.json` 至少要有 `title`、`brief_date`、`topic_id`，有看板卡片时加 `board_topic_id`。文章目录是 `/workspace/projects/articles/<日期-slug>/`，目录名就是审稿页网址里的 slug。
 
-**命令**：没装 CLI 时先安装 `mkdir -p ~/.local/bin && curl -fsSL https://superme.aigalaxy.top/cli/superme -o ~/.local/bin/superme && chmod +x ~/.local/bin/superme`；`superme --version` 要 ≥ 2.6.0，旧了跑 `superme update`。然后：
+**命令**：没装 CLI 时先安装 `mkdir -p ~/.local/bin && curl -fsSL https://superme.aigalaxy.top/cli/superme -o ~/.local/bin/superme && chmod +x ~/.local/bin/superme`；`superme --version` 要 ≥ 2.7.0，旧了跑 `superme update`。然后：
 
 ```bash
 set -a; . ~/.config/handbook/env; set +a
 SUPERME_TOKEN="$HANDBOOK_TOKEN" superme article push /workspace/projects/articles/<目录> --assistant 小燕子 --dry-run   # 先看清单
-SUPERME_TOKEN="$HANDBOOK_TOKEN" superme article push /workspace/projects/articles/<目录> --assistant 小燕子
+SUPERME_TOKEN="$HANDBOOK_TOKEN" superme article push /workspace/projects/articles/<目录> --assistant 小燕子 --stage drafted
 ```
+
+**审稿反馈（收到 handoff=小燕子 的通知后）**：先
+`SUPERME_TOKEN="$HANDBOOK_TOKEN" superme article feedback <slug> --round N --assistant 小燕子`
+读第 N 轮反馈，按反馈重写整篇后
+`SUPERME_TOKEN="$HANDBOOK_TOKEN" superme article push /workspace/projects/articles/<目录> --assistant 小燕子 --stage rewritten --round N`
+写回；handoff 是紫薇 / 尔康时按名字转交，不自己接手。反馈字段与阶段语义见
+`docs/article-push-protocol.md` §10。
 
 **规则**：
 - CLI 自动带上 `meta.title`、`brief_date`、正文（有 `02-final.md` 用定稿，否则用 `01-draft.md`）、`article.html`（其中 `images/…` 图片自动上传并改写）、`qa-report.md`、简报关联（`brief_date` + `topic_id`）、`board_topic_id`，不需要手动传图片或拼 JSON。

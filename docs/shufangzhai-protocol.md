@@ -37,6 +37,12 @@
 
 ## 三、出站 webhook（dabaihua → 漱芳斋）
 
+所有出站事件都登记在注册表 `lib/assistant-events.ts`（一条事件 = 一条配置），总表见
+`docs/assistant-events.md`（由脚本从注册表生成，勿手改）。注册表键一律 `domain.action` 命名
+（如 `article.review_submitted`、`brief.response_decided`），线上事件名（payload.event /
+`x-dabaihua-event`）新事件与键的 action 部分一致；本节 3.1–3.4 的四个老事件名
+`select` / `confirm_outline` / `cancel` / `regenerate_outline` 是别名，线上名与 payload 不变。
+
 服务器读三个环境变量：
 
 | 变量 | 说明 |
@@ -52,7 +58,9 @@
 通知状态只有三种：`delivered` / `failed` / `unconfigured`。
 没有自动重试——需要重发时由 Yu 调 `POST .../notify` 手动重发上一次事件。
 
-事件只有四个：`select`、`confirm_outline`、`cancel`、`regenerate_outline`。
+事件：简报四个老事件（3.1–3.4，均为别名）；另有两个新事件：
+`article_review_submitted`（3.5，Yu 提交文章审稿）与 `response_decided`
+（3.6，简报「不要」/ 清空决定，抄送晴儿）。
 
 ### 3.1 `select`（点「就写这个」）
 
@@ -205,6 +213,143 @@ Yu 在页面上给若干块写「不好，重新生成」的建议后，服务�
 
 `blocks` 里的 `blockId` 取值见第五章；一次最多 30 块。小燕子给 diagram 块重写后，
 重画时先用 `draft`，Yu 确认后改成 `ok`，要求重画改成 `redo`。
+
+### 3.5 `article_review_submitted`（Yu 提交文章审稿）
+
+触发时机：Yu 在文章审稿页提交一轮反馈（结论 `approved` / `changes_requested` / `comments`）。
+审稿写库成功后再发；通知失败只记录，不影响审稿结果。协议 `dabaihua.review-notify/v1`
+（注册表键 `article.review_submitted`），请求头与发送规则同上：
+`x-dabaihua-event: article_review_submitted`，默认 `Authorization: Bearer <secret>`。
+
+payload 示例（数据是编的）：
+
+```json
+{
+  "protocol": "dabaihua.review-notify/v1",
+  "event": "article_review_submitted",
+  "eventId": "7c1d2e3f-4a5b-4968-8077-6a5b4c3d2e1f",
+  "sentAt": "2026-10-04T22:30:00+08:00",
+  "article": {
+    "slug": "2026-10-04-mock-review",
+    "title": "示例稿：把一份资料读成文章",
+    "status": "changes-requested",
+    "sourcePath": "2026-10-04-mock-review/02-final.md",
+    "articleDir": "2026-10-04-mock-review",
+    "assistant": "紫薇",
+    "brief": { "date": "2026-10-03", "topicId": "kb-3" },
+    "boardTopicId": 12,
+    "stage": { "name": "revised", "round": 1, "label": "已按第 1 轮改完", "assistant": "紫薇", "at": "2026-10-04T20:00:00+08:00" }
+  },
+  "review": {
+    "round": 2,
+    "verdict": "changes_requested",
+    "overallComment": "开头两段铺垫太长，直接从场景切入",
+    "reviewer": { "nickname": "Yu" },
+    "submittedAt": "2026-10-04T22:29:00+08:00",
+    "contentHash": "3e2f1a0b9c8d7e6f5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b5c4d",
+    "counts": { "marks": 2, "good": 1, "change": 1 },
+    "marks": [
+      {
+        "id": 301,
+        "type": "good",
+        "quote": "这一段把机制讲清楚了",
+        "comment": "写得好，别动",
+        "prefix": "…上一段结尾",
+        "suffix": "下一段开头…",
+        "blockIndex": 5
+      },
+      {
+        "id": 302,
+        "type": "change",
+        "quote": "在我看来这个框架的核心不是工具",
+        "comment": "这句判断太弱，给出理由",
+        "prefix": "…上一段结尾",
+        "suffix": "，而是分工…",
+        "blockIndex": 7
+      }
+    ]
+  },
+  "handoff": { "assistant": "紫薇", "reason": "文字修改", "source": "auto" },
+  "links": {
+    "review": "https://superme.aigalaxy.top/review/article/2026-10-04-mock-review",
+    "feedback": "https://superme.aigalaxy.top/api/review/article/2026-10-04-mock-review/feedback?round=2"
+  }
+}
+```
+
+字段说明：
+
+| 字段 | 说明 |
+| --- | --- |
+| `article` | 文章快照：`slug`、`title`、`status`，以及 meta 里的 `sourcePath` / `articleDir` / `assistant`（上次推送的助手）/ `brief` / `boardTopicId` / `stage`（当前阶段，见 article-push-protocol §10）；缺字段给 `null` |
+| `review` | 本轮审稿：`round`、`verdict`、`overallComment`、`reviewer.nickname`（不带 id / 邮箱）、`submittedAt`、`contentHash`（对应稿子版本的 hash）、`counts`（marks / good / change 数）、`marks[]`（每条：`id`、`type`、`quote` 被标原文、`comment` 意见、`prefix` / `suffix` 前后文、`blockIndex`） |
+| `handoff` | `{ assistant, reason, source }`：实际该谁接手，判定见下 |
+| `links` | `review` 审稿页、`feedback` 反馈接口（助手 token 可读） |
+
+handoff 规则（Yu 在提交面板可手选「交给：自动 / 紫薇 / 小燕子 / 尔康」，手选优先，
+`source: picked`）：
+
+1. `approved`（通过）→ 尔康（排版定稿）。
+2. 总体意见与所有「要改」标记的意见，任一条命中结构词（重写、换观点、改观点、改结构、
+   推翻、整段、重来、换角度）→ 小燕子（结构性修改）。
+3. 所有非空意见都只谈排版配图（命中排版 / 配图 / 图片 / 插图 / 封面 / 字号 / 行距 / 间距 /
+   样式 / 版式 / 配色 / layout，且不含措辞 / 标题 / 段落 / 论点等文字词）→ 尔康。
+4. 其余 → 紫薇（文字修改）。
+
+漱芳斋应做的事：
+
+- 按 `handoff.assistant` 转交：紫薇改文字、小燕子按轮次重写、尔康排版 / 定稿；
+  handoff 不是小燕子时不用自己接手。
+- 被转交的助手先读全文反馈：
+  `superme article feedback <slug> --round N --assistant <名字>`
+  （命令细节与输出见 `docs/article-push-protocol.md` §10）。
+- 改完后把新稿写回审稿页：
+  `superme article push <文章目录> --assistant <名字> --stage revised|rewritten|typeset --round N`
+  （初稿用 `--stage drafted`；四种阶段的语义见 article-push-protocol §10）。
+- 命令都要用 `SUPERME_TOKEN="$HANDBOOK_TOKEN"`（先 `set -a; . ~/.config/handbook/env; set +a`），
+  绝不走 SSH。
+
+失败与重试：没有自动重试。通知失败只记录（审稿页显示「通知失败」），Yu 在审稿页点
+「重新通知」（`POST /api/review/article/<slug>/notify`，仅文章所有者）重发上一轮事件。
+
+### 3.6 `response_decided`（简报「不要」/ 清空决定，抄送晴儿）
+
+触发时机：Yu 在今日简报里对某条选题做「不要」或清空决定，且 `decision` 实际变化
+（`pick` ↔ `reject` ↔ 空）时才发；重复提交同一个决定不推送。协议
+`dabaihua.brief-response/v1`（注册表键 `brief.response_decided`），请求头与发送规则同上：
+`x-dabaihua-event: response_decided`。
+
+payload 示例（数据是编的）：
+
+```json
+{
+  "protocol": "dabaihua.brief-response/v1",
+  "event": "response_decided",
+  "eventId": "2b3c4d5e-6f70-4881-9a2b-1c2d3e4f5a6b",
+  "sentAt": "2026-10-04T21:00:00+08:00",
+  "date": "2026-10-03",
+  "topicId": "kb-7",
+  "decision": "reject",
+  "rejectReason": "角度和昨天那篇重复了",
+  "rating": 3,
+  "ratingComment": "第二问的备选不够锐",
+  "scenario": { "index": 2, "custom": "" },
+  "answers": [
+    { "question": "这条能和你之前写的哪篇接上？", "answer": "接不上" }
+  ],
+  "cc": ["晴儿"],
+  "links": {
+    "brief": "https://superme.aigalaxy.top/content?view=brief&date=2026-10-03",
+    "responses": "https://superme.aigalaxy.top/api/briefs/responses?date=2026-10-03"
+  }
+}
+```
+
+- `decision`：`pick` / `reject` / `null`（清空）；`rejectReason` 只在拒绝时非空。
+  `rating` / `ratingComment` / `answers` 是决定那一刻的快照。
+- 之后的打分、评语、答案是逐字段自动保存，**不逐次推送**。要看最新反馈，
+  让晴儿读：`superme brief responses --date <date>`（也支持 `--since <ISO>`）。
+- 漱芳斋收到后按 `cc` 转交晴儿（决定只关系到简报选题质量，小燕子不接手）。
 
 ## 四、漱芳斋写回（漱芳斋 → dabaihua）
 
