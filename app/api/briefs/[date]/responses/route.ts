@@ -1,7 +1,9 @@
 import { env } from "cloudflare:workers";
 import { assertSameOrigin, authenticateApiKey, getSessionUser, type SessionUser } from "../../../../../lib/auth";
 import { isValidBriefDate } from "../../../../../lib/daily-brief-core";
-import { upsertResponse, type ResponsePatch } from "../../../../../lib/daily-brief";
+import { getResponse, upsertResponse, type ResponsePatch } from "../../../../../lib/daily-brief";
+import { maybeNotifyResponseDecision, type AssistantNotifyResult } from "../../../../../lib/brief-response-notify";
+import { publicBaseUrl } from "../../../../../lib/weekly";
 
 type Params = { params: Promise<{ date: string }> };
 
@@ -53,8 +55,27 @@ export async function POST(request: Request, { params }: Params) {
   if (has("answers")) patch.answers = Array.isArray(body.answers) ? body.answers.map((answer) => String(answer ?? "")) : [];
 
   try {
+    // upsert 前取旧 decision，保存后才能判断「不要」/清空是否真的变化了。
+    const previous = await getResponse(env, date, topicId, auth.user.id);
     const response = await upsertResponse(env, date, topicId, auth.user.id, patch);
-    return json({ ok: true, response });
+    // decision 实际变化才通知晴儿；打分 / 评语 / 答案变化不逐次推送。
+    // 通知失败只记录，不影响保存结果。
+    let notify: AssistantNotifyResult | null = null;
+    try {
+      notify = await maybeNotifyResponseDecision(env, {
+        date,
+        topicId,
+        response,
+        hasDecision: "decision" in patch,
+        previousDecision: previous ? previous.decision : null,
+        origin: publicBaseUrl(env, request),
+      });
+    } catch {
+      notify = null;
+    }
+    const result: Record<string, unknown> = { ok: true, response };
+    if (notify) result.notify = notify;
+    return json(result);
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : "保存失败" }, 400);
   }

@@ -17,6 +17,10 @@ export type AssistantEventDef = {
   target: string | null;
   /** 实际该谁接手；固定名字或 "rule:<说明>"。 */
   handoff: string;
+  /** 仅文档用：线上事件名早于命名约定、作为旧别名保留时，注明对应的规范名。 */
+  aliasOf?: string;
+  /** 固定抄送名单（payload.cc）；仅文档展示。 */
+  cc?: string[];
   /** false：不发送（sendAssistantEvent 返回 state "disabled"）。 */
   enabled: boolean;
   /** payload 顶层字段，文档与测试都用它。 */
@@ -96,6 +100,7 @@ export const ASSISTANT_EVENTS: AssistantEventDef[] = [
     page: "简报页 POST /api/briefs/<date>/topics/<topicId>/select",
     target: "shufangzhai",
     handoff: "小燕子",
+    aliasOf: "brief_select",
     enabled: true,
     payloadFields: BRIEF_BASE_FIELDS,
     read: "superme brief pipeline <date> <topicId>",
@@ -108,6 +113,7 @@ export const ASSISTANT_EVENTS: AssistantEventDef[] = [
     page: "简报页 POST /api/briefs/<date>/topics/<topicId>/confirm-outline",
     target: "shufangzhai",
     handoff: "小燕子",
+    aliasOf: "brief_confirm_outline",
     enabled: true,
     payloadFields: BRIEF_CONFIRM_FIELDS,
     read: "superme brief pipeline <date> <topicId>",
@@ -120,6 +126,7 @@ export const ASSISTANT_EVENTS: AssistantEventDef[] = [
     page: "简报页 POST /api/briefs/<date>/topics/<topicId>/regenerate-outline",
     target: "shufangzhai",
     handoff: "小燕子",
+    aliasOf: "brief_regenerate_outline",
     enabled: true,
     payloadFields: BRIEF_REGEN_FIELDS,
     read: "superme brief pipeline <date> <topicId>",
@@ -132,10 +139,40 @@ export const ASSISTANT_EVENTS: AssistantEventDef[] = [
     page: "简报页 POST /api/briefs/<date>/topics/<topicId>/undo",
     target: "shufangzhai",
     handoff: "小燕子",
+    aliasOf: "brief_cancel",
     enabled: true,
     payloadFields: BRIEF_BASE_FIELDS,
     read: "superme brief pipeline <date> <topicId>",
     writeBack: "PATCH /api/briefs/<date>/topics/<topicId>/pipeline",
+  },
+  {
+    // 第 2b 步接调用点：简报反馈的「不要」/ 清空决定（decision 实际变化时）。
+    // 打分 / 评语 / 答案逐字段自动保存，不逐次推送（见 brief.responses_digest）。
+    key: "brief.response_decided",
+    event: "response_decided",
+    protocol: "dabaihua.brief-response/v1",
+    page: "今日简报「不要」/ 清空决定（POST /api/briefs/<date>/responses，decision 变化时）",
+    target: "shufangzhai",
+    handoff: "晴儿",
+    cc: ["晴儿"],
+    enabled: true,
+    payloadFields: [
+      "protocol",
+      "event",
+      "eventId",
+      "sentAt",
+      "date",
+      "topicId",
+      "decision",
+      "rejectReason",
+      "rating",
+      "ratingComment",
+      "scenario",
+      "answers",
+      "cc",
+      "links",
+    ],
+    read: "superme brief responses --date <date>",
   },
   {
     // 第 2 步才接调用点：文章审稿页提交（approved / changes_requested / comments）。
@@ -160,7 +197,7 @@ export const ASSISTANT_EVENTS: AssistantEventDef[] = [
     writeBack: "superme article push <文章目录> --assistant 紫薇 --round N",
   },
   {
-    // 以下四条先登记、暂不启用（目标助手不明确）；启用时定目标、改条目、接调用点。
+    // 以下五条先登记、暂不启用（目标助手不明确）；启用时定目标、改条目、接调用点。
     key: "topic.review_decision",
     event: "topic_review_decision",
     protocol: "dabaihua.topic-notify/v1",
@@ -194,15 +231,28 @@ export const ASSISTANT_EVENTS: AssistantEventDef[] = [
     read: "superme itch",
   },
   {
-    key: "brief.response",
-    event: "brief_response",
-    protocol: "dabaihua.brief-response-notify/v1",
-    page: "简报页 POST /api/briefs/<date>/responses",
+    // 简报反馈的打分 / 评语 / 答案逐字段自动保存，不逐次推送；汇总推送记为 next。
+    key: "brief.responses_digest",
+    event: "responses_digest",
+    protocol: "dabaihua.brief-response/v1",
+    page: "简报页打分 / 评语 / 答案（逐字段自动保存）",
     target: null,
-    handoff: "TBD",
+    handoff: "晴儿",
     enabled: false,
-    payloadFields: ["date", "topicId", "rating", "decision", "rejectReason"],
-    read: "-",
+    payloadFields: ["date", "responses"],
+    read: "superme brief responses --date <date>",
+  },
+  {
+    // 简报大纲配图（diagrams.status ok/redo）人工确认后交给尔康换图。
+    key: "brief.diagram_reviewed",
+    event: "diagram_reviewed",
+    protocol: "dabaihua.brief-notify/v1",
+    page: "简报页大纲配图 diagrams.status ok/redo",
+    target: null,
+    handoff: "尔康",
+    enabled: false,
+    payloadFields: ["date", "topicId", "diagrams"],
+    read: "superme brief pipeline <date> <topicId>",
   },
 ];
 

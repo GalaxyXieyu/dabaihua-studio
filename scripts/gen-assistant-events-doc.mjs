@@ -38,6 +38,15 @@ export function renderAssistantEventsDoc() {
     "Yu 在网页上做的、需要助手接手的决定，都登记在 `lib/assistant-events.ts` 注册表里：新增事件 = 加一条配置。本文由 `scripts/gen-assistant-events-doc.mjs` 从注册表生成（`npm run events:doc`），勿手改。",
   );
   lines.push("");
+  lines.push("## 命名约定");
+  lines.push("");
+  lines.push(
+    "- 注册表键一律 `domain.action`：domain 是页面 / 业务域（`brief`、`article`、`topic`、`cards`、`itch`，以后的英语页按画饼规格取名，如 `speaking`），action 用过去式或名词短语描述 Yu 做了什么（`review_submitted`、`response_decided`）。",
+  );
+  lines.push(
+    "- 线上事件名（payload.event / `x-dabaihua-event`）新事件与键的 action 部分一致（`article_review_submitted`）；简报四个老事件 `select` / `confirm_outline` / `regenerate_outline` / `cancel` 作为别名保留，线上名与 payload 不变。",
+  );
+  lines.push("");
   lines.push("## Webhook 目标");
   lines.push("");
   lines.push("只列 env 变量名；发送规则：POST JSON + `x-dabaihua-event`，默认 `Authorization: Bearer <secret>`（配置了自定义头则原样发 secret），8 秒超时。");
@@ -53,10 +62,11 @@ export function renderAssistantEventsDoc() {
   lines.push("## 事件");
   lines.push("");
   lines.push(
-    "| key | event | protocol | 页面 / 接口 | 目标 | handoff | 启用 | payload 字段 | 读命令 | 写回 |",
+    "| key | event | protocol | 页面 / 接口 | 目标 | handoff | cc | 启用 | payload 字段 | 读命令 | 写回 | 备注 |",
   );
-  lines.push("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+  lines.push("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
   for (const def of ASSISTANT_EVENTS) {
+    const remark = def.aliasOf ? `线上名为旧别名（\`${def.aliasOf}\`）` : "";
     const cells = [
       code(def.key),
       code(def.event),
@@ -64,10 +74,12 @@ export function renderAssistantEventsDoc() {
       cell(def.page),
       def.target ? code(def.target) : "-",
       cell(def.handoff),
+      def.cc && def.cc.length ? cell(def.cc.join("、")) : "-",
       def.enabled ? "是" : "否",
       cell(def.payloadFields.join(", ")),
       cell(def.read),
       cell(def.writeBack),
+      cell(remark),
     ];
     lines.push(`| ${cells.join(" | ")} |`);
   }

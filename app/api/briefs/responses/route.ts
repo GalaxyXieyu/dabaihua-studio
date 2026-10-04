@@ -1,17 +1,28 @@
 import { env } from "cloudflare:workers";
 import { assertSameOrigin, authenticateApiKey, getSessionUser, type SessionUser } from "../../../../lib/auth";
+import { bearerToken, sameSecret } from "../../../../lib/assistant-auth";
 import { getLatestBriefDate, listResponses, type ResponseQuery } from "../../../../lib/daily-brief";
 
 function json(body: unknown, status = 200) {
   return Response.json(body, { status, headers: { "cache-control": "no-store" } });
 }
 
-/** Bearer `topk_…` key or website session, admin only. */
-async function authorize(request: Request, write: boolean): Promise<{ user: SessionUser } | Response> {
+type Actor = { kind: "user"; user: SessionUser } | { kind: "assistant" };
+
+/** 助手 token 只读；Bearer `topk_…` key 或网站会话仍需 admin。 */
+async function authorize(request: Request, write: boolean): Promise<Actor | Response> {
+  // 助手 token（DABAIHUA_CARDS_ASSISTANT_TOKEN）：只读，未配置时不启用。
+  if (!write) {
+    const token = bearerToken(request);
+    const assistantToken = (env.DABAIHUA_CARDS_ASSISTANT_TOKEN || "").trim();
+    if (token && assistantToken && sameSecret(token, assistantToken)) {
+      return { kind: "assistant" };
+    }
+  }
   const viaKey = await authenticateApiKey(env, request);
   if (viaKey.status === "ok") {
     if (viaKey.user.role !== "admin") return json({ error: "forbidden" }, 403);
-    return { user: viaKey.user };
+    return { kind: "user", user: viaKey.user };
   }
   const user = await getSessionUser(env, request);
   if (!user) return json({ error: "unauthorized" }, 401);
@@ -23,7 +34,7 @@ async function authorize(request: Request, write: boolean): Promise<{ user: Sess
       return json({ error: "forbidden" }, 403);
     }
   }
-  return { user };
+  return { kind: "user", user };
 }
 
 export async function GET(request: Request) {

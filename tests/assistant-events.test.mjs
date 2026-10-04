@@ -71,6 +71,73 @@ test("registry: the four brief pipeline events map to brief.<event> entries", ()
   }
 });
 
+test("registry: brief.response_decided 已启用交给晴儿，digest / diagram 仍登记不启用", () => {
+  const decided = getAssistantEvent("brief.response_decided");
+  assert.ok(decided, "注册表缺少 brief.response_decided");
+  assert.equal(decided.event, "response_decided");
+  assert.equal(decided.protocol, "dabaihua.brief-response/v1");
+  assert.equal(decided.page, "今日简报「不要」/ 清空决定（POST /api/briefs/<date>/responses，decision 变化时）");
+  assert.equal(decided.target, "shufangzhai");
+  assert.equal(decided.handoff, "晴儿");
+  assert.deepEqual(decided.cc, ["晴儿"]);
+  assert.equal(decided.enabled, true);
+  assert.deepEqual(decided.payloadFields, [
+    "protocol",
+    "event",
+    "eventId",
+    "sentAt",
+    "date",
+    "topicId",
+    "decision",
+    "rejectReason",
+    "rating",
+    "ratingComment",
+    "scenario",
+    "answers",
+    "cc",
+    "links",
+  ]);
+  assert.equal(decided.read, "superme brief responses --date <date>");
+
+  const digest = getAssistantEvent("brief.responses_digest");
+  assert.ok(digest, "注册表缺少 brief.responses_digest");
+  assert.equal(digest.enabled, false);
+  assert.equal(digest.target, null);
+  assert.equal(digest.handoff, "晴儿");
+  assert.equal(digest.read, "superme brief responses --date <date>");
+
+  const diagram = getAssistantEvent("brief.diagram_reviewed");
+  assert.ok(diagram, "注册表缺少 brief.diagram_reviewed");
+  assert.equal(diagram.enabled, false);
+  assert.equal(diagram.target, null);
+  assert.equal(diagram.handoff, "尔康");
+  assert.equal(diagram.read, "superme brief pipeline <date> <topicId>");
+
+  // 旧占位键已升级为启用的 brief.response_decided。
+  assert.equal(getAssistantEvent("brief.response"), null);
+});
+
+test("registry: 只有简报四个老事件带「线上名为旧别名」的备注", () => {
+  const expected = new Map([
+    ["brief.select", "brief_select"],
+    ["brief.confirm_outline", "brief_confirm_outline"],
+    ["brief.regenerate_outline", "brief_regenerate_outline"],
+    ["brief.cancel", "brief_cancel"],
+  ]);
+  for (const def of ASSISTANT_EVENTS) {
+    if (expected.has(def.key)) {
+      assert.equal(def.aliasOf, expected.get(def.key), `${def.key} 应注明规范名`);
+      assert.equal(def.enabled, true, `${def.key} 老事件仍在线上发送`);
+    } else {
+      assert.equal(def.aliasOf, undefined, `${def.key} 不应有 aliasOf`);
+    }
+  }
+  // 文档里的备注列由生成脚本常量拼接，两条命名约定写在文档顶部。
+  const doc = renderAssistantEventsDoc();
+  assert.match(doc, /线上名为旧别名/);
+  assert.match(doc, /## 命名约定/);
+});
+
 function setupLogDb() {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(
