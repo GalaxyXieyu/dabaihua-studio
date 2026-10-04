@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
-import { ASSISTANT_EVENTS, getAssistantEvent, WEBHOOK_TARGETS } from "../lib/assistant-events.ts";
+import { ASSISTANT_EVENTS, ASSISTANT_INBOUND, getAssistantEvent, WEBHOOK_TARGETS } from "../lib/assistant-events.ts";
 import { PIPELINE_NOTIFY_EVENTS } from "../lib/brief-pipeline-core.ts";
 import { sendAssistantEvent } from "../lib/assistant-notify.ts";
 import { renderAssistantEventsDoc } from "../scripts/gen-assistant-events-doc.mjs";
@@ -132,10 +132,38 @@ test("registry: 只有简报四个老事件带「线上名为旧别名」的备�
       assert.equal(def.aliasOf, undefined, `${def.key} 不应有 aliasOf`);
     }
   }
-  // 文档里的备注列由生成脚本常量拼接，两条命名约定写在文档顶部。
+  // 文档备注：线上名（即旧别名本身）在备注列，payload 不变；两条命名约定写在文档顶部。
   const doc = renderAssistantEventsDoc();
-  assert.match(doc, /线上名为旧别名/);
+  for (const def of ASSISTANT_EVENTS) {
+    if (expected.has(def.key)) {
+      assert.ok(
+        doc.includes("线上名 `" + def.event + "` 为旧别名，payload 不变"),
+        `${def.key} 备注应写线上名为旧别名`,
+      );
+    } else {
+      assert.doesNotMatch(doc, new RegExp("\\| " + def.key + " \\|.*为旧别名"));
+    }
+  }
   assert.match(doc, /## 命名约定/);
+});
+
+test("registry: ASSISTANT_INBOUND keys are unique and domain.action shaped", () => {
+  const keys = ASSISTANT_INBOUND.map((def) => def.key);
+  assert.equal(new Set(keys).size, keys.length, `inbound key 重复：${keys.join(", ")}`);
+  for (const key of keys) {
+    assert.match(key, /^[a-z]+\.[a-z_]+$/, `inbound key 不是 domain.action 形式：${key}`);
+  }
+  for (const def of ASSISTANT_INBOUND) {
+    assert.ok(def.command, `${def.key} 缺 command`);
+    assert.ok(def.api, `${def.key} 缺 api`);
+    assert.ok(def.effect, `${def.key} 缺 effect`);
+  }
+});
+
+test("registry: ASSISTANT_EVENTS keys all match domain.action pattern", () => {
+  for (const def of ASSISTANT_EVENTS) {
+    assert.match(def.key, /^[a-z]+\.[a-z_]+$/, `key 不符合 domain.action 形式：${def.key}`);
+  }
 });
 
 function setupLogDb() {

@@ -31,6 +31,18 @@ export type AssistantEventDef = {
   writeBack?: string;
 };
 
+/** 助手写回与读取（入站）命令速查的条目类型。 */
+export type AssistantInboundDef = {
+  /** 入站键，如 "article.stage"，一律 domain.action 形式。 */
+  key: string;
+  /** superme 命令行。 */
+  command: string;
+  /** 对应 API 接口。 */
+  api: string;
+  /** 效果 / 权限说明。 */
+  effect: string;
+};
+
 /** webhook 目标：env 变量名集中定义，发送函数按 target 键取。 */
 export const WEBHOOK_TARGETS = {
   shufangzhai: {
@@ -181,7 +193,7 @@ export const ASSISTANT_EVENTS: AssistantEventDef[] = [
     protocol: "dabaihua.review-notify/v1",
     page: "文章审稿页 POST /api/review/article/<slug>/submit",
     target: "shufangzhai",
-    handoff: "rule:要求修改/批注→紫薇（全是排版配图意见→尔康）；通过→尔康",
+    handoff: "rule:Yu 手选优先；自动：结构性意见→小燕子，纯排版配图→尔康，其余文字修改→紫薇；通过→尔康",
     enabled: true,
     payloadFields: [
       "protocol",
@@ -193,8 +205,9 @@ export const ASSISTANT_EVENTS: AssistantEventDef[] = [
       "handoff",
       "links",
     ],
-    read: "superme article feedback <slug> [--round N]",
-    writeBack: "superme article push <文章目录> --assistant 紫薇 --round N",
+    read: "superme article feedback <slug> --round N --assistant <名字>",
+    writeBack:
+      "superme article push <文章目录> --assistant <handoff> --stage revised|rewritten|typeset --round N",
   },
   {
     // 以下五条先登记、暂不启用（目标助手不明确）；启用时定目标、改条目、接调用点。
@@ -253,6 +266,40 @@ export const ASSISTANT_EVENTS: AssistantEventDef[] = [
     enabled: false,
     payloadFields: ["date", "topicId", "diagrams"],
     read: "superme brief pipeline <date> <topicId>",
+  },
+];
+
+/** 助手写回与读取（入站）命令速查：文档用。 */
+export const ASSISTANT_INBOUND: AssistantInboundDef[] = [
+  {
+    key: "article.stage",
+    command: "superme article push <dir> --assistant <名字> --stage drafted|revised|rewritten|typeset [--round N]",
+    api: "PUT /api/articles/<slug>（body.stage）",
+    effect: "记 meta.stage 与 stageHistory，审稿页显示阶段徽标与进度",
+  },
+  {
+    key: "article.feedback",
+    command: "superme article feedback <slug> [--round N] [--json]",
+    api: "GET /api/review/article/<slug>/feedback",
+    effect: "助手 token 只读，含 round、overallComment、marks（good/change，quote+comment）",
+  },
+  {
+    key: "brief.responses",
+    command: "superme brief responses [--date D | --since ISO]",
+    api: "GET /api/briefs/responses",
+    effect: "助手 token 只读",
+  },
+  {
+    key: "brief.pipeline",
+    command: "superme brief pipeline <date> <topicId>",
+    api: "GET/PATCH /api/briefs/<date>/topics/<topicId>/pipeline",
+    effect: "读状态 / 写回状态与大纲",
+  },
+  {
+    key: "events.log",
+    command: "superme events [--after-id N] [--key k] [--follow-state]",
+    api: "GET /api/assistant-events",
+    effect: "拉取事件日志（含 payload），漏收 webhook 时兜底",
   },
 ];
 

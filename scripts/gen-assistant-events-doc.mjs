@@ -13,7 +13,7 @@
 import { realpathSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { ASSISTANT_EVENTS, WEBHOOK_TARGETS } from "../lib/assistant-events.ts";
+import { ASSISTANT_EVENTS, ASSISTANT_INBOUND, WEBHOOK_TARGETS } from "../lib/assistant-events.ts";
 
 const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const DOC_PATH = join(REPO_ROOT, "docs", "assistant-events.md");
@@ -68,7 +68,7 @@ export function renderAssistantEventsDoc() {
   );
   lines.push("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
   for (const def of ASSISTANT_EVENTS) {
-    const remark = def.aliasOf ? `线上名为旧别名（\`${def.aliasOf}\`）` : "";
+    const remark = def.aliasOf ? `线上名 \`${def.event}\` 为旧别名，payload 不变` : "";
     const cells = [
       code(def.key),
       code(def.event),
@@ -83,6 +83,19 @@ export function renderAssistantEventsDoc() {
       cell(def.writeBack),
       cell(remark),
     ];
+    lines.push(`| ${cells.join(" | ")} |`);
+  }
+  lines.push("");
+  lines.push("## 助手写回与读取（入站）");
+  lines.push("");
+  lines.push(
+    "出站事件之外，助手用下面这些命令 / 接口写回和读取状态（也来自 `lib/assistant-events.ts` 的 `ASSISTANT_INBOUND` 注册表）：",
+  );
+  lines.push("");
+  lines.push("| key | 命令 | API | 效果 |");
+  lines.push("| --- | --- | --- | --- |");
+  for (const def of ASSISTANT_INBOUND) {
+    const cells = [code(def.key), code(def.command), code(def.api), cell(def.effect)];
     lines.push(`| ${cells.join(" | ")} |`);
   }
   lines.push("");
