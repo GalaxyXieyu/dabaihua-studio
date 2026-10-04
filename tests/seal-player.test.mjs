@@ -166,3 +166,100 @@ test("seal-lock 是纯 TS（不碰 DOM），页面导出唯一的 stageLock", ()
   assert.ok(!/document|window|matchMedia/.test(LOCK), "seal-lock.ts 不应碰 DOM");
   assert.ok(LOCK.includes("export const stageLock"), "应导出全局唯一的 stageLock");
 });
+
+// ---------- SealStage / useSealQueue / usePauseWhenHidden 源码断言（第 5 节） ----------
+// 这些是 "use client" 的浏览器组件，node 里没法渲染，靠源码断言锁住结构和关键行为。
+
+const STAGE = readFileSync(new URL("../app/_components/seal/SealStage.tsx", import.meta.url), "utf8");
+const USEQUEUE = readFileSync(new URL("../app/_components/seal/useSealQueue.ts", import.meta.url), "utf8");
+const PAUSE = readFileSync(new URL("../app/_components/seal/usePauseWhenHidden.ts", import.meta.url), "utf8");
+
+test("SealStage 有 use client、默认导出（React.lazy 按需加载），不引动画库", () => {
+  assert.ok(STAGE.includes('"use client"'), "SealStage 应是客户端组件");
+  assert.ok(/export default function SealStage/.test(STAGE), "应默认导出");
+  assert.ok(!/from "motion"|from 'motion'|gsap|lottie/i.test(STAGE), "不许引 motion/gsap/lottie");
+  assert.ok(!/requestAnimationFrame|setInterval/.test(STAGE), "不走 rAF/interval");
+  // 自己不做动画，只编排 seal-player 的动作
+  assert.ok(!/\.animate\(/.test(STAGE), "SealStage 不直接调 .animate");
+  for (const fn of ["playReplay", "playStamp", "playDayWrap", "playWelcome", "setActorKind", "prefersReducedMotion"]) {
+    assert.ok(STAGE.includes(fn), `应从 seal-player 引 ${fn}`);
+  }
+});
+
+test("SealStage 整次编排跑在 stageLock 里（7.4 第 8 条一屏一个主动效）", () => {
+  assert.ok(/stageLock[\s\S]*?\.run\(/.test(STAGE), "应用 stageLock.run 跑整次编排");
+  assert.ok(STAGE.includes('from "./seal-lock.ts"'), "从 seal-lock 引入");
+});
+
+test("SealStage 打断（7.4 第 6 条）：scroll/wheel/pointerdown/keydown/切后台/pagehide，AbortController + cancel", () => {
+  for (const ev of ["scroll", "wheel", "pointerdown", "keydown"]) {
+    assert.ok(STAGE.includes(`"${ev}"`), `应监听 ${ev}`);
+  }
+  assert.ok(STAGE.includes("visibilitychange"), "应监听 visibilitychange");
+  assert.ok(STAGE.includes("pagehide"), "应监听 pagehide");
+  assert.ok(STAGE.includes("AbortController"), "应用 AbortController");
+  assert.ok(/a\.cancel\(\)/.test(STAGE), "打断时 cancel track 过的动画");
+  assert.ok(STAGE.includes("onSkip"), "打断时调用 onSkip");
+  // 卸载（切路由）时也 abort：StrictMode 第二次挂载能取消第一次
+  assert.ok(/return \(\) => \{[\s\S]*?controller\.abort\(\)[\s\S]*?\};?\s*[\s\S]*?\};/m.test(STAGE) || /return \(\) => \{[\s\S]*?controller\.abort\(\)/.test(STAGE));
+});
+
+test("SealStage 铺位与收尾路由：昨日小卡、印条 id、welcomeBack 换回方章", () => {
+  assert.ok(STAGE.includes('"seal-yesterday-card"'), "回放用 seal-yesterday-card");
+  assert.ok(STAGE.includes('"seal-strip-"'), "印条 id 前缀 seal-strip-");
+  assert.ok(STAGE.includes('setActorKind(actor, "fang"'), "welcomeBack 换回方章");
+  assert.ok(STAGE.includes("BACK.after"), "补完 300ms 后再迎接（BACK.after）");
+  assert.ok(STAGE.includes("onMoment(closing)"), "收尾演完调 onMoment(closing)");
+});
+
+test("SealStage reduced：全部新印痕一起淡入（复用 playStamp 的 reduced 分支），自己不写 transform 帧", () => {
+  assert.ok(STAGE.includes("reduced: true"), "应有 reduced 淡入上下文 fadeCtx");
+  assert.ok(!/transform:\s*["'`]/.test(STAGE), "SealStage 不自己写 transform 关键帧");
+  assert.ok(STAGE.includes("onOverflow?.(p.overflow)"), "超出 maxAnimated 要报 overflow");
+});
+
+test("SealStage 无障碍：aria-live 播报新盖了 N 个章，可选文案 seal-copy", () => {
+  assert.ok(STAGE.includes('aria-live="polite"'));
+  assert.ok(STAGE.includes("新盖了"));
+  assert.ok(STAGE.includes("seal-copy"));
+});
+
+test("useSealQueue：读 localStorage、planVisit、立刻写回、写回前重读再 pruneStore", () => {
+  assert.ok(USEQUEUE.includes('"use client"'));
+  assert.ok(USEQUEUE.includes("STORE_KEY"));
+  assert.ok(USEQUEUE.includes("planVisit("));
+  assert.ok(USEQUEUE.includes("writeStore(p.store)"), "读完立刻写回 plan.store");
+  assert.ok(USEQUEUE.includes("readStore()"), "每次写前重读一遍");
+  assert.ok(USEQUEUE.includes("pruneStore("));
+  assert.ok(USEQUEUE.includes("markSeen("));
+  assert.ok(USEQUEUE.includes("skipAll("), "onSkip/skip 用 skipAll");
+  assert.ok(/export function readStore/.test(USEQUEUE), "导出 readStore 给页内盖章");
+  assert.ok(/export function writeStore/.test(USEQUEUE), "导出 writeStore 给页内盖章");
+  // moment 键口径与 planVisit 规则 12 一致
+  assert.ok(USEQUEUE.includes("`replay:${plan.today}`"));
+  assert.ok(USEQUEUE.includes("`wrap:${plan.replay.date}`"));
+  assert.ok(USEQUEUE.includes("`back:${plan.today}`"));
+  assert.ok(USEQUEUE.includes("`wrap:${plan.pageDate}`"));
+  // 印条 / 小卡 / 需要演出的判定
+  assert.ok(USEQUEUE.includes('closing === "dayWrap"'));
+  assert.ok(USEQUEUE.includes("plan.replay"));
+  assert.ok(USEQUEUE.includes("firstVisit"), "新设备不需要 stage");
+});
+
+test("usePauseWhenHidden：hidden 设 data-seal-paused、visible 移除（规范 6.5）", () => {
+  assert.ok(PAUSE.includes('"use client"'));
+  assert.ok(PAUSE.includes("visibilitychange"));
+  assert.ok(PAUSE.includes('setAttribute("data-seal-paused"'));
+  assert.ok(PAUSE.includes('removeAttribute("data-seal-paused"'));
+  assert.ok(!/\.animate\(|requestAnimationFrame/.test(PAUSE), "hook 只改属性，不做动画");
+});
+
+test("新文件无 emoji（SealStage / useSealQueue / usePauseWhenHidden）", () => {
+  for (const [name, src] of [
+    ["SealStage.tsx", STAGE],
+    ["useSealQueue.ts", USEQUEUE],
+    ["usePauseWhenHidden.ts", PAUSE],
+  ]) {
+    assert.ok(!EMOJI_RE.test(src), `${name} 不应出现 emoji`);
+  }
+});

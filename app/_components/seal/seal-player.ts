@@ -34,6 +34,8 @@ function anim(
   opts: KeyframeAnimationOptions,
   ctx: PlayerCtx,
 ): Promise<void> {
+  // signal 已 abort 时直接拒绝：不再创建动画（打断要立刻落地，不等播完）
+  if (ctx.signal.aborted) return Promise.reject(new DOMException("seal aborted", "AbortError"));
   const a = ctx.track(el.animate(frames, { fill: "forwards", ...opts }));
   return a.finished.then(
     () => {
