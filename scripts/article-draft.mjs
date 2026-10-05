@@ -11,6 +11,8 @@
  *   默认是 DRY RUN：会上传图片素材并让远端渲染预览，但 dryRun=true，绝不创建/群发。
  *   只有显式加 --upload 才会真正保存到公众号草稿箱。工具白名单只有
  *   gzh_html_draft_add，并额外用禁止名单正则拦截群发/发布类工具名。
+ *   若远端工具 inputSchema 缺少 dryRun（或未声明任何属性），非 --upload 运行会直接
+ *   拒绝调用 tools/call，绝不冒默认实发请求的风险。
  *   --local 为完全离线干跑，不发任何网络请求。
  *
  * 只使用 Node 内置模块。
@@ -527,6 +529,32 @@ function printSummary({ title, digest, author, needOpenComment, coverSrc, coverS
   log(`HTML 长度：${htmlLength} 字`);
 }
 
+// ---------- 工具参数构建 ----------
+
+/**
+ * 按 schemaProperties 过滤 desired 得到 tools/call 的 arguments。
+ * 纯函数：不做任何 I/O。规则：
+ *   - schema 未声明任何属性时放行全部键（兼容无 schema 的旧工具）；
+ *   - schema 声明了属性但不含 dryRun，且本次不是 --upload：返回 error，拒绝调用；
+ *   - dryRun 永不被过滤，args.dryRun 始终为 !upload（以 options 为准，忽略 desired 里的值）。
+ * 返回 { args, dropped, error }，error 为字符串或 null。
+ */
+export function buildToolArgs(desired, schemaProperties, { upload } = {}) {
+  const allowedKeys = new Set(Object.keys(schemaProperties || {}));
+  if (!upload && (allowedKeys.size === 0 || !allowedKeys.has("dryRun"))) {
+    return { args: {}, dropped: [], error: "工具 inputSchema 不含 dryRun，拒绝调用（避免误建草稿）" };
+  }
+  const args = {};
+  const dropped = [];
+  for (const [key, value] of Object.entries(desired || {})) {
+    if (key === "dryRun") continue; // 永不丢弃，统一在下方按 !upload 写入
+    if (allowedKeys.size === 0 || allowedKeys.has(key)) args[key] = value;
+    else dropped.push(key);
+  }
+  args.dryRun = !upload;
+  return { args, dropped, error: null };
+}
+
 // ---------- 主流程 ----------
 
 export async function main(argv = process.argv.slice(2)) {
@@ -683,7 +711,6 @@ export async function main(argv = process.argv.slice(2)) {
   }
   const tool = tools.find((item) => item.name === chosenName);
   const schema = tool?.inputSchema || tool?.input_schema || {};
-  const allowedKeys = new Set(Object.keys(schema.properties || {}));
 
   const desired = {
     html,
@@ -694,19 +721,26 @@ export async function main(argv = process.argv.slice(2)) {
     coverFile: path.basename(coverPath),
     picCrop235_1: crop235,
     picCrop1_1: crop1x1,
-    dryRun: !options.upload,
   };
   if (author) desired.author = author;
   if (digest) desired.digest = digest;
   if (options.allowLongTitle) desired.allowLongTitle = true;
 
-  const args = {};
-  const dropped = [];
-  for (const [key, value] of Object.entries(desired)) {
-    if (allowedKeys.size === 0 || allowedKeys.has(key)) args[key] = value;
-    else dropped.push(key);
+  // 非上传运行若 schema 缺 dryRun（或无属性声明），在此处直接拒绝，绝不发起实发请求
+  const { args, dropped, error: argsError } = buildToolArgs(desired, schema.properties, { upload: options.upload });
+  if (argsError) {
+    fail(argsError);
+    process.exitCode = 1;
+    return;
   }
   if (dropped.length) warn(`工具 inputSchema 不含以下参数，已丢弃：${dropped.join("、")}`);
+
+  // 硬性保险：dryRun 必须在场且与 !options.upload 一致，否则拒绝调用
+  if (args.dryRun !== !options.upload) {
+    fail(`dryRun 参数缺失或不一致（期望 ${!options.upload}），拒绝调用（避免误建草稿）`);
+    process.exitCode = 1;
+    return;
+  }
 
   log(`调用工具：${chosenName}（dryRun=${args.dryRun}）`);
   let result;

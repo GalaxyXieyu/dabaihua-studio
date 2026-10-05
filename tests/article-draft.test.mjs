@@ -7,6 +7,7 @@ import {
   validateFields,
   extractImgSrcs,
   sameExceptImgSrc,
+  buildToolArgs,
 } from "../scripts/article-draft.mjs";
 
 function tinyPng(width, height) {
@@ -72,4 +73,40 @@ test("sameExceptImgSrc：样式不同则不一致", () => {
   const a = '<img src="a.png" style="width: 100%" />';
   const b = '<img src="b.png" style="width: 50%" />';
   assert.equal(sameExceptImgSrc(a, b), false);
+});
+
+test("buildToolArgs：schema 不含 dryRun 且非 upload 时拒绝（含无属性声明）", () => {
+  const desired = { html: "<p>hi</p>", title: "t" };
+  for (const schemaProperties of [{ html: {}, title: {} }, {}, undefined]) {
+    const { args, dropped, error } = buildToolArgs(desired, schemaProperties, { upload: false });
+    assert.ok(error, `schemaProperties=${JSON.stringify(schemaProperties)} 应返回 error`);
+    assert.match(error, /不含 dryRun/);
+    assert.deepEqual(args, {});
+    assert.deepEqual(dropped, []);
+  }
+});
+
+test("buildToolArgs：schema 含 dryRun 且非 upload 时 args.dryRun 为 true", () => {
+  const { args, dropped, error } = buildToolArgs(
+    { html: "<p>hi</p>", title: "t", dryRun: false },
+    { html: {}, title: {}, dryRun: {} },
+    { upload: false },
+  );
+  assert.equal(error, null);
+  assert.deepEqual(dropped, []);
+  assert.equal(args.dryRun, true);
+  assert.equal(args.html, "<p>hi</p>");
+});
+
+test("buildToolArgs：未知键被丢弃，dryRun 不会被丢弃", () => {
+  const { args, dropped, error } = buildToolArgs(
+    { html: "<p>hi</p>", title: "t", mystery: 1, dryRun: true },
+    { html: {}, dryRun: {} },
+    { upload: true },
+  );
+  assert.equal(error, null);
+  assert.deepEqual(dropped, ["title", "mystery"]);
+  assert.equal("title" in args, false);
+  assert.equal("mystery" in args, false);
+  assert.equal(args.dryRun, false);
 });
