@@ -8,6 +8,7 @@ import {
   extractImgSrcs,
   sameExceptImgSrc,
   buildToolArgs,
+  extractMediaId,
 } from "../scripts/article-draft.mjs";
 
 function tinyPng(width, height) {
@@ -109,4 +110,16 @@ test("buildToolArgs：未知键被丢弃，dryRun 不会被丢弃", () => {
   assert.equal("title" in args, false);
   assert.equal("mystery" in args, false);
   assert.equal(args.dryRun, false);
+});
+
+test("extractMediaId：识别 camelCase mediaId", () => {
+  assert.equal(extractMediaId({ ok: true, mediaId: "abc123XYZ" }), "abc123XYZ");
+});
+
+test("extractMediaId：识别 snake_case media_id", () => {
+  assert.equal(extractMediaId({ media_id: "def456UVW" }), "def456UVW");
+});
+
+test("extractMediaId：无 media id 时返回空串", () => {
+  assert.equal(extractMediaId({ ok: true }), "");
 });

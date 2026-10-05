@@ -377,13 +377,19 @@ function resultText(result) {
   return parts.join("\n");
 }
 
-function extractMediaId(result) {
-  if (result && typeof result.media_id === "string" && result.media_id) return result.media_id;
-  if (result?.structuredContent && typeof result.structuredContent.media_id === "string") {
-    return result.structuredContent.media_id;
+/** 从工具结果中提取草稿 media id，兼容 media_id / mediaId（顶层与 structuredContent）。 */
+export function extractMediaId(result) {
+  if (result) {
+    if (typeof result.mediaId === "string" && result.mediaId) return result.mediaId;
+    if (typeof result.media_id === "string" && result.media_id) return result.media_id;
+    const structured = result.structuredContent;
+    if (structured && typeof structured === "object") {
+      if (typeof structured.mediaId === "string" && structured.mediaId) return structured.mediaId;
+      if (typeof structured.media_id === "string" && structured.media_id) return structured.media_id;
+    }
   }
   const text = resultText(result);
-  const jsonField = text.match(/"media_id"\s*:\s*"([A-Za-z0-9_-]{6,})"/i);
+  const jsonField = text.match(/"media_?id"\s*:\s*"([A-Za-z0-9_-]{6,})"/i);
   if (jsonField) return jsonField[1];
   const match = text.match(/media[_ ]?id[^A-Za-z0-9_-]*([A-Za-z0-9_-]{6,})/i);
   return match ? match[1] : "";
@@ -581,8 +587,16 @@ export async function main(argv = process.argv.slice(2)) {
   const author = options.author || (meta.wechat && meta.wechat.author) || process.env.WENYAN_AUTHOR || "";
   const needOpenComment = options.comment;
 
-  if (options.upload && meta.wechat_draft && meta.wechat_draft.media_id && !options.force) {
-    fail(`已存在公众号草稿（media_id=${meta.wechat_draft.media_id}），如需重新保存请加 --force`);
+  if (
+    options.upload &&
+    meta.wechat_draft &&
+    (meta.wechat_draft.media_id || meta.wechat_draft.unknown_result === true) &&
+    !options.force
+  ) {
+    const detail = meta.wechat_draft.media_id
+      ? `media_id=${meta.wechat_draft.media_id}`
+      : "上次结果未知（草稿可能已创建）";
+    fail(`已存在公众号草稿（${detail}），如需重新保存请加 --force`);
     process.exitCode = 1;
     return;
   }
@@ -783,14 +797,35 @@ export async function main(argv = process.argv.slice(2)) {
   }
 
   // --upload：真正保存到草稿箱
+  const savedAt = new Date().toISOString();
   const mediaId = parsed ? extractMediaId(parsed) || parsed.media_id || "" : extractMediaId(result);
   if (!mediaId) {
+    if (parsed && parsed.ok === true) {
+      meta.wechat_draft = { media_id: "", unknown_result: true, saved_at: savedAt, title };
+      writeFileSync(metaPath, `${JSON.stringify(meta, null, 2)}\n`, "utf8");
+      warn(
+        "工具返回 ok:true 但未找到 media_id，公众号草稿可能已经创建；请先到草稿箱确认，确认前不要重试（重试需加 --force，否则可能产生重复草稿）。",
+      );
+    }
     fail(`工具未返回 media_id，无法确认草稿已创建：${truncate(redact(rawText), 300)}`);
     process.exitCode = 2;
     return;
   }
+  const thumbMediaId =
+    parsed && typeof parsed.thumbMediaId === "string"
+      ? parsed.thumbMediaId
+      : parsed && typeof parsed.thumb_media_id === "string"
+        ? parsed.thumb_media_id
+        : "";
+  const uploadedCount = parsed && Array.isArray(parsed.uploaded) ? parsed.uploaded.length : null;
   log(`已保存到公众号草稿箱（未群发）media_id=${mediaId}`);
-  meta.wechat_draft = { media_id: mediaId, saved_at: new Date().toISOString(), title };
+  meta.wechat_draft = {
+    media_id: mediaId,
+    ...(thumbMediaId ? { thumb_media_id: thumbMediaId } : {}),
+    saved_at: savedAt,
+    title,
+    ...(uploadedCount === null ? {} : { uploaded_count: uploadedCount }),
+  };
   writeFileSync(metaPath, `${JSON.stringify(meta, null, 2)}\n`, "utf8");
   log(`已更新 ${metaPath}`);
 }
