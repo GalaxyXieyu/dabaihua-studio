@@ -25,6 +25,7 @@
     "articles:watch": "node scripts/sync-articles.mjs --watch",
     "publish:draft": "node scripts/publish-draft.mjs",
     "publish-review": "node scripts/publish-review.mjs",
+    "article:draft": "node scripts/article-draft.mjs",
     "brief": "node scripts/brief.mjs",
     "materials": "node scripts/materials.mjs",
     "kb:install": "npm --prefix scripts/topic-kb install",
