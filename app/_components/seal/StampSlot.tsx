@@ -11,8 +11,10 @@ import type { SealKind } from "./seal-tokens.ts";
 export type StampSlotState = "unknown" | "pending" | "stamped" | "blank";
 
 export type StampSlotProps = {
-  /** 印位 DOM id：盖章动画要把印痕落到这里，用 seal-moments 的 slotId(key) 生成 */
-  targetId: string;
+  /** 印位 DOM id：盖章动画要把印痕落到这里，用 seal-moments 的 slotId(key) 生成。
+ *  可选（规范 10.1）：同一版面有两套印位时，只给当前看得见的那一套写 id，
+ *  收起行的小印位与印谱叶的格子不能同时带 id */
+  targetId?: string;
   state: StampSlotState;
   kind: SealKind;
   size: number;

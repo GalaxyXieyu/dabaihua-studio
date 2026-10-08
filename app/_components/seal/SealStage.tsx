@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { shanghaiDate } from "./seal-store.ts";
 import { stageLock } from "./seal-lock.ts";
-import { prefersReducedMotion, playDayWrap, playReplay, playStamp, playWelcome, setActorKind } from "./seal-player.ts";
+import { prefersReducedMotion, playBow, playDayWrap, playReplay, playStamp, playWelcome, setActorKind } from "./seal-player.ts";
 import type { PlayerCtx } from "./seal-player.ts";
 import { BACK } from "./seal-tokens.ts";
 import type { SealEvent, VisitPlan } from "./seal-moments.ts";
@@ -251,6 +251,10 @@ export default function SealStage(props: SealStageProps) {
           await playDayWrap(actor, daySlots, strip, stampSize, ctx);
         } else if (strip) {
           strip.dataset.state = "stamped"; // 印条在但源印位缺失：至少收工
+        } else {
+          // 规范 10.1：收起时印条不显示，印痕排进收起那一行的小印位，
+          // 角色照常鞠躬（onMoment("dayWrap") 照常在下面调）
+          await playBow(actor, stampSize, ctx);
         }
       } else if (closing === "nod" && call.copy && p.tier >= 2) {
         setCopyText("日日如此"); // 只在第 2、3 档显示（6.4）

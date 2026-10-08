@@ -689,29 +689,59 @@ export async function playReplay(
       })
       .catch(() => {});
     if (card) {
-      // 变换原点是 scaleWrap 的右下角（wrap 里还有小章，所以 O 用 wrap 的 rect，尺寸用纸的 rect），
-      // 位移按通用公式算：P' = O + S(P - O) + t，令纸的左上角映射到 card 的左上角
       const wrapRect = scaleWrap.getBoundingClientRect();
       const o = { x: wrapRect.right, y: wrapRect.bottom };
       const from = sheet.getBoundingClientRect();
       const to = card.getBoundingClientRect();
-      const sx = from.width ? to.width / from.width : 1;
-      const sy = from.height ? to.height / from.height : 1;
-      const tx = to.left - o.x - sx * (from.left - o.x);
-      const ty = to.top - o.y - sy * (from.top - o.y);
-      const end = `translate(${tx}px, ${ty}px) scale(${sx}, ${sy})`;
-      scaleWrap.style.transformOrigin = "right bottom";
-      await anim(
-        scaleWrap,
-        [{ transform: "translate(0, 0) scale(1, 1)" }, { transform: end }],
-        { duration: tl.dockDuration, easing: EASE.out },
-        replayCtx,
-      )
-        .then(() => {
-          // 同上：终帧 transform 落到样式上，保证 cleanup 移除遮罩前不跳回原位
-          scaleWrap.style.transform = end;
-        })
-        .catch(() => {});
+      if (card.classList.contains("seal-fold-yday")) {
+        // 规范 10.1 / 6.7 第 6 步收起分支：纸等比收进收起那一行的"昨日"小印位
+        // （纸的中心落到小印位中心，不是左上角对齐），最后 120ms 纸淡出、
+        // 小印位同步 stamped 靠 CSS 120ms 淡入；盖章区不自动展开
+        const s = from.width && from.height ? Math.min(to.width / from.width, to.height / from.height) : 1;
+        const tx = to.left + to.width / 2 - o.x - s * (from.left + from.width / 2 - o.x);
+        const ty = to.top + to.height / 2 - o.y - s * (from.top + from.height / 2 - o.y);
+        const end = `translate(${tx}px, ${ty}px) scale(${s})`;
+        scaleWrap.style.transformOrigin = "right bottom";
+        const docked = anim(
+          scaleWrap,
+          [{ transform: "translate(0, 0) scale(1)" }, { transform: end }],
+          { duration: tl.dockDuration, easing: EASE.out },
+          replayCtx,
+        )
+          .then(() => {
+            scaleWrap.style.transform = end;
+          })
+          .catch(() => {});
+        const fadeDelay = Math.max(0, tl.dockDuration - 120);
+        if (fadeDelay > 0) await wait2(fadeDelay);
+        card.dataset.state = "stamped"; // 小印位淡入与纸淡出同时开始
+        await anim(scaleWrap, [{ opacity: 1 }, { opacity: 0 }], { duration: 120, easing: EASE.fade }, replayCtx)
+          .then(() => {
+            scaleWrap.style.opacity = "0";
+          })
+          .catch(() => {});
+        await docked;
+      } else {
+        // 变换原点是 scaleWrap 的右下角（wrap 里还有小章，所以 O 用 wrap 的 rect，尺寸用纸的 rect），
+        // 位移按通用公式算：P' = O + S(P - O) + t，令纸的左上角映射到 card 的左上角
+        const sx = from.width ? to.width / from.width : 1;
+        const sy = from.height ? to.height / from.height : 1;
+        const tx = to.left - o.x - sx * (from.left - o.x);
+        const ty = to.top - o.y - sy * (from.top - o.y);
+        const end = `translate(${tx}px, ${ty}px) scale(${sx}, ${sy})`;
+        scaleWrap.style.transformOrigin = "right bottom";
+        await anim(
+          scaleWrap,
+          [{ transform: "translate(0, 0) scale(1, 1)" }, { transform: end }],
+          { duration: tl.dockDuration, easing: EASE.out },
+          replayCtx,
+        )
+          .then(() => {
+            // 同上：终帧 transform 落到样式上，保证 cleanup 移除遮罩前不跳回原位
+            scaleWrap.style.transform = end;
+          })
+          .catch(() => {});
+      }
     } else {
       await anim(sheet, [{ opacity: 1 }, { opacity: 0 }], { duration: tl.dockDuration, easing: EASE.fade }, replayCtx).catch(() => {});
     }

@@ -27,9 +27,12 @@ export type SealBookGridProps = {
   streak?: number;
   dry?: boolean;
   className?: string;
+  /** 印位要不要写 DOM id（规范 10.1）：今天页收起行的小印位和印谱叶共用 targetId，
+ *  展开时才由格子持有 id，收起时格子不写（默认 true，旧账日视图不变） */
+  withIds?: boolean;
 };
 
-export function SealBookGrid({ items, streak, dry, className }: SealBookGridProps) {
+export function SealBookGrid({ items, streak, dry, className, withIds = true }: SealBookGridProps) {
   const n = items.length;
   if (n === 0) return null;
 
@@ -71,7 +74,7 @@ export function SealBookGrid({ items, streak, dry, className }: SealBookGridProp
             >
               <span className="seal-book-imp">
                 <StampSlot
-                  targetId={item.targetId}
+                  targetId={withIds ? item.targetId : undefined}
                   state={item.state}
                   kind={item.kind}
                   size={size}

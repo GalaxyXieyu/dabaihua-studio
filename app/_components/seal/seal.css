@@ -290,6 +290,170 @@ html[data-nav="collapsed"] .global-brand .brand-logo { display: none; }
   text-align: center;
 }
 
+/* ---------- 收起那一行（规范 10.1）：整行一个 disclosure 按钮 ---------- */
+
+.seal-fold-h {
+  margin: 0;
+  font: inherit;
+}
+
+/* 不用文武边版框、不用 --paper；底色 --canvas。规范写的是上下各一条 0.5px 发丝线，
+   但收起行上边紧贴刊头的粗细双线（border-top 会在双线下约 6px 再叠一条，变三线），
+   所以只留下发丝线，刊头双线就是上边界 */
+.seal-fold-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  height: 48px;
+  padding: 0 4px;
+  background: var(--canvas, #F5F0E6);
+  border: 0;
+  border-bottom: 0.5px solid var(--line, #D8CFBE);
+  color: var(--ink, #1B1915);
+  cursor: pointer;
+  text-align: left;
+}
+
+.seal-fold-bar:focus-visible {
+  outline: 1px solid var(--ink, #1B1915);
+  outline-offset: 2px;
+}
+
+/* hover 只让「展开 / 收起」变 --ink，不变底色 */
+.seal-fold-bar:hover .seal-fold-toggle {
+  color: var(--ink, #1B1915);
+}
+
+.seal-fold-title {
+  font-family: var(--font-serif, serif);
+  font-size: 13px;
+  letter-spacing: 0.28em;
+  color: var(--ink, #1B1915);
+  white-space: nowrap;
+}
+
+/* 小印位：近七日印痕 + 左侧的 +N；展开时直接不占位（印痕已经在印谱叶里），
+   计数紧跟标题，不做淡入淡出 */
+.seal-fold-marks {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 0 1 auto;
+  height: 24px;
+  line-height: 0;
+}
+
+.seal-fold[data-open="true"] .seal-fold-marks {
+  display: none;
+}
+
+.seal-fold-mark {
+  display: inline-flex;
+  line-height: 0;
+}
+
+/* “昨日”小印位（日期章的 24px 版）：pending 时透明保位，stamped 后 120ms 淡入 */
+.seal-fold-yday {
+  display: inline-flex;
+  line-height: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.seal-fold-yday[data-state="pending"] {
+  opacity: 0;
+}
+
+/* +N：代表更早的、装不下的枚数；桌面 / 手机各说各的（间距和断点不同） */
+.seal-fold-plus {
+  font-family: var(--font-latin, serif);
+  font-size: 12px;
+  color: var(--seal-date, #71695C);
+}
+
+.seal-fold-plus-m {
+  display: none;
+}
+
+.seal-fold-count {
+  font-size: 12px;
+  color: var(--seal-date, #71695C);
+  font-variant-numeric: tabular-nums lining-nums;
+  white-space: nowrap;
+}
+
+.seal-fold-toggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted, #4A453C);
+  white-space: nowrap;
+}
+
+.seal-fold-arrow {
+  transition: transform 240ms cubic-bezier(.23, 1, .32, 1);
+}
+
+.seal-fold[data-open="true"] .seal-fold-arrow {
+  transform: rotate(180deg);
+}
+
+/* ---------- 展开的印谱叶：高度 0fr/1fr 过渡 ---------- */
+
+/* 与下一条 .td-a-row 发丝线的节奏：
+   收起时下边距 0，下一条 .td-a-row 的 border-top 由下面的规则去掉，
+   收起行的下发丝线就是分隔线（不叠成两条平行线；.td-a-row 的 padding-top 保留，
+   节奏不变）；展开时恢复 28px + 下一条 border-top。
+   印谱叶自己的上边距收在这段里（只在展开时出现） */
+.seal-fold {
+  margin: 0;
+}
+
+.seal-fold[data-open="false"] + .td-a-row {
+  border-top: 0;
+}
+
+.seal-fold[data-open="true"] {
+  margin: 0 0 28px;
+}
+
+.seal-fold .seal-book {
+  margin: 16px 0 0;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.seal-fold[data-open="true"] .seal-book {
+  opacity: 1;
+}
+
+.seal-fold-sheet {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 240ms cubic-bezier(.23, 1, .32, 1);
+}
+
+.seal-fold[data-open="true"] .seal-fold-sheet {
+  grid-template-rows: 1fr;
+}
+
+.seal-fold-sheet-in {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* 首次水合直接就位不播高度动画；reduced-motion 同理（见文件末尾） */
+.seal-fold-sheet[data-anim="off"] {
+  transition: none;
+}
+
+.seal-fold-sheet[data-anim="off"] .seal-book {
+  transition: none;
+}
+
 /* ---------- 昨日纸（规范 6.7 / v3-zhuan README）：居中双线小笺 ----------
    容器 .seal-sheet 可以是页面卡（#seal-yesterday-card）也可以是回放遮罩里的纸，
    两处共用同一套规则（本文件在 layout.tsx 全局引入，body 上的遮罩也吃得到）。 */
@@ -440,6 +604,36 @@ html[data-nav="collapsed"] .global-brand .brand-logo { display: none; }
   .seal-book-more-m {
     display: inline;
   }
+
+  /* ---------- 收起那一行：手机换行，整块 64px ---------- */
+
+  .seal-fold-bar {
+    height: 64px;
+    flex-wrap: wrap;
+    align-content: center;
+    /* 不能写 gap 简写：会把 row-gap 覆盖掉，两行就填不进 64px */
+    column-gap: 12px;
+    row-gap: 2px;
+  }
+
+  /* 标题 + 小印位（最多 4 枚）+「展开」在第一行，计数换到第二行 */
+  .seal-fold-count {
+    order: 9;
+    flex-basis: 100%;
+  }
+
+  /* 手机上限 4 枚：桌面多渲染的那几枚隐藏，+N 换手机那份 */
+  .seal-fold-mark[data-m-hide] {
+    display: none;
+  }
+
+  .seal-fold-plus-d {
+    display: none;
+  }
+
+  .seal-fold-plus-m {
+    display: inline;
+  }
 }
 
 /* ---------- reduced-motion（规范 7.5） ---------- */
@@ -452,4 +646,9 @@ html[data-nav="collapsed"] .global-brand .brand-logo { display: none; }
   .seal-actor[data-pose="idle"] .seal-eye,
   .seal-actor[data-pose="pending"] .seal-eye { transform: scaleY(1); }
   /* rest 保留坐姿但不呼吸（动画已 none）；offline 不变 */
+  /* 收起 / 展开：高度、箭头、昨日小印位、内容都不做过渡，直接切换（规范 10.1） */
+  .seal-fold-sheet,
+  .seal-fold-sheet .seal-book,
+  .seal-fold-yday,
+  .seal-fold-arrow { transition: none; }
 }

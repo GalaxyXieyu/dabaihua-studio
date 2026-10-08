@@ -104,3 +104,54 @@ export function eventCaption(key: string): string {
   }
   return "盖章";
 }
+
+/** 收起那一行的计数（规范 10.1 第 3 条）。kinds 是已盖（不含待盖）的近七日事件种类。
+ *  0 枚 → 「近七日 · 还没有章」；只有一种章 → 「近七日 · 五枚」（cnCount）；
+ *  两种及以上 → 按印文分类计数，固定顺序 事 习 力 日 收官，只写出现过的，阿拉伯数字：「事 3 · 习 1 · 日 2」。
+ *  印文用规范 10.1 的简体（「习」），不是刻印用的 SEAL_GLYPHS（「習」）。 */
+const FOLD_GLYPHS: ReadonlyArray<readonly [kind: SealKind, glyph: string]> = [
+  ["fang", "事"],
+  ["yuan", "习"],
+  ["hulu", "力"],
+  ["tuoyuan", "日"],
+  ["yinshou", "收官"],
+];
+
+export function foldCountText(kinds: SealKind[]): string {
+  if (kinds.length === 0) return "近七日 · 还没有章";
+  const counts = new Map<SealKind, number>();
+  for (const k of kinds) counts.set(k, (counts.get(k) ?? 0) + 1);
+  if (counts.size === 1) return `近七日 · ${cnCount(kinds.length)}枚`;
+  const parts: string[] = [];
+  for (const [k, glyph] of FOLD_GLYPHS) {
+    const n = counts.get(k);
+    if (n !== undefined) parts.push(`${glyph} ${n}`);
+  }
+  return parts.join(" · ");
+}
+
+/** 收起那一行的小印位名额（规范 10.1 第 2 条）：桌面 8 枚、手机 4 枚，
+ *  "昨日"小印位占一个名额（昨日 + 7 枚 / 昨日 + 3 枚）。
+ *  foldSlots(total, hasYday)：total 是近七日已盖事件总数，返回
+ *  deskFrom（取最近桌面名额枚的 slice 起点）、phoneHideBefore（手机多渲染的
+ *  前几枚用 data-m-hide 藏，是相对 slice(deskFrom) 之后 foldEvents 的下标，
+ *  不是相对 total）、plusD / plusM（两边各写 "+N"，都按 total 算）。 */
+export const FOLD_DESK_MAX = 8;
+export const FOLD_PHONE_MAX = 4;
+
+export function foldSlots(total: number, hasYday: boolean): {
+  deskFrom: number;
+  phoneHideBefore: number;
+  plusD: number;
+  plusM: number;
+} {
+  const deskSlots = Math.max(0, (hasYday ? FOLD_DESK_MAX - 1 : FOLD_DESK_MAX));
+  const phoneSlots = Math.max(0, (hasYday ? FOLD_PHONE_MAX - 1 : FOLD_PHONE_MAX));
+  // 桌面：取最近的 deskSlots 枚（多的在左边写 +N）
+  const plusD = Math.max(0, total - deskSlots);
+  const deskFrom = plusD;
+  const shown = total - deskFrom;                          // 实际渲染的枚数
+  const phoneHideBefore = Math.max(0, shown - phoneSlots); // foldEvents 下标
+  const plusM = Math.max(0, total - phoneSlots);           // 手机 +N 仍按 total
+  return { deskFrom, phoneHideBefore, plusD, plusM };
+}

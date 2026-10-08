@@ -14,6 +14,7 @@ export type SealStore = {
   seen: string[];                // 已看过的事件键，不带时间
   stampLog: StampLogEntry[];     // 本设备页内当场盖的章，只留最近 2 天，给昨日回放用
   streak?: number;               // 今天页算出的连续提交天数缓存（页内章定力度用）
+  sheetOpen?: boolean;           // 今天页盖章区是否展开，规范 10.1；缺省 = 收起
 };
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -101,7 +102,19 @@ export function parseStore(raw: string | null): SealStore | null {
     stampLog,
   };
   if (typeof o.streak === "number") store.streak = o.streak;
+  if (typeof o.sheetOpen === "boolean") store.sheetOpen = o.sheetOpen;
   return store;
+}
+
+/** 读展开状态：store 为 null 或没有字段 → false */
+export function isSheetOpen(s: SealStore | null): boolean {
+  return s?.sheetOpen === true;
+}
+
+/** 不可变地写展开状态；s 为 null 时返回 null（还没有 store 就不建，避免把新设备当成老设备） */
+export function withSheetOpen(s: SealStore | null, open: boolean): SealStore | null {
+  if (s == null) return null;
+  return { ...s, sheetOpen: open };
 }
 
 export function serializeStore(s: SealStore): string {

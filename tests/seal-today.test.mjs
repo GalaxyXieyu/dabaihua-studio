@@ -60,15 +60,22 @@ test('TodaySeals 有 "use client"，SealStage 用 lazy 动态加载', () => {
 
 // ---------- 印谱叶：新盖的章改成居中、行均衡的印谱版面 ----------
 
-test("新盖的章是印谱叶：文武边 + seal-book-grid，去掉右侧大号计数列", () => {
+// ---------- 收起那一行与展开的印谱叶（规范 10.1） ----------
+
+test("新盖的章默认收起成一行：外层 seal-fold，印谱叶在展开区里，去掉 seal-book-head", () => {
   const src = read("app/_components/seal/TodaySeals.tsx");
-  assert.ok(src.includes('className="td-a-seals seal-book"'), "外层应是印谱叶（不再用 td-a-row 网格）");
-  assert.ok(src.includes('className="seal-book-in"'));
-  assert.ok(src.includes('className="seal-book-title"'));
+  assert.ok(src.includes('className="td-a-seals seal-fold"'), "外层是收起行（不再直接是印谱叶）");
+  assert.ok(src.includes('className="seal-fold-bar"'), "整行是一个 disclosure 按钮");
+  assert.ok(src.includes("aria-expanded={open}"), "按钮带 aria-expanded");
+  assert.ok(src.includes('aria-controls="seal-fold-sheet"'), "按钮控制展开区");
   assert.ok(src.includes('id="td-a-row-seals"'), "标题 id 保留（aria-labelledby）");
   assert.ok(src.includes("新盖的章"), "标题文字");
-  assert.ok(src.includes("近七日 · 未盖"), "零枚时写未盖");
-  assert.ok(src.includes("cnCount(count)"), "枚数用中文数字并进副行");
+  // 10.1：展开的印谱叶不再渲染自己的 seal-book-head（标题由收起行承担，避免两个「新盖的章」）
+  assert.ok(!src.includes("seal-book-head"), "TodaySeals 不该再渲染 seal-book-head");
+  assert.ok(!src.includes("seal-book-title"), "TodaySeals 不该再渲染 seal-book-title");
+  assert.ok(src.includes('id="seal-fold-sheet"'), "展开区有自己的 id");
+  assert.ok(src.includes("foldCountText("), "计数用 foldCountText（10.1 第 3 条）");
+  assert.ok(src.includes('className="seal-book-in"'), "印谱叶还在展开区里");
   assert.ok(src.includes("<SealBookGrid"), "印位格应交给 SealBookGrid");
   for (const gone of ["td-a-col-figure", "td-a-index", "td-a-unit", "td-a-seal-cells", "td-a-col-label"]) {
     assert.ok(!src.includes(gone), `不该再出现 ${gone}`);
